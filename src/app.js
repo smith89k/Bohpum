@@ -867,7 +867,7 @@ function renderProps() {
   const lockBtn = btn(locked ? 'Locked' : 'Lock', () => cmd('lock'), 'cell-btn' + (locked ? ' on' : ''));
   lockBtn.insertAdjacentHTML('afterbegin', icon(locked ? 'lock' : 'unlock'));
   lockBtn.title = locked ? 'Unlock so it can be moved' : 'Lock so it can’t be moved by accident';
-  const g = grid(pos, 2);
+  const g = grid(pos);
   if (single) {
     g.append(num('X', single.x, v => moveTo(v, null)), num('Y', single.y, v => moveTo(null, v)));
     if (single.type !== 'line') {
@@ -945,7 +945,7 @@ function boxProps(P, sel) {
   if (o.shape === 'roundrect' || o.shape === 'rect') s.append(row('Corner', numInput(o.radius || 0, v => setProp(x => x.radius = Math.max(0, v)), 0.5, 'mm')));
   const t = section(P, 'Text box');
   caption(t, 'Inner margins (mm)');
-  const g = grid(t, 4);
+  const g = grid(t);
   const pad = o.pad || { t: 0, r: 0, b: 0, l: 0 };
   g.append(num('T', pad.t, v => setProp(x => x.pad = { ...x.pad, t: v }), 0.5), num('B', pad.b, v => setProp(x => x.pad = { ...x.pad, b: v }), 0.5),
     num('L', pad.l, v => setProp(x => x.pad = { ...x.pad, l: v }), 0.5), num('R', pad.r, v => setProp(x => x.pad = { ...x.pad, r: v }), 0.5));
@@ -993,7 +993,7 @@ function renderPageProps(P) {
     v => { if (v !== '') { const p = PAGE_PRESETS[+v]; setPageSize(p.w, p.h); } });
   presets.classList.add('full');
   s.append(presets);
-  const g = grid(s, 2); g.style.marginTop = '6px';
+  const g = grid(s); g.style.marginTop = '6px';
   g.append(num('W', d.pageW, v => setPageSize(v, null), 0.1), num('H', d.pageH, v => setPageSize(null, v), 0.1));
   const tall = d.pageH >= d.pageW;
   const turn = () => setPageSize(d.pageH, d.pageW);
@@ -1003,7 +1003,7 @@ function renderPageProps(P) {
   note(s, 'Every page uses this size.');
   const m = section(P, 'Margin guides');
   caption(m, 'Distance from the page edge (mm)');
-  const g2 = grid(m, 4);
+  const g2 = grid(m);
   const mg = d.margins || { t: 0, r: 0, b: 0, l: 0 };
   g2.append(num('T', mg.t, v => setDoc(() => d.margins = { ...mg, t: v }), 0.5), num('B', mg.b, v => setDoc(() => d.margins = { ...mg, b: v }), 0.5),
     num('L', mg.l, v => setDoc(() => d.margins = { ...mg, l: v }), 0.5), num('R', mg.r, v => setDoc(() => d.margins = { ...mg, r: v }), 0.5));
@@ -1033,7 +1033,7 @@ function renderPageProps(P) {
 
 // ---- panel widgets
 function section(P, title) { const s = document.createElement('div'); s.className = 'psec'; s.innerHTML = `<h4>${title}</h4>`; P.append(s); return s; }
-function grid(parent, n) { const g = document.createElement('div'); g.className = n === 4 ? 'grid4' : 'grid2'; parent.append(g); return g; }
+function grid(parent) { const g = document.createElement('div'); g.className = 'grid2'; parent.append(g); return g; }
 function btns(parent) { const b = document.createElement('div'); b.className = 'pbtns'; parent.append(b); return b; }
 function btn(label, fn, cls = '') { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label; b.onclick = fn; return b; }
 // Icon button for segmented groups; `label` adds visible text next to the icon
