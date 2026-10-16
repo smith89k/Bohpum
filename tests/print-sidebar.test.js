@@ -38,6 +38,13 @@ run(async (t, check) => {
   })()`);
   const b1 = await boxOf(['[data-k="left"]', '[data-k="top"]', '#pd-pos']);
   check('One per sheet: Left, Top and the 3×3 pad are boxed together', b1.same && b1.border === '1px', b1);
+  const fill = await t.js(`(() => {
+    const box = document.querySelector('.pr-box.pr-pos'), cs = getComputedStyle(box), r = box.getBoundingClientRect();
+    const inL = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft), inR = r.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight);
+    const left = document.querySelector('[data-k="left"]').closest('.pf').getBoundingClientRect(), pad = document.getElementById('pd-pos').getBoundingClientRect();
+    return { startGap: Math.round(left.left - inL), endGap: Math.round(inR - pad.right) };
+  })()`);
+  check('One per sheet: Left, Top and the pad fill the box edge to edge', Math.abs(fill.startGap) <= 1 && Math.abs(fill.endGap) <= 1, fill);
 
   await t.click('#pd-pos [data-pos="tl"]');
   const s2 = await side();
