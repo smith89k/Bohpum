@@ -1,0 +1,40 @@
+{
+  "name": "bohpum",
+  "productName": "Bohpum",
+  "version": "0.1.0",
+  "description": "Bohpum (បោះពុម្ព) - desktop publishing app that opens Microsoft Publisher .pub files",
+  "main": "main.js",
+  "author": "Sunnguon TAING",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "bundle-libreoffice": "node scripts/bundle-libreoffice.js",
+    "dist": "node scripts/bundle-libreoffice.js && electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^44.8.0",
+    "electron-builder": "^26.15.3"
+  },
+  "overrides": {
+    "global-agent": "^4.1.3"
+  },
+  "build": {
+    "appId": "kh.bohpum.app",
+    "productName": "Bohpum",
+    "files": ["main.js", "preload.js", "src/**/*"],
+    "extraResources": [
+      { "from": "vendor/libreoffice", "to": "libreoffice" }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "fileAssociations": [
+      { "ext": "bpum", "name": "Bohpum Document", "role": "Editor" },
+      { "ext": "pub", "name": "Publisher File", "role": "Viewer" }
+    ]
+  }
+}

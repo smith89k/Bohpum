@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="km">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:">
+  <title>Bohpum</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand"><span class="km">បោះពុម្ព</span><b>Bohpum</b></div>
+    <div class="tb-group">
+      <button class="btn" data-cmd="new" title="New (Ctrl+N)" data-icon="new"></button>
+      <button class="btn" data-cmd="open" title="Open .pub / .bpum (Ctrl+O)" data-icon="open"></button>
+      <button class="btn" data-cmd="save" title="Save (Ctrl+S)" data-icon="save"></button>
+    </div>
+    <div class="tb-group">
+      <button class="btn" data-cmd="undo" id="b-undo" title="Undo (Ctrl+Z)" data-icon="undo"></button>
+      <button class="btn" data-cmd="redo" id="b-redo" title="Redo (Ctrl+Y)" data-icon="redo"></button>
+    </div>
+    <div class="tb-group tools">
+      <button class="btn" data-tool="select" title="Select (V)" data-icon="select"></button>
+      <button class="btn" data-tool="text" title="Text box (T)" data-icon="text"></button>
+      <button class="btn" data-tool="rect" title="Rectangle (R)" data-icon="rect"></button>
+      <button class="btn" data-tool="ellipse" title="Ellipse (E)" data-icon="ellipse"></button>
+      <button class="btn" data-tool="line" title="Line (L)" data-icon="line"></button>
+      <button class="btn" data-cmd="insert-image" title="Picture" data-icon="image"></button>
+    </div>
+    <div class="tb-group">
+      <button class="btn" data-cmd="front" title="Bring to front" data-icon="front"></button>
+      <button class="btn" data-cmd="back" title="Send to back" data-icon="back"></button>
+      <button class="btn" data-cmd="group" title="Group (Ctrl+G)" data-icon="group"></button>
+      <button class="btn" data-cmd="ungroup" title="Ungroup (Ctrl+Shift+G)" data-icon="ungroup"></button>
+    </div>
+    <div class="tb-group">
+      <button class="btn" data-cmd="zoom-out" title="Zoom out" data-icon="minus"></button>
+      <select class="zoom-sel" id="zoom-sel" title="Zoom"></select>
+      <button class="btn" data-cmd="zoom-in" title="Zoom in" data-icon="plus"></button>
+      <button class="btn" data-cmd="zoom-fit" title="Fit page (Ctrl+0)" data-icon="fit"></button>
+    </div>
+    <div class="spacer"></div>
+    <div class="tb-group">
+      <button class="btn" data-cmd="export-pdf" title="Export PDF (Ctrl+E)"><span data-icon="pdf"></span><span class="lbl">PDF</span></button>
+      <button class="btn primary" data-cmd="print" title="Print (Ctrl+P)"><span data-icon="print"></span><span class="lbl">Print</span></button>
+    </div>
+  </header>
+
+  <div id="textbar" class="disabled">
+    <input class="field" id="tb-font" list="font-list" placeholder="Font" spellcheck="false">
+    <datalist id="font-list"></datalist>
+    <input class="field" id="tb-size" list="size-list" placeholder="Size">
+    <datalist id="size-list"></datalist>
+    <button class="btn fmt" id="tb-grow" title="Grow font">A+</button>
+    <button class="btn fmt" id="tb-shrink" title="Shrink font">A−</button>
+    <span class="sep"></span>
+    <button class="btn fmt" id="tb-b" title="Bold (Ctrl+B)">B</button>
+    <button class="btn fmt i" id="tb-i" title="Italic (Ctrl+I)">I</button>
+    <button class="btn fmt u" id="tb-u" title="Underline (Ctrl+U)">U</button>
+    <button class="btn fmt s" id="tb-s" title="Strikethrough">S</button>
+    <label class="btn color-btn" title="Text colour"><span class="color-swatch" id="tb-color-sw"></span><input type="color" id="tb-color"></label>
+    <span class="sep"></span>
+    <button class="btn fmt" id="tb-al" title="Align left" data-icon="al"></button>
+    <button class="btn fmt" id="tb-ac" title="Center" data-icon="ac"></button>
+    <button class="btn fmt" id="tb-ar" title="Align right" data-icon="ar"></button>
+    <button class="btn fmt" id="tb-aj" title="Justify" data-icon="aj"></button>
+    <span class="sep"></span>
+    <select class="field" id="tb-ls" title="Line spacing">
+      <option value="0.75">0.75 sp</option><option value="0.85">0.85 sp</option><option value="1">1.0 sp</option><option value="1.15">1.15 sp</option>
+      <option value="1.25">1.25 sp</option><option value="1.5">1.5 sp</option><option value="2">2.0 sp</option>
+    </select>
+    <span class="sep"></span>
+    <button class="btn fmt" id="tb-vt" title="Text at top" data-icon="vt"></button>
+    <button class="btn fmt" id="tb-vm" title="Text in middle" data-icon="vm"></button>
+    <button class="btn fmt" id="tb-vb" title="Text at bottom" data-icon="vb"></button>
+    <span class="tb-hint" id="tb-hint">Select a text box, or double-click one to edit text</span>
+  </div>
+
+  <main>
+    <aside id="pages">
+      <div class="panel-h">
+        <span>Pages <span class="count" id="page-count"></span></span>
+        <span class="panel-tools">
+          <button class="btn" data-cmd="page-add" title="Add a page after this one" data-icon="plus"></button>
+          <button class="btn" data-cmd="page-duplicate" title="Duplicate this page" data-icon="dupPage"></button>
+        </span>
+      </div>
+      <div id="page-list"></div>
+    </aside>
+
+    <section id="workspace-wrap">
+      <div id="corner" title="Rulers in millimetres"></div>
+      <canvas id="ruler-h"></canvas>
+      <canvas id="ruler-v"></canvas>
+      <div id="workspace" tabindex="-1">
+        <div id="stage"><div id="page-holder"></div></div>
+      </div>
+    </section>
+
+    <aside id="props"></aside>
+  </main>
+
+  <footer id="status">
+    <span id="st-page"></span>
+    <span id="st-pos"></span>
+    <span id="st-sel" class="grow"></span>
+    <span id="st-zoom"></span>
+  </footer>
+
+  <div id="modal-root"></div>
+  <div id="ctxmenu"></div>
+  <div id="toast"></div>
+  <div class="drop-hint">Drop a .pub, .bpum or picture here</div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

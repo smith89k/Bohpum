@@ -1,0 +1,33 @@
+{
+  "name": "kbach-publisher",
+  "productName": "Kbach Publisher",
+  "version": "0.1.0",
+  "description": "Kbach Publisher (ក្បាច់ Publisher) - desktop publishing app that opens Microsoft Publisher .pub files",
+  "main": "main.js",
+  "author": "Sunnguon TAING",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "kh.kbach.publisher",
+    "productName": "Kbach Publisher",
+    "files": ["main.js", "preload.js", "src/**/*"],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "fileAssociations": [
+      { "ext": "kbach", "name": "Kbach Publisher Document", "role": "Editor" },
+      { "ext": "pub", "name": "Publisher File", "role": "Viewer" }
+    ]
+  }
+}
