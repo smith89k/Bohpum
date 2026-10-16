@@ -253,6 +253,8 @@ main { display: grid; grid-template-columns: 170px 1fr 268px; min-height: 0; }
 .pr-copies .pf { flex-direction: row; align-items: center; gap: 10px; font-size: 12.5px; }
 .pr-copies .numf { width: 90px; }
 .pr-sub { margin: 2px 0 10px; }
+.pr-sub > select.field { height: 30px; margin: 2px 0 8px; }
+.pf.off { opacity: .5; }
 .pr-pos { display: flex; align-items: flex-end; gap: 8px; }
 .pr-pos .pf { width: 84px; }
 .pos-pad { display: grid; grid-template-columns: repeat(3, 18px); gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; flex: none; }

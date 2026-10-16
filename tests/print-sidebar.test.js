@@ -39,6 +39,23 @@ run(async (t, check) => {
   const s3 = await side();
   check('Mouse: Multiple copies per sheet shows margins, hides Left / Top', s3.margins && !s3.left && /^Multiple copies per sheet/.test(s3.layoutShown), s3);
 
+  const grid = () => t.js(`(() => {
+    const q = (s) => document.querySelector(s);
+    const before = (a, b) => !!(q(a).compareDocumentPosition(q(b)) & Node.DOCUMENT_POSITION_FOLLOWING);
+    return {
+      order: before('[data-k="center"]', '[data-k="marginT"]') && before('[data-k="order"]', '[data-k="marginT"]'),
+      center: q('[data-k="center"]').checked,
+      marginsOff: ['marginT', 'marginL', 'marginB', 'marginR'].map(k => q('[data-k="' + k + '"]').disabled),
+      gapsOff: ['gapX', 'gapY'].map(k => q('[data-k="' + k + '"]').disabled)
+    };
+  })()`);
+  const m1 = await grid();
+  check('Multiple: Center and the order dropdown come before the margins', m1.order, m1);
+  check('Multiple: Center ticked greys out the margins, gaps stay usable', m1.center && m1.marginsOff.every(Boolean) && !m1.gapsOff.some(Boolean), m1);
+  await t.click('[data-k="center"]');
+  const m2 = await grid();
+  check('Multiple: unticking Center turns the margins back on', !m2.center && !m2.marginsOff.some(Boolean), m2);
+
   await t.click('select[data-k="mode"]');
   await t.click('select[data-k="mode"] option[value="actual"]');
   const s4 = await side();
