@@ -6,3 +6,4 @@ dist/
 vendor/libreoffice/
 vendor/libreoffice.stamp
 *.bak
+.superpowers/
