@@ -60,6 +60,19 @@ body { display: grid; grid-template-rows: auto auto auto 1fr auto; }
 #textbar .tb-hint { color: var(--ink-3); font-size: 12px; margin-left: 8px; }
 .field { height: 28px; border: 1px solid var(--line-2); border-radius: 5px; background: #fff; padding: 0 7px; }
 .field:focus { outline: 2px solid #b9dcc6; outline-offset: -1px; border-color: var(--accent); }
+
+/* ---------- dropdowns: Bohpum's own look (customizable <select>, Chromium 135+) ---------- */
+select, ::picker(select) { appearance: base-select; }
+select { display: inline-flex; align-items: center; border: 1px solid var(--line-2); border-radius: 6px; background: #fff; padding: 0 8px; white-space: nowrap; cursor: default; }
+select::picker-icon { content: ""; flex: none; width: 6px; height: 6px; margin: 0 2px 3px auto; border-right: 1.6px solid var(--ink-2); border-bottom: 1.6px solid var(--ink-2); transform: rotate(45deg); transition: transform .12s; }
+select:open::picker-icon { transform: translateY(3px) rotate(225deg); border-color: var(--accent); }
+select:open, select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px #cfe8d9; outline: 0; }
+select:disabled { opacity: .5; }
+::picker(select) { border: 1px solid var(--line-2); border-radius: 8px; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 4px; margin: 4px 0; }
+select option { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 6px 8px; border-radius: 5px; white-space: nowrap; }
+select option:hover, select option:focus-visible { background: var(--chrome); outline: 0; }
+select option:checked { background: var(--accent-soft); }
+select option::checkmark { order: 1; margin-left: auto; padding-left: 12px; color: var(--accent); }
 #tb-font { width: 190px; }
 #tb-size { width: 56px; }
 .fmt { width: 28px; height: 28px; min-width: 28px; padding: 0; font-weight: 600; }

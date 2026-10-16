@@ -1427,7 +1427,12 @@ function modal(title, bodyEl, buttons, cls = '') {
   const f = document.createElement('div'); f.className = 'modal-f';
   let resolve; const done = new Promise(r => resolve = r);
   const close = (v) => { back.remove(); document.removeEventListener('keydown', key, true); resolve(v); };
-  const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(null); } if (e.key === 'Enter' && !e.target.matches('textarea')) { const p = buttons.find(x => x[2]); if (p) { e.preventDefault(); close(p[1]); } } };
+  const key = (e) => {
+    const s = e.target.closest && e.target.closest('select');
+    if (s && s.matches(':open')) return; // an open dropdown list handles its own Esc / Enter
+    if (e.key === 'Escape') { e.stopPropagation(); close(null); }
+    if (e.key === 'Enter' && !e.target.matches('textarea')) { const p = buttons.find(x => x[2]); if (p) { e.preventDefault(); close(p[1]); } }
+  };
   document.addEventListener('keydown', key, true);
   for (const [label, val, primary] of buttons) { const bt = document.createElement('button'); bt.className = 'btn' + (primary ? ' primary' : ''); bt.textContent = label; bt.onclick = () => close(val); f.append(bt); }
   box.append(b, f); back.append(box); $('modal-root').append(back);
@@ -1558,7 +1563,8 @@ function onKey(e) {
     else if (ctrl && ['b', 'i', 'u'].includes(k.toLowerCase())) { e.preventDefault(); S.toggleFmt(k.toLowerCase()); }
     return;
   }
-  if (e.target.matches('input, select, textarea, [contenteditable="true"]')) { if (k === 'Escape') e.target.blur(); return; }
+  // (option = an item in an open dropdown list: its keys belong to the list)
+  if (e.target.matches('input, select, option, textarea, [contenteditable="true"]')) { if (k === 'Escape') e.target.blur(); return; }
   if (e.altKey && !ctrl && !e.shiftKey && MENU_KEYS[k.toLowerCase()] != null) { e.preventDefault(); return openMenu(MENU_KEYS[k.toLowerCase()]); }
   if (k === 'F10' && !ctrl && !e.altKey) { e.preventDefault(); return openMenu(0); }
   const sel = selObjs();
