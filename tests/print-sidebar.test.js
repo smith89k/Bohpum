@@ -51,10 +51,7 @@ run(async (t, check) => {
   })()`);
   const m1 = await grid();
   check('Multiple: Center and the order dropdown come before the margins', m1.order, m1);
-  check('Multiple: Center ticked greys out the margins, gaps stay usable', m1.center && m1.marginsOff.every(Boolean) && !m1.gapsOff.some(Boolean), m1);
-  await t.click('[data-k="center"]');
-  const m2 = await grid();
-  check('Multiple: unticking Center turns the margins back on', !m2.center && !m2.marginsOff.some(Boolean), m2);
+  check('Multiple: margins and gaps stay usable with Center ticked', m1.center && !m1.marginsOff.some(Boolean) && !m1.gapsOff.some(Boolean), m1);
 
   await t.click('select[data-k="mode"]');
   await t.click('select[data-k="mode"] option[value="actual"]');

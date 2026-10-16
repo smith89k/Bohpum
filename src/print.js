@@ -163,8 +163,8 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   const side = back.querySelector('#pd-side'), prev = back.querySelector('#pd-prev'), info = back.querySelector('#pd-info');
   const printBtn = back.querySelector('[data-a="print"]');
 
-  // A labelled number box (label above, unit inside); off = greyed out with the reason as its tooltip
-  const field = (key, label, obj = o, step = 0.5, unit = 'mm', off = '') => `<label class="pf${off ? ' off' : ''}"${off ? ` title="${off}"` : ''}><span>${label}</span><span class="numf"><input type="number" step="${step}" data-k="${key}" data-o="${obj === nudge ? 'n' : 'o'}" value="${round(obj[key])}"${off ? ' disabled' : ''}>${unit ? `<em>${unit}</em>` : ''}</span></label>`;
+  // A labelled number box (label above, unit inside)
+  const field = (key, label, obj = o, step = 0.5, unit = 'mm') => `<label class="pf"><span>${label}</span><span class="numf"><input type="number" step="${step}" data-k="${key}" data-o="${obj === nudge ? 'n' : 'o'}" value="${round(obj[key])}">${unit ? `<em>${unit}</em>` : ''}</span></label>`;
   const round = (v) => v == null ? '' : Math.round(v * 10) / 10;
 
   function ensurePos() {
@@ -214,8 +214,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       ${o.mode === 'grid' ? `<div class="pr-sub">
         <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
         <select class="field" data-k="order" aria-label="Page order" style="width:100%"><option value="repeat" ${o.order === 'repeat' ? 'selected' : ''}>Fill each sheet with one page</option><option value="sequence" ${o.order === 'sequence' ? 'selected' : ''}>Different pages in sequence</option></select>
-        <div class="grid2">${[['marginT', 'Top'], ['marginL', 'Left'], ['marginB', 'Bottom'], ['marginR', 'Right']].map(([k, l]) => field(k, l, o, 0.5, 'mm', o.center ? 'Centred on the sheet: untick Center to place the block with margins' : '')).join('')}</div>
-        <div class="grid2">${field('gapX', 'Gap ↔')}${field('gapY', 'Gap ↕')}</div>
+        <div class="grid2">${field('marginT', 'Top')}${field('marginL', 'Left')}${field('marginB', 'Bottom')}${field('marginR', 'Right')}${field('gapX', 'Gap ↔')}${field('gapY', 'Gap ↕')}</div>
       </div>` : ''}
       ${bigSelect(`data-k="sheet" aria-label="Paper"${actual ? ' disabled' : ''}`,
         Object.entries(SHEETS).map(([k, [w, h]]) => ({ v: k, icon: 'paper', title: k, sub: `${round(w)} × ${round(h)} mm` })), o.sheet)}
