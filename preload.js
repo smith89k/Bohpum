@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSettings: (patch) => ipcRenderer.invoke('set-settings', patch),
   exportPdf: (opts) => ipcRenderer.invoke('export-pdf', opts),
+  writePdf: (opts) => ipcRenderer.invoke('write-pdf', opts),
   exportPng: (opts) => ipcRenderer.invoke('export-png', opts),
   printHtml: (opts) => ipcRenderer.invoke('print-html', opts),
   setDirty: (v) => ipcRenderer.send('set-dirty', v),

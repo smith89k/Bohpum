@@ -108,7 +108,6 @@ function buildMenu() {
       { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => send('save') },
       { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('save-as') },
       { type: 'separator' },
-      { label: 'Export PDF…', accelerator: 'CmdOrCtrl+E', click: () => send('export-pdf') },
       { label: 'Export Page as PNG…', click: () => send('export-png') },
       { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: () => send('print') },
       { type: 'separator' },
@@ -246,17 +245,29 @@ function withHiddenWindow(html, fn) {
   });
 }
 
-ipcMain.handle('export-pdf', async (_e, { html, widthMm, heightMm, defaultName }) => {
-  const r = await dialog.showSaveDialog(win, { defaultPath: defaultName || 'publication.pdf', filters: [{ name: 'PDF', extensions: ['pdf'] }] });
-  if (r.canceled) return null;
+// Lay the HTML out as PDF pages of widthMm × heightMm, write it, open it for viewing
+async function writePdf(html, widthMm, heightMm, filePath) {
   const data = await withHiddenWindow(html, (w) => w.webContents.printToPDF({
     printBackground: true, preferCSSPageSize: true,
     pageSize: { width: widthMm / 25.4, height: heightMm / 25.4 },
     margins: { top: 0, bottom: 0, left: 0, right: 0 }
   }));
-  fs.writeFileSync(r.filePath, data);
-  shell.openPath(r.filePath);
-  return r.filePath;
+  fs.writeFileSync(filePath, data);
+  shell.openPath(filePath);
+  return filePath;
+}
+
+// The Print dialog's Save as PDF (the sheets as laid out): asks for the file itself
+ipcMain.handle('export-pdf', async (_e, { html, widthMm, heightMm, defaultName }) => {
+  const r = await dialog.showSaveDialog(win, { defaultPath: defaultName || 'publication.pdf', filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+  if (r.canceled) return null;
+  return writePdf(html, widthMm, heightMm, r.filePath);
+});
+
+// Save As → PDF: the editor already asked for the file
+ipcMain.handle('write-pdf', async (_e, { html, widthMm, heightMm, path: p }) => {
+  if (typeof p !== 'string' || !/\.pdf$/i.test(p)) throw new Error('Not a PDF file name');
+  return writePdf(html, widthMm, heightMm, p);
 });
 
 ipcMain.handle('print-html', async (_e, { html, widthMm, heightMm, copies }) => {

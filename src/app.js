@@ -47,7 +47,6 @@ const ICONS = {
   lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5z', unlock: 'M7 11V8a5 5 0 0 1 9.6-2M5 11h14v10H5z',
   minus: 'M5 12h14',
   fit: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
-  pdf: 'M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5M12 11v6M9 14l3 3 3-3',
   print: 'M7 9V3h10v6M7 18H5a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v7H7z',
   al: 'M4 6h16M4 10h10M4 14h16M4 18h10', ac: 'M4 6h16M7 10h10M4 14h16M7 18h10',
   ar: 'M4 6h16M10 10h10M4 14h16M10 18h10', aj: 'M4 6h16M4 10h16M4 14h16M4 18h16',
@@ -1309,8 +1308,12 @@ async function save(as = false) {
   finishEditing();
   let p = S.path;
   if (as || !p || !/\.bpum$/i.test(p)) {
-    p = await api.saveDialog({ defaultName: (S.doc.name || 'Untitled') + '.bpum', filters: [{ name: 'Bohpum', extensions: ['bpum'] }] });
+    // Save As also offers PDF; plain Save (also a first save) only .bpum
+    const filters = [{ name: 'Bohpum publication', extensions: ['bpum'] }];
+    if (as) filters.push({ name: 'PDF', extensions: ['pdf'] });
+    p = await api.saveDialog({ defaultName: (S.doc.name || 'Untitled') + '.bpum', filters });
     if (!p) return false;
+    if (/\.pdf$/i.test(p)) { await savePdf(p); return false; } // a copy: the publication itself is not saved
   }
   S.doc.name = p.split(/[\\/]/).pop().replace(/\.bpum$/i, '');
   await api.writeFile({ path: p, text: JSON.stringify(S.doc) });
@@ -1386,12 +1389,14 @@ function pageSetup() {
   S.sel.clear(); renderProps(); renderOverlay();
   toast('Page size and margins are in the panel on the right.');
 }
-async function exportPdf() {
-  finishEditing();
+// Save As → PDF: every page at page size. The publication's own file, name and unsaved state don't change.
+async function savePdf(p) {
   const lay = { sw: S.doc.pageW, sh: S.doc.pageH, sheets: S.doc.pages.map((_, i) => [{ pi: i, x: 0, y: 0 }]) };
   const html = buildOutputHtml(S.doc, lay);
-  const p = await api.exportPdf({ html, widthMm: lay.sw, heightMm: lay.sh, defaultName: (S.doc.name || 'publication') + '.pdf' });
-  if (p) toast('Exported ' + p);
+  try {
+    await api.writePdf({ html, widthMm: lay.sw, heightMm: lay.sh, path: p });
+    toast('Saved ' + p.split(/[\\/]/).pop());
+  } catch (err) { toast('Could not save the PDF: ' + (err && err.message || err), 6000); }
 }
 async function exportPng() {
   finishEditing();
@@ -1447,7 +1452,6 @@ function cmd(c) {
     case 'save': return save();
     case 'save-as': return save(true);
     case 'save-and-close': return save().then(ok => ok && api.closeNow());
-    case 'export-pdf': return exportPdf();
     case 'export-png': return exportPng();
     case 'print': return printDialog();
     case 'page-setup': return pageSetup();
