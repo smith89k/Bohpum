@@ -15,7 +15,7 @@ run(async (t, check) => {
   await t.ready();
   const openPrint = async () => {
     await t.js('window.__bohpumApp.cmd("print")');
-    await t.waitFor('!!document.querySelector(".print-preview .slot") && document.getElementById("pd-printer").options[0].textContent !== "Finding printers…"');
+    await t.waitFor('!!document.querySelector(".print-preview .slot") && !document.getElementById("pd-printer").options[0].textContent.startsWith("Finding printers")');
   };
   const set = (selector, value, ev) => t.js(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event(${JSON.stringify(ev)}, { bubbles: true })); })()`);
   const ui = () => t.js(`(() => {
@@ -23,7 +23,7 @@ run(async (t, check) => {
     return {
       options: [...s.options].map(o => o.value), selected: s.value, disabled: s.disabled,
       props: !!document.getElementById('pd-props') && !document.getElementById('pd-props').disabled,
-      heads: [...document.querySelectorAll('.print-side .psec h4')].map(h => h.textContent),
+      heads: [...document.querySelectorAll('.print-side h4')].map(h => h.textContent),
       printLabel: document.querySelector('[data-a="print"]').textContent, printDisabled: document.querySelector('[data-a="print"]').disabled,
       pdfDisabled: document.querySelector('[data-a="pdf"]').disabled, firstOption: s.options[0] && s.options[0].textContent
     };
@@ -33,7 +33,7 @@ run(async (t, check) => {
   const u1 = await ui();
   check('Printer list shows the installed printers, Windows default selected',
     u1.options.join('|') === 'Office HP|Front Desk Canon' && u1.selected === 'Front Desk Canon' && u1.props && !u1.disabled, u1);
-  check('Left column: Printer, Paper, Layout, Pages, Printer adjustment', u1.heads.join('|') === 'Printer|Paper|Layout|Pages|Printer adjustment', u1.heads);
+  check('Left column: Printer, Settings, Printer adjustment', u1.heads.join('|') === 'Printer|Settings|Printer adjustment', u1.heads);
   check('Print button says Print (no Windows dialog follows)', u1.printLabel === 'Print', u1.printLabel);
 
   await set('#pd-printer', 'Office HP', 'change');
@@ -60,7 +60,7 @@ run(async (t, check) => {
   await openPrint();
   const u3 = await ui();
   check('No printers: says so, Print disabled, Save as PDF still works',
-    u3.firstOption === 'No printers installed' && u3.disabled && !u3.props && u3.printDisabled && !u3.pdfDisabled, u3);
+    u3.firstOption.startsWith('No printers installed') && u3.disabled && !u3.props && u3.printDisabled && !u3.pdfDisabled, u3);
   await t.key('Escape');
 }, {
   setup: () => {

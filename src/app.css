@@ -75,6 +75,18 @@ select option { display: flex; align-items: center; gap: 8px; min-height: 28px; 
 select option:hover, select option:focus-visible { background: var(--chrome); outline: 0; }
 select option:checked { background: var(--accent-soft); }
 select option::checkmark { order: 1; margin-left: auto; padding-left: 12px; color: var(--accent); }
+/* big Publisher-style dropdowns (print screen): picture · title · explanation */
+select.big { display: flex; width: 100%; min-height: 48px; padding: 6px 10px 6px 8px; border-radius: 7px; }
+select.big > button { display: flex; flex: 1; min-width: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; }
+select.big selectedcontent, select.big option { display: flex; align-items: center; gap: 10px; min-width: 0; }
+select.big option { padding: 7px 8px; }
+.big .ic { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+.big .ic svg { width: 18px; height: 18px; }
+.big .t { display: flex; flex-direction: column; min-width: 0; }
+.big .t b { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.big .t small { color: var(--ink-3); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+.big option .ic { background: var(--chrome-2); color: var(--ink-2); }
+.big option:checked .ic { background: #fff; color: var(--accent); }
 #tb-font { width: 190px; }
 #tb-size { width: 56px; }
 .fmt { width: 28px; height: 28px; min-width: 28px; padding: 0; font-weight: 600; }
@@ -231,24 +243,32 @@ main { display: grid; grid-template-columns: 170px 1fr 268px; min-height: 0; }
 .modal.print .modal-b { flex: 1; min-height: 0; padding: 0; overflow: hidden; }
 .print-wrap { display: grid; grid-template-columns: 340px 1fr; height: 100%; }
 .print-side { overflow: auto; min-height: 0; padding: 14px 16px 16px; background: #fff; border-right: 1px solid var(--line); }
-.print-side .psec { padding: 0 0 12px; margin-bottom: 12px; }
-.print-side .grid2 .field { width: 100%; min-width: 0; }
-.print-side input[type=radio], .print-side input[type=checkbox] { accent-color: var(--accent); }
-.pr-printer { display: flex; gap: 6px; margin-bottom: 6px; }
-.pr-printer .field { flex: 1; min-width: 0; }
-.pr-printer .btn { height: 28px; border-color: var(--line-2); background: #fff; }
+.print-side h4 { margin: 16px 0 6px; font-size: 11px; letter-spacing: .7px; text-transform: uppercase; color: var(--ink-2); font-weight: 600; }
+.print-side select.big { margin-bottom: 6px; }
+.print-side input[type=checkbox] { accent-color: var(--accent); }
+.print-side .muted { font-size: 11.5px; line-height: 1.4; }
+.print-side .grid2 { gap: 8px; }
+.pf { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 11.5px; color: var(--ink-2); }
+.pf .numf, .pf .field { height: 30px; color: var(--ink); }
+.pr-copies .pf { flex-direction: row; align-items: center; gap: 10px; font-size: 12.5px; }
+.pr-copies .numf { width: 90px; }
+.pr-sub { margin: 2px 0 10px; }
+.pr-pos { display: flex; align-items: flex-end; gap: 8px; }
+.pr-pos .pf { width: 84px; }
+.pos-pad { display: grid; grid-template-columns: repeat(3, 18px); gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; flex: none; }
+.pos-pad button { width: 18px; height: 14px; padding: 0; border: 0; border-radius: 3px; background: var(--chrome-2); cursor: pointer; }
+.pos-pad button:hover { background: var(--line-2); }
+.pos-pad button.on { background: var(--accent); }
+.linkbtn { display: block; border: 0; background: none; padding: 0; margin: 0 0 2px 2px; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
+.linkbtn:hover { text-decoration: underline; }
+.linkbtn:disabled { opacity: .45; cursor: default; text-decoration: none; }
 .print-preview { background: var(--pasteboard); display: flex; align-items: center; justify-content: center; min-height: 0; position: relative; overflow: hidden; }
 .sheet { background: #fff; position: relative; box-shadow: 0 4px 18px rgba(0,0,0,.2); }
 .sheet .nopr { position: absolute; inset: 0; pointer-events: none; }
-.pos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; max-width: 200px; }
-.pos-grid .btn { height: 26px; border-color: var(--line); background: #fff; font-size: 12px; }
 .sheet .slot { position: absolute; outline: 1px solid rgba(29,111,216,.45); background: #fff; }
 .sheet .slot.drag { cursor: move; }
 .sheet .slot.drag:hover { outline: 2px solid var(--sel); }
 .sheet .slot .pz { transform-origin: 0 0; position: absolute; left: 0; top: 0; pointer-events: none; }
-.print-side .radio { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; margin-bottom: 6px; cursor: pointer; }
-.print-side .radio.on { border-color: var(--accent); background: var(--accent-soft); }
-.print-side .radio small { display: block; color: var(--ink-3); }
 .warn { background: #fff7e6; color: #8a5a00; border: 1px solid #f2d28b; padding: 6px 8px; border-radius: 6px; font-size: 12px; margin-top: 8px; }
 .prev-nav { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: rgba(255,255,255,.9); padding: 3px 8px; border-radius: 14px; font-size: 12px; }
 

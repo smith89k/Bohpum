@@ -107,6 +107,27 @@ html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 // An open dropdown list handles its own Esc / Enter
 const pickerOpen = (e) => { const s = e.target.closest && e.target.closest('select'); return !!(s && s.matches(':open')); };
+// Pictures for the big dropdowns (24 × 24, drawn in currentColor)
+const ICON = {
+  printer: '<path d="M7 9V3h10v6M7 18H5a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v7H7z"/>',
+  all: '<path d="M8 3h9l3 3v13H8zM4 7v14h12"/>',
+  current: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 12h6"/>',
+  custom: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 11h6M9 15h4"/>',
+  single: '<path d="M5 3h14v18H5z"/><path d="M8 10h8v5H8z" fill="currentColor" stroke="none"/>',
+  grid: '<path d="M5 3h14v18H5z"/><path d="M7 6h4v3H7zM13 6h4v3h-4zM7 11h4v3H7zM13 11h4v3h-4zM7 16h4v3H7zM13 16h4v3h-4z" fill="currentColor" stroke="none"/>',
+  actual: '<path d="M5 3h14v18H5z"/><path d="M7 5h10v14H7z" fill="currentColor" stroke="none"/>',
+  paper: '<path d="M6 3h12v18H6z"/>',
+  portrait: '<path d="M7 3h10v18H7z"/><path d="M10 7h4"/>',
+  landscape: '<path d="M3 7h18v10H3z"/><path d="M7 10h4"/>'
+};
+const svg = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`;
+// Big Publisher-style dropdown (a real <select>): items [{ v, icon, title, sub }]; the closed box shows the
+// chosen item through <selectedcontent>
+const bigOptions = (items, value) => '<button><selectedcontent></selectedcontent></button>' + items.map(it =>
+  `<option value="${esc(it.v)}"${it.v === value ? ' selected' : ''}><span class="ic">${svg(it.icon)}</span><span class="t"><b>${esc(it.title)}</b><small>${esc(it.sub)}</small></span></option>`).join('');
+const bigSelect = (attrs, items, value) => `<select class="big" ${attrs}>${bigOptions(items, value)}</select>`;
+// The 3×3 position pad: snap points 10 mm from the paper edges, or centred
+const PAD = [['tl', 'Top left'], ['tc', 'Top centre'], ['tr', 'Top right'], ['ml', 'Middle left'], ['mc', 'Centre'], ['mr', 'Middle right'], ['bl', 'Bottom left'], ['bc', 'Bottom centre'], ['br', 'Bottom right']];
 
 export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, toast, onDocChange }) {
   const small = doc.pageW * 2 <= 210 || doc.pageH * 2 <= 297;
@@ -142,7 +163,8 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   const side = back.querySelector('#pd-side'), prev = back.querySelector('#pd-prev'), info = back.querySelector('#pd-info');
   const printBtn = back.querySelector('[data-a="print"]');
 
-  const num = (key, label, obj = o, step = 0.5) => `<div class="numf" title="${label}"><span>${label}</span><input type="number" step="${step}" data-k="${key}" data-o="${obj === nudge ? 'n' : 'o'}" value="${round(obj[key])}"></div>`;
+  // A labelled number box (label above, unit inside)
+  const field = (key, label, obj = o, step = 0.5, unit = 'mm') => `<label class="pf"><span>${label}</span><span class="numf"><input type="number" step="${step}" data-k="${key}" data-o="${obj === nudge ? 'n' : 'o'}" value="${round(obj[key])}">${unit ? `<em>${unit}</em>` : ''}</span></label>`;
   const round = (v) => v == null ? '' : Math.round(v * 10) / 10;
 
   function ensurePos() {
@@ -150,59 +172,61 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     if (o.left == null || o.left > sw) o.left = Math.max(0, (sw - doc.pageW) / 2);
     if (o.top == null || o.top > sh) o.top = Math.max(0, (sh - doc.pageH) / 2);
   }
+  function padPos(k) {
+    const [sw, sh] = sheetSize(o.sheet, o.orient), m = 10;
+    return {
+      left: k[1] === 'l' ? m : k[1] === 'r' ? sw - doc.pageW - m : (sw - doc.pageW) / 2,
+      top: k[0] === 't' ? m : k[0] === 'b' ? sh - doc.pageH - m : (sh - doc.pageH) / 2
+    };
+  }
+  // Light the pad cell that matches the current position (none when the card is somewhere else)
+  function markPad() {
+    side.querySelectorAll('#pd-pos [data-pos]').forEach(b => {
+      const p = padPos(b.dataset.pos);
+      b.classList.toggle('on', Math.abs(p.left - o.left) < 0.05 && Math.abs(p.top - o.top) < 0.05);
+    });
+  }
 
   function renderSide() {
     if (o.mode === 'single') ensurePos();
     const [sw, sh] = sheetSize(o.sheet, o.orient);
     const g = gridInfo(doc, o, sw, sh);
+    const n = doc.pages.length, actual = o.mode === 'actual';
     side.innerHTML = `
-      <div class="psec">
-        <h4>Printer</h4>
-        <div class="pr-printer">
-          <select class="field" id="pd-printer" aria-label="Printer"></select>
-          <button class="btn" id="pd-props" title="Opens Windows' printing preferences for this printer. Changes there become this printer's defaults.">Properties</button>
-        </div>
-        <div class="grid2">${num('copies', 'Copies', o, 1)}</div>
-      </div>
-      <div class="psec">
-        <h4>Paper</h4>
-        <div class="grid2">
-          <select class="field" data-k="sheet" aria-label="Paper size">${Object.keys(SHEETS).map(k => `<option ${k === o.sheet ? 'selected' : ''}>${k}</option>`).join('')}</select>
-          <select class="field" data-k="orient" aria-label="Orientation"><option value="portrait" ${o.orient === 'portrait' ? 'selected' : ''}>Portrait</option><option value="landscape" ${o.orient === 'landscape' ? 'selected' : ''}>Landscape</option></select>
-        </div>
-        <div class="muted">Publication page: ${round(doc.pageW)} × ${round(doc.pageH)} mm</div>
-      </div>
-      <div class="psec">
-        <h4>Layout</h4>
-        <div class="radio ${o.mode === 'single' ? 'on' : ''}" data-mode="single"><input type="radio" ${o.mode === 'single' ? 'checked' : ''}><div><b>One per sheet, at a position</b><small>Drag the page on the preview or type the distance from the paper edge.</small></div></div>
-        ${o.mode === 'single' ? `<div style="margin:2px 0 10px 24px">
-          <div class="grid2">${num('left', 'Left')}${num('top', 'Top')}</div>
-          <div class="pos-grid" id="pd-pos">
-            ${[['tl', '↖'], ['tc', '↑'], ['tr', '↗'], ['ml', '←'], ['mc', 'Center'], ['mr', '→'], ['bl', '↙'], ['bc', '↓'], ['br', '↘']].map(([k, l]) => `<button class="btn" data-pos="${k}" title="Snap to ${k}">${l}</button>`).join('')}
-          </div></div>` : ''}
-        <div class="radio ${o.mode === 'grid' ? 'on' : ''}" data-mode="grid"><input type="radio" ${o.mode === 'grid' ? 'checked' : ''}><div><b>Multiple copies per sheet</b><small>${g.cols * g.rows ? `${g.cols * g.rows} per sheet (${g.cols} × ${g.rows})` : 'Page is larger than the paper'}</small></div></div>
-        ${o.mode === 'grid' ? `<div style="margin:2px 0 10px 24px">
-          <div class="grid2">${num('marginT', 'Top')}${num('marginL', 'Left')}${num('marginB', 'Bottom')}${num('marginR', 'Right')}${num('gapX', 'Gap ↔')}${num('gapY', 'Gap ↕')}</div>
-          <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
-          <select class="field" data-k="order" style="width:100%"><option value="repeat" ${o.order === 'repeat' ? 'selected' : ''}>Fill each sheet with one page</option><option value="sequence" ${o.order === 'sequence' ? 'selected' : ''}>Different pages in sequence</option></select>
-        </div>` : ''}
-        <div class="radio ${o.mode === 'actual' ? 'on' : ''}" data-mode="actual"><input type="radio" ${o.mode === 'actual' ? 'checked' : ''}><div><b>Page size = paper size</b><small>Print each page on paper of the same size (${round(doc.pageW)} × ${round(doc.pageH)} mm).</small></div></div>
-      </div>
-      <div class="psec">
-        <h4>Pages</h4>
-        <div class="grid2">
-          <select class="field" data-k="pages" aria-label="Pages to print"><option value="all" ${o.pages === 'all' ? 'selected' : ''}>All pages (${doc.pages.length})</option><option value="current" ${o.pages === 'current' ? 'selected' : ''}>Current page</option><option value="range" ${o.pages === 'range' ? 'selected' : ''}>Pages…</option></select>
-          ${o.pages === 'range' ? `<input class="field" data-k="range" aria-label="Pages" placeholder="e.g. 1-3, 5" value="${esc(o.range || '')}">` : ''}
-        </div>
-        <label class="chk"><input type="checkbox" data-k="crop" ${o.crop ? 'checked' : ''} ${o.mode === 'actual' ? 'disabled' : ''}> Crop marks</label>
-      </div>
-      <div class="psec">
-        <h4>Printer adjustment</h4>
-        <div class="grid2">${num('x', 'X', nudge, 0.1)}${num('y', 'Y', nudge, 0.1)}</div>
-        <div class="muted">If your printer prints a little off, enter the correction in mm (+X moves right, +Y moves down). It is remembered for next time.</div>
-      </div>
+      <div class="pr-copies">${field('copies', 'Copies', o, 1, '')}</div>
+      <h4>Printer</h4>
+      <select class="big" id="pd-printer" aria-label="Printer"></select>
+      <button class="linkbtn" id="pd-props" title="Opens Windows' printing preferences for this printer. Changes there become this printer's defaults.">Printer Properties</button>
+      <h4>Settings</h4>
+      ${bigSelect('data-k="pages" aria-label="Pages to print"', [
+        { v: 'all', icon: 'all', title: 'Print All Pages', sub: `The whole publication (${n} page${n === 1 ? '' : 's'})` },
+        { v: 'current', icon: 'current', title: 'Print Current Page', sub: `Page ${pageIndex + 1}` },
+        { v: 'range', icon: 'custom', title: 'Custom Print', sub: 'Type which pages to print' }
+      ], o.pages)}
+      ${o.pages === 'range' ? `<label class="pf pr-sub"><span>Pages</span><input class="field" data-k="range" placeholder="e.g. 1-3, 5" value="${esc(o.range || '')}"></label>` : ''}
+      ${bigSelect('data-k="mode" aria-label="Layout"', [
+        { v: 'single', icon: 'single', title: 'One per sheet, at a position', sub: 'Place the page anywhere on the paper' },
+        { v: 'grid', icon: 'grid', title: 'Multiple copies per sheet', sub: g.cols * g.rows ? `${g.cols * g.rows} per sheet (${g.cols} × ${g.rows})` : 'Page is larger than the paper' },
+        { v: 'actual', icon: 'actual', title: 'Page size = paper size', sub: `Print on ${round(doc.pageW)} × ${round(doc.pageH)} mm paper` }
+      ], o.mode)}
+      ${o.mode === 'single' ? `<div class="pr-sub pr-pos">${field('left', 'Left')}${field('top', 'Top')}
+        <div class="pos-pad" id="pd-pos" role="group" aria-label="Snap to">${PAD.map(([k, t]) => `<button data-pos="${k}" title="${t}" aria-label="${t}"></button>`).join('')}</div></div>` : ''}
+      ${o.mode === 'grid' ? `<div class="pr-sub">
+        <div class="grid2">${field('marginT', 'Top')}${field('marginL', 'Left')}${field('marginB', 'Bottom')}${field('marginR', 'Right')}${field('gapX', 'Gap ↔')}${field('gapY', 'Gap ↕')}</div>
+        <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
+        <select class="field" data-k="order" aria-label="Page order" style="width:100%"><option value="repeat" ${o.order === 'repeat' ? 'selected' : ''}>Fill each sheet with one page</option><option value="sequence" ${o.order === 'sequence' ? 'selected' : ''}>Different pages in sequence</option></select>
+      </div>` : ''}
+      ${bigSelect(`data-k="sheet" aria-label="Paper"${actual ? ' disabled' : ''}`,
+        Object.entries(SHEETS).map(([k, [w, h]]) => ({ v: k, icon: 'paper', title: k, sub: `${round(w)} × ${round(h)} mm` })), o.sheet)}
+      ${bigSelect(`data-k="orient" aria-label="Orientation"${actual ? ' disabled' : ''}`, [
+        { v: 'portrait', icon: 'portrait', title: 'Portrait Orientation', sub: 'Tall sheet' },
+        { v: 'landscape', icon: 'landscape', title: 'Landscape Orientation', sub: 'Wide sheet' }
+      ], o.orient)}
+      <label class="chk"><input type="checkbox" data-k="crop" ${o.crop ? 'checked' : ''} ${actual ? 'disabled' : ''}> Crop marks</label>
+      <h4>Printer adjustment</h4>
+      <div class="grid2">${field('x', 'Move right', nudge, 0.1)}${field('y', 'Move down', nudge, 0.1)}</div>
+      <div class="muted">If your printer prints a little off, enter the correction in mm. It is remembered for next time.</div>
       <div id="pd-warn"></div>`;
-    side.querySelectorAll('[data-mode]').forEach(r => r.onclick = () => { o.mode = r.dataset.mode; sheetNo = 0; update(); });
     side.querySelectorAll('[data-k]').forEach(inp => {
       const ev = inp.type === 'number' || inp.tagName === 'INPUT' && inp.type !== 'checkbox' ? 'input' : 'change';
       inp.addEventListener(ev, () => {
@@ -212,29 +236,26 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
         else if (inp.type === 'number') { const v = parseFloat(inp.value); target[k] = isNaN(v) ? 0 : v; }
         else target[k] = inp.value;
         if (k === 'sheet' || k === 'orient') { o.left = null; o.top = null; }
-        if (inp.tagName === 'SELECT' || inp.type === 'checkbox') update(); else { renderPreview(); renderWarn(); }
+        if (k === 'mode') sheetNo = 0;
+        if (inp.tagName === 'SELECT' || inp.type === 'checkbox') update(); else { renderPreview(); renderWarn(); markPad(); }
       });
     });
-    side.querySelectorAll('[data-pos]').forEach(b => b.onclick = () => {
-      const [sw, sh] = sheetSize(o.sheet, o.orient);
-      const m = 10, k = b.dataset.pos;
-      o.left = k[1] === 'l' ? m : k[1] === 'r' ? sw - doc.pageW - m : (sw - doc.pageW) / 2;
-      o.top = k[0] === 't' ? m : k[0] === 'b' ? sh - doc.pageH - m : (sh - doc.pageH) / 2;
-      update();
-    });
+    side.querySelectorAll('#pd-pos [data-pos]').forEach(b => b.onclick = () => { Object.assign(o, padPos(b.dataset.pos)); update(); });
     side.querySelector('#pd-printer').addEventListener('change', (e) => { printer = e.target.value; saveSettings({ printer }); });
     side.querySelector('#pd-props').onclick = () => { if (printer) api.printerPrefs(printer); };
     fillPrinters();
+    markPad();
     renderWarn();
   }
 
-  // The printer list: the remembered printer if still installed, else Windows' default
+  // The printer dropdown: the remembered printer if still installed, else Windows' default
   function fillPrinters() {
     const sel = side.querySelector('#pd-printer'), props = side.querySelector('#pd-props');
     const none = !printers || !printers.length;
-    sel.innerHTML = !printers ? '<option>Finding printers…</option>'
-      : none ? '<option>No printers installed</option>'
-      : printers.map(p => `<option value="${esc(p.name)}"${p.name === printer ? ' selected' : ''}>${esc(p.displayName)}</option>`).join('');
+    const items = !printers ? [{ v: '', icon: 'printer', title: 'Finding printers…', sub: 'One moment' }]
+      : none ? [{ v: '', icon: 'printer', title: 'No printers installed', sub: 'Save as PDF still works' }]
+      : printers.map(p => ({ v: p.name, icon: 'printer', title: p.displayName, sub: p.isDefault ? 'Default printer' : 'Printer' }));
+    sel.innerHTML = bigOptions(items, none ? '' : printer);
     sel.disabled = none; props.disabled = none;
     printBtn.disabled = sending || none || !printer;
   }
@@ -316,7 +337,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       const L = side.querySelector('[data-k="left"]'), T = side.querySelector('[data-k="top"]');
       if (L) L.value = round(nl); if (T) T.value = round(nt);
     };
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); renderWarn(); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); renderWarn(); markPad(); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   }
 
