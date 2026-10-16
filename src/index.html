@@ -7,8 +7,19 @@
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <header id="topbar">
+  <header id="titlebar">
     <div class="brand"><span class="km">បោះពុម្ព</span><b>Bohpum</b></div>
+    <nav id="menus">
+      <button class="menu-btn" data-menu="0">File</button>
+      <button class="menu-btn" data-menu="1">Edit</button>
+      <button class="menu-btn" data-menu="2">Insert</button>
+      <button class="menu-btn" data-menu="3">Arrange</button>
+      <button class="menu-btn" data-menu="4">View</button>
+      <button class="menu-btn" data-menu="5">Help</button>
+    </nav>
+    <div id="doc-title"></div>
+  </header>
+  <header id="topbar">
     <div class="tb-group">
       <button class="btn" data-cmd="new" title="New (Ctrl+N)" data-icon="new"></button>
       <button class="btn" data-cmd="open" title="Open .pub / .bpum (Ctrl+O)" data-icon="open"></button>

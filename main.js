@@ -74,6 +74,10 @@ function createWindow() {
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     title: APP_NAME,
     backgroundColor: '#e9e7e2',
+    // Own title row (src/index.html #titlebar): Windows only draws ─ □ ✕ over its right end, in the row's
+    // colours (--chrome / --ink in src/app.css — keep in sync). 36 = the row without its 1 px bottom line.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#f7f5f1', symbolColor: '#23201b', height: 36 },
     show: false,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false }
   });
@@ -99,17 +103,19 @@ function createWindow() {
 function send(cmd) { if (win) win.webContents.send('menu', cmd); }
 
 function buildMenu() {
+  // The menu is never drawn as a row (own title row, menus pop up from it), so the page's keydown
+  // handler owns every shortcut; the menu only shows them.
   const noReg = { registerAccelerator: false };
   const template = [
     { label: 'File', submenu: [
-      { label: 'New…', accelerator: 'CmdOrCtrl+N', click: () => send('new') },
-      { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => send('open') },
+      { label: 'New…', accelerator: 'CmdOrCtrl+N', ...noReg, click: () => send('new') },
+      { label: 'Open…', accelerator: 'CmdOrCtrl+O', ...noReg, click: () => send('open') },
       { type: 'separator' },
-      { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => send('save') },
-      { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('save-as') },
+      { label: 'Save', accelerator: 'CmdOrCtrl+S', ...noReg, click: () => send('save') },
+      { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', ...noReg, click: () => send('save-as') },
       { type: 'separator' },
       { label: 'Export Page as PNG…', click: () => send('export-png') },
-      { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: () => send('print') },
+      { label: 'Print…', accelerator: 'CmdOrCtrl+P', ...noReg, click: () => send('print') },
       { type: 'separator' },
       { label: 'Page Setup…', click: () => send('page-setup') },
       { type: 'separator' },
@@ -227,6 +233,13 @@ ipcMain.handle('set-settings', (_e, patch) => { const s = { ...loadSettings(), .
 ipcMain.on('set-dirty', (_e, v) => { dirty = !!v; });
 ipcMain.on('set-title', (_e, t) => { if (win) win.setTitle(t); });
 ipcMain.on('close-now', () => { dirty = false; if (win) win.close(); });
+// A menu word in the title row (or Alt+letter / F10): that application menu drops down under it.
+// x, y = the word's bottom-left in page pixels. Resolves when the menu closes.
+ipcMain.handle('show-menu', (e, index, x, y) => new Promise((resolve) => {
+  const item = Menu.getApplicationMenu()?.items[index | 0];
+  if (!win || e.sender !== win.webContents || !item || !item.submenu) return resolve(false);
+  item.submenu.popup({ window: win, x: Math.max(0, Math.round(+x) || 0), y: Math.max(0, Math.round(+y) || 0), callback: () => resolve(true) });
+}));
 
 // Render HTML in a hidden window, then PDF / print / PNG
 function withHiddenWindow(html, fn) {

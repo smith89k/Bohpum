@@ -19,7 +19,20 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--chrome); color: var(--ink); font: 13px/1.35 var(--ui-font); }
 button, input, select { font: inherit; color: inherit; }
-body { display: grid; grid-template-rows: auto auto 1fr auto; }
+body { display: grid; grid-template-rows: auto auto auto 1fr auto; }
+
+/* ---------- title row ---------- */
+/* Windows draws ─ □ ✕ over the right end (main.js titleBarOverlay: 36 px = this row without its line,
+   colours = --chrome / --ink); the right padding keeps the row's content out from under them. */
+#titlebar { display: flex; align-items: center; gap: 2px; height: 37px; padding: 0 calc(10px + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)) 0 10px; background: var(--chrome); border-bottom: 1px solid var(--line); -webkit-app-region: drag; user-select: none; }
+#titlebar .brand { margin-right: 6px; }
+#menus { display: flex; gap: 1px; }
+.menu-btn { -webkit-app-region: no-drag; height: 28px; padding: 0 9px; border: 0; border-radius: 5px; background: transparent; font-size: 12.5px; cursor: default; }
+.menu-btn:hover { background: var(--chrome-2); }
+.menu-btn.open { background: var(--accent-soft); color: var(--accent); }
+#doc-title { flex: 1; min-width: 0; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 12.5px; }
+/* a drag area ignores what is drawn over it */
+.modal-back, #ctxmenu, #toast, .drop-hint { -webkit-app-region: no-drag; }
 
 /* ---------- top bar ---------- */
 #topbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--chrome); border-bottom: 1px solid var(--line); flex-wrap: wrap; }

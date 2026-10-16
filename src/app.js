@@ -96,7 +96,11 @@ function undo() { if (S.editing) return finishEditing(); if (S.hi > 0) restore(S
 function redo() { if (S.hi < S.hist.length - 1) restore(S.hi + 1); }
 function updateUndo() { $('b-undo').disabled = S.hi <= 0; $('b-redo').disabled = S.hi >= S.hist.length - 1; }
 function setDirty(v) { S.dirty = v; api.setDirty(v); updateTitle(); }
-function updateTitle() { api.setTitle(`${S.doc.name || 'Untitled'}${S.dirty ? ' •' : ''} – Bohpum`); }
+function updateTitle() {
+  const t = `${S.doc.name || 'Untitled'}${S.dirty ? ' •' : ''}`;
+  $('doc-title').textContent = t;
+  api.setTitle(`${t} – Bohpum`);
+}
 
 // ---------------------------------------------------------------- rendering
 function renderAll() { renderStage(); renderThumbs(); renderProps(); updateTextbar(); updateStatus(); updateTools(); }
@@ -1527,16 +1531,36 @@ function showMenu(e, items) {
   m.querySelectorAll('.mi').forEach(mi => mi.onclick = () => { closeCtx(); cmd(mi.dataset.c); });
 }
 
+// ---------------------------------------------------------------- title row menus
+const MENU_KEYS = { f: 0, e: 1, i: 2, a: 3, v: 4, h: 5 }; // Alt+F File, Alt+E Edit … (main.js menu order)
+const FILE_KEYS = { n: 'new', o: 'open', p: 'print' };    // Ctrl+letter; Ctrl+S / Ctrl+Shift+S below
+function openMenu(i) {
+  const b = document.querySelector(`#menus [data-menu="${i}"]`);
+  if (!b || !api.showMenu) return;
+  closeCtx();
+  const r = b.getBoundingClientRect();
+  b.classList.add('open');
+  api.showMenu(i, r.left, r.bottom).finally(() => b.classList.remove('open'));
+}
+
 // ---------------------------------------------------------------- keyboard
 function onKey(e) {
   if ($('modal-root').children.length) return;
   const ctrl = e.ctrlKey || e.metaKey, k = e.key;
+  // File shortcuts work everywhere, also while typing (Windows no longer handles them: see main.js buildMenu)
+  if (ctrl && !e.altKey) {
+    const lk = k.toLowerCase();
+    if (lk === 's') { e.preventDefault(); return cmd(e.shiftKey ? 'save-as' : 'save'); }
+    if (!e.shiftKey && FILE_KEYS[lk]) { e.preventDefault(); return cmd(FILE_KEYS[lk]); }
+  }
   if (S.editing) {
     if (k === 'Escape') { e.preventDefault(); finishEditing(); }
     else if (ctrl && ['b', 'i', 'u'].includes(k.toLowerCase())) { e.preventDefault(); S.toggleFmt(k.toLowerCase()); }
     return;
   }
   if (e.target.matches('input, select, textarea, [contenteditable="true"]')) { if (k === 'Escape') e.target.blur(); return; }
+  if (e.altKey && !ctrl && !e.shiftKey && MENU_KEYS[k.toLowerCase()] != null) { e.preventDefault(); return openMenu(MENU_KEYS[k.toLowerCase()]); }
+  if (k === 'F10' && !ctrl && !e.altKey) { e.preventDefault(); return openMenu(0); }
   const sel = selObjs();
   if (k === ' ' && !S.space) { S.space = true; $('workspace').style.cursor = 'grab'; e.preventDefault(); return; }
   if (ctrl) {
@@ -1555,11 +1579,6 @@ function onKey(e) {
     if (k === '0') { e.preventDefault(); return zoomFit(); }
     if (lk === 'm') { e.preventDefault(); return cmd('toggle-master'); }
     if (lk === 'b' || lk === 'i' || lk === 'u') { if (textBoxesSelected().length) { e.preventDefault(); S.toggleFmt(lk); } return; }
-    if (!window.api.__native) { // browser fallback for menu shortcuts
-      if (lk === 's') { e.preventDefault(); return save(e.shiftKey); }
-      if (lk === 'o') { e.preventDefault(); return openFile(); }
-      if (lk === 'p') { e.preventDefault(); return printDialog(); }
-    }
     return;
   }
   if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); return deleteSel(); }
@@ -1588,6 +1607,10 @@ function wire() {
   document.querySelectorAll('[data-icon]').forEach(el => { el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon)); });
   document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => cmd(b.dataset.cmd)));
   document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+  document.querySelectorAll('#menus [data-menu]').forEach(b => {
+    b.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus (e.g. in a text box being edited)
+    b.addEventListener('click', () => openMenu(+b.dataset.menu));
+  });
   $('zoom-sel').onchange = () => { const v = $('zoom-sel').value; if (v === 'fit') zoomFit(); else setZoom(+v / 100); };
   const ws = $('workspace');
   ws.addEventListener('pointerdown', onWorkspaceDown);

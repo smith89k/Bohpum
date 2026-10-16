@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('api', {
   setDirty: (v) => ipcRenderer.send('set-dirty', v),
   setTitle: (t) => ipcRenderer.send('set-title', t),
   closeNow: () => ipcRenderer.send('close-now'),
+  showMenu: (index, x, y) => ipcRenderer.invoke('show-menu', index, x, y),
   pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return file.path || null; } },
   onMenu: (fn) => ipcRenderer.on('menu', (_e, cmd) => fn(cmd)),
   onOpenPath: (fn) => ipcRenderer.on('open-path', (_e, p) => fn(p))
