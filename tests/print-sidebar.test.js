@@ -45,6 +45,14 @@ run(async (t, check) => {
     return { startGap: Math.round(left.left - inL), endGap: Math.round(inR - pad.right) };
   })()`);
   check('One per sheet: Left, Top and the pad fill the box edge to edge', Math.abs(fill.startGap) <= 1 && Math.abs(fill.endGap) <= 1, fill);
+  const cols = await t.js(`(() => {
+    const r = (s) => document.querySelector(s).getBoundingClientRect();
+    const top = document.querySelector('[data-k="top"]').closest('.pf').getBoundingClientRect(), left = document.querySelector('[data-k="left"]').closest('.pf').getBoundingClientRect(), pad = r('#pd-pos');
+    return { topAboveLeft: top.bottom <= left.top && Math.round(top.left) === Math.round(left.left), padRight: pad.left >= Math.max(top.right, left.right),
+      padTop: Math.round(pad.top - top.top), padBottom: Math.round(pad.bottom - left.bottom) };
+  })()`);
+  check('One per sheet: two columns, Top above Left, the pad beside them', cols.topAboveLeft && cols.padRight, cols);
+  check('One per sheet: the pad is as tall as Top + Left', Math.abs(cols.padTop) <= 1 && Math.abs(cols.padBottom) <= 1, cols);
 
   await t.click('#pd-pos [data-pos="tl"]');
   const s2 = await side();

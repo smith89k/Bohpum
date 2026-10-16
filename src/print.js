@@ -209,7 +209,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
         { v: 'grid', icon: 'grid', title: 'Multiple copies per sheet', sub: g.cols * g.rows ? `${g.cols * g.rows} per sheet (${g.cols} × ${g.rows})` : 'Page is larger than the paper' },
         { v: 'actual', icon: 'actual', title: 'Page size = paper size', sub: `Print on ${round(doc.pageW)} × ${round(doc.pageH)} mm paper` }
       ], o.mode)}
-      ${o.mode === 'single' ? `<div class="pr-box pr-pos">${field('left', 'Left')}${field('top', 'Top')}
+      ${o.mode === 'single' ? `<div class="pr-box pr-pos">${field('top', 'Top')}${field('left', 'Left')}
         <div class="pos-pad" id="pd-pos" role="group" aria-label="Snap to">${PAD.map(([k, t]) => `<button data-pos="${k}" title="${t}" aria-label="${t}"></button>`).join('')}</div></div>` : ''}
       ${o.mode === 'grid' ? `<div class="pr-box">
         <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
