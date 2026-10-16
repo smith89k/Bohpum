@@ -324,7 +324,7 @@ function drawRulers() {
     }
     g.stroke();
     if (mouseMm) {
-      g.strokeStyle = '#9a3412'; g.beginPath();
+      g.strokeStyle = '#1f7a4c'; g.beginPath(); // --accent
       const p = Math.round(origin + (horiz ? mouseMm.x : mouseMm.y) * k) + 0.5;
       if (horiz) { g.moveTo(p, 0); g.lineTo(p, 22); } else { g.moveTo(0, p); g.lineTo(22, p); }
       g.stroke();
