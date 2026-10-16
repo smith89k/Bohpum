@@ -50,9 +50,10 @@ credit LibreOffice on the About page.
 - Undo / redo, copy / paste between pages and publications, paste pictures from the clipboard
 
 **Print and save**
-- **Print** (Ctrl+P), like Publisher:
-  - Pick the printer in the dialog; **Print** sends straight to it (**Properties** opens the printer's own settings). The last printer is remembered.
-  - *One per sheet, at a position*: drag the card on the A4 preview or type Left/Top in mm
+- **Print** (Ctrl+P), like Publisher: the print screen fills the window; each setting is a big dropdown
+  (printer, pages, layout, paper, orientation) with the preview beside it
+  - Pick the printer; **Print** sends straight to it (**Printer Properties** opens the printer's own settings). The last printer is remembered.
+  - *One per sheet, at a position*: drag the card on the A4 preview, type Left/Top in mm, or click the 3×3 pad
   - *Multiple copies per sheet*: margins, gaps, centred block, the same page or different pages
   - *Page size = paper size*
   - Crop marks, page range, copies
