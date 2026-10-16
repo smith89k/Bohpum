@@ -67,21 +67,27 @@ function cropMarks(sheetEl, x, y, w, h) {
   }
 }
 
-// Build a standalone HTML document for the hidden print window
-export function buildOutputHtml(doc, lay, { crop = false, nudge = { x: 0, y: 0 } } = {}) {
+// Build a standalone HTML document for the hidden print window.
+// portraitPaper: a landscape sheet goes out as portrait paper with the content turned 90° (its top along
+// the paper's left edge, the way drivers print landscape), so no printer driver turns it a second time.
+export function buildOutputHtml(doc, lay, { crop = false, nudge = { x: 0, y: 0 }, portraitPaper = false } = {}) {
+  const turn = portraitPaper && lay.sw > lay.sh;
+  const pw = turn ? lay.sh : lay.sw, ph = turn ? lay.sw : lay.sh;
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-100000px;top:0;';
   document.body.append(host);
   for (const sheet of lay.sheets) {
     const s = document.createElement('div');
     s.className = 'sheet-out';
+    let t = s;
+    if (turn) { t = document.createElement('div'); t.className = 'sheet-turn'; s.append(t); }
     for (const p of sheet) {
       const pg = renderPage(doc, doc.pages[p.pi]);
       pg.style.position = 'absolute';
       pg.style.left = (p.x + (nudge.x || 0)) + 'mm';
       pg.style.top = (p.y + (nudge.y || 0)) + 'mm';
-      s.append(pg);
-      if (crop) cropMarks(s, p.x + (nudge.x || 0), p.y + (nudge.y || 0), doc.pageW, doc.pageH);
+      t.append(pg);
+      if (crop) cropMarks(t, p.x + (nudge.x || 0), p.y + (nudge.y || 0), doc.pageW, doc.pageH);
     }
     host.append(s);
   }
@@ -89,14 +95,17 @@ export function buildOutputHtml(doc, lay, { crop = false, nudge = { x: 0, y: 0 }
   const body = host.innerHTML;
   host.remove();
   return `<!doctype html><html><head><meta charset="utf-8"><title>${(doc.name || 'Publication').replace(/</g, '')}</title><style>${RENDER_CSS}
-@page { size: ${lay.sw}mm ${lay.sh}mm; margin: 0; }
+@page { size: ${pw}mm ${ph}mm; margin: 0; }
 html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.sheet-out { position: relative; width: ${lay.sw}mm; height: ${lay.sh}mm; overflow: hidden; break-after: page; page-break-after: always; }
+.sheet-out { position: relative; width: ${pw}mm; height: ${ph}mm; overflow: hidden; break-after: page; page-break-after: always; }
 .sheet-out:last-child { break-after: auto; page-break-after: auto; }
+.sheet-turn { position: absolute; left: 0; top: 0; width: ${lay.sw}mm; height: ${lay.sh}mm; transform-origin: 0 0; transform: translateY(${lay.sw}mm) rotate(-90deg); }
 </style></head><body>${body}</body></html>`;
 }
 
 // ---------------- dialog ----------------
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
 export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, toast, onDocChange }) {
   const small = doc.pageW * 2 <= 210 || doc.pageH * 2 <= 297;
   const o = Object.assign({
@@ -107,6 +116,9 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   }, clone(doc.print || {}));
   const nudge = Object.assign({ x: 0, y: 0 }, settings.printNudge || {});
   let sheetNo = 0;
+  let printers = null;                     // null until Windows has listed them
+  let printer = settings.printer || null;  // printer name; remembered app-wide
+  let sending = false;
 
   const back = document.createElement('div');
   back.className = 'modal-back';
@@ -121,16 +133,16 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       <span class="muted" style="margin-right:auto" id="pd-info"></span>
       <button class="btn" data-a="close">Close</button>
       <button class="btn" data-a="pdf">Save as PDF</button>
-      <button class="btn primary" data-a="print">Print…</button>
+      <button class="btn primary" data-a="print">Print</button>
     </div>
   </div>`;
   document.getElementById('modal-root').append(back);
   const side = back.querySelector('#pd-side'), prev = back.querySelector('#pd-prev'), info = back.querySelector('#pd-info');
+  const printBtn = back.querySelector('[data-a="print"]');
 
   const num = (key, label, obj = o, step = 0.5) => `<div class="numf" title="${label}"><span>${label}</span><input type="number" step="${step}" data-k="${key}" data-o="${obj === nudge ? 'n' : 'o'}" value="${round(obj[key])}"></div>`;
   const round = (v) => v == null ? '' : Math.round(v * 10) / 10;
 
-  function sheetWH() { return o.mode === 'actual' ? [doc.pageW, doc.pageH] : sheetSize(o.sheet, o.orient); }
   function ensurePos() {
     const [sw, sh] = sheetSize(o.sheet, o.orient);
     if (o.left == null || o.left > sw) o.left = Math.max(0, (sw - doc.pageW) / 2);
@@ -142,40 +154,52 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     const [sw, sh] = sheetSize(o.sheet, o.orient);
     const g = gridInfo(doc, o, sw, sh);
     side.innerHTML = `
-      <div class="psec" style="padding:0 0 10px;border:0">
+      <div class="psec">
+        <h4>Printer</h4>
+        <div class="pr-printer">
+          <select class="field" id="pd-printer" aria-label="Printer"></select>
+          <button class="btn" id="pd-props" title="Opens Windows' printing preferences for this printer. Changes there become this printer's defaults.">Properties</button>
+        </div>
+        <div class="grid2">${num('copies', 'Copies', o, 1)}</div>
+      </div>
+      <div class="psec">
         <h4>Paper</h4>
         <div class="grid2">
-          <select class="field" data-k="sheet">${Object.keys(SHEETS).map(k => `<option ${k === o.sheet ? 'selected' : ''}>${k}</option>`).join('')}</select>
-          <select class="field" data-k="orient"><option value="portrait" ${o.orient === 'portrait' ? 'selected' : ''}>Portrait</option><option value="landscape" ${o.orient === 'landscape' ? 'selected' : ''}>Landscape</option></select>
+          <select class="field" data-k="sheet" aria-label="Paper size">${Object.keys(SHEETS).map(k => `<option ${k === o.sheet ? 'selected' : ''}>${k}</option>`).join('')}</select>
+          <select class="field" data-k="orient" aria-label="Orientation"><option value="portrait" ${o.orient === 'portrait' ? 'selected' : ''}>Portrait</option><option value="landscape" ${o.orient === 'landscape' ? 'selected' : ''}>Landscape</option></select>
         </div>
         <div class="muted">Publication page: ${round(doc.pageW)} × ${round(doc.pageH)} mm</div>
       </div>
-      <h4 style="margin:4px 0 8px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-2)">Layout</h4>
-      <div class="radio ${o.mode === 'single' ? 'on' : ''}" data-mode="single"><input type="radio" ${o.mode === 'single' ? 'checked' : ''}><div><b>One per sheet, at a position</b><small>Drag the page on the preview or type the distance from the paper edge.</small></div></div>
-      ${o.mode === 'single' ? `<div style="margin:2px 0 10px 24px">
-        <div class="grid2">${num('left', 'Left')}${num('top', 'Top')}</div>
-        <div class="pos-grid" id="pd-pos">
-          ${[['tl', '↖'], ['tc', '↑'], ['tr', '↗'], ['ml', '←'], ['mc', 'Center'], ['mr', '→'], ['bl', '↙'], ['bc', '↓'], ['br', '↘']].map(([k, l]) => `<button class="btn" data-pos="${k}" title="Snap to ${k}">${l}</button>`).join('')}
-        </div></div>` : ''}
-      <div class="radio ${o.mode === 'grid' ? 'on' : ''}" data-mode="grid"><input type="radio" ${o.mode === 'grid' ? 'checked' : ''}><div><b>Multiple copies per sheet</b><small>${g.cols * g.rows ? `${g.cols * g.rows} per sheet (${g.cols} × ${g.rows})` : 'Page is larger than the paper'}</small></div></div>
-      ${o.mode === 'grid' ? `<div style="margin:2px 0 10px 24px">
-        <div class="grid2">${num('marginT', 'Top')}${num('marginL', 'Left')}${num('marginB', 'Bottom')}${num('marginR', 'Right')}${num('gapX', 'Gap ↔')}${num('gapY', 'Gap ↕')}</div>
-        <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
-        <select class="field" data-k="order" style="width:100%"><option value="repeat" ${o.order === 'repeat' ? 'selected' : ''}>Fill each sheet with one page</option><option value="sequence" ${o.order === 'sequence' ? 'selected' : ''}>Different pages in sequence</option></select>
-      </div>` : ''}
-      <div class="radio ${o.mode === 'actual' ? 'on' : ''}" data-mode="actual"><input type="radio" ${o.mode === 'actual' ? 'checked' : ''}><div><b>Page size = paper size</b><small>Print each page on paper of the same size (${round(doc.pageW)} × ${round(doc.pageH)} mm).</small></div></div>
-      <div class="psec" style="padding:10px 0 0;border:0">
-        <label class="chk"><input type="checkbox" data-k="crop" ${o.crop ? 'checked' : ''} ${o.mode === 'actual' ? 'disabled' : ''}> Crop marks</label>
-        <div class="grid2" style="margin-top:6px">
-          <select class="field" data-k="pages"><option value="all" ${o.pages === 'all' ? 'selected' : ''}>All pages (${doc.pages.length})</option><option value="current" ${o.pages === 'current' ? 'selected' : ''}>Current page</option><option value="range" ${o.pages === 'range' ? 'selected' : ''}>Pages…</option></select>
-          ${o.pages === 'range' ? `<input class="field" data-k="range" placeholder="e.g. 1-3, 5" value="${o.range || ''}">` : num('copies', 'Copies', o, 1)}
+      <div class="psec">
+        <h4>Layout</h4>
+        <div class="radio ${o.mode === 'single' ? 'on' : ''}" data-mode="single"><input type="radio" ${o.mode === 'single' ? 'checked' : ''}><div><b>One per sheet, at a position</b><small>Drag the page on the preview or type the distance from the paper edge.</small></div></div>
+        ${o.mode === 'single' ? `<div style="margin:2px 0 10px 24px">
+          <div class="grid2">${num('left', 'Left')}${num('top', 'Top')}</div>
+          <div class="pos-grid" id="pd-pos">
+            ${[['tl', '↖'], ['tc', '↑'], ['tr', '↗'], ['ml', '←'], ['mc', 'Center'], ['mr', '→'], ['bl', '↙'], ['bc', '↓'], ['br', '↘']].map(([k, l]) => `<button class="btn" data-pos="${k}" title="Snap to ${k}">${l}</button>`).join('')}
+          </div></div>` : ''}
+        <div class="radio ${o.mode === 'grid' ? 'on' : ''}" data-mode="grid"><input type="radio" ${o.mode === 'grid' ? 'checked' : ''}><div><b>Multiple copies per sheet</b><small>${g.cols * g.rows ? `${g.cols * g.rows} per sheet (${g.cols} × ${g.rows})` : 'Page is larger than the paper'}</small></div></div>
+        ${o.mode === 'grid' ? `<div style="margin:2px 0 10px 24px">
+          <div class="grid2">${num('marginT', 'Top')}${num('marginL', 'Left')}${num('marginB', 'Bottom')}${num('marginR', 'Right')}${num('gapX', 'Gap ↔')}${num('gapY', 'Gap ↕')}</div>
+          <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
+          <select class="field" data-k="order" style="width:100%"><option value="repeat" ${o.order === 'repeat' ? 'selected' : ''}>Fill each sheet with one page</option><option value="sequence" ${o.order === 'sequence' ? 'selected' : ''}>Different pages in sequence</option></select>
+        </div>` : ''}
+        <div class="radio ${o.mode === 'actual' ? 'on' : ''}" data-mode="actual"><input type="radio" ${o.mode === 'actual' ? 'checked' : ''}><div><b>Page size = paper size</b><small>Print each page on paper of the same size (${round(doc.pageW)} × ${round(doc.pageH)} mm).</small></div></div>
+      </div>
+      <div class="psec">
+        <h4>Pages</h4>
+        <div class="grid2">
+          <select class="field" data-k="pages" aria-label="Pages to print"><option value="all" ${o.pages === 'all' ? 'selected' : ''}>All pages (${doc.pages.length})</option><option value="current" ${o.pages === 'current' ? 'selected' : ''}>Current page</option><option value="range" ${o.pages === 'range' ? 'selected' : ''}>Pages…</option></select>
+          ${o.pages === 'range' ? `<input class="field" data-k="range" aria-label="Pages" placeholder="e.g. 1-3, 5" value="${esc(o.range || '')}">` : ''}
         </div>
-        ${o.pages === 'range' ? `<div class="grid2">${num('copies', 'Copies', o, 1)}</div>` : ''}
-        <h4 style="margin:12px 0 6px">Printer adjustment</h4>
+        <label class="chk"><input type="checkbox" data-k="crop" ${o.crop ? 'checked' : ''} ${o.mode === 'actual' ? 'disabled' : ''}> Crop marks</label>
+      </div>
+      <div class="psec">
+        <h4>Printer adjustment</h4>
         <div class="grid2">${num('x', 'X', nudge, 0.1)}${num('y', 'Y', nudge, 0.1)}</div>
         <div class="muted">If your printer prints a little off, enter the correction in mm (+X moves right, +Y moves down). It is remembered for next time.</div>
-        <div id="pd-warn"></div>
-      </div>`;
+      </div>
+      <div id="pd-warn"></div>`;
     side.querySelectorAll('[data-mode]').forEach(r => r.onclick = () => { o.mode = r.dataset.mode; sheetNo = 0; update(); });
     side.querySelectorAll('[data-k]').forEach(inp => {
       const ev = inp.type === 'number' || inp.tagName === 'INPUT' && inp.type !== 'checkbox' ? 'input' : 'change';
@@ -196,7 +220,21 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       o.top = k[0] === 't' ? m : k[0] === 'b' ? sh - doc.pageH - m : (sh - doc.pageH) / 2;
       update();
     });
+    side.querySelector('#pd-printer').addEventListener('change', (e) => { printer = e.target.value; saveSettings({ printer }); });
+    side.querySelector('#pd-props').onclick = () => { if (printer) api.printerPrefs(printer); };
+    fillPrinters();
     renderWarn();
+  }
+
+  // The printer list: the remembered printer if still installed, else Windows' default
+  function fillPrinters() {
+    const sel = side.querySelector('#pd-printer'), props = side.querySelector('#pd-props');
+    const none = !printers || !printers.length;
+    sel.innerHTML = !printers ? '<option>Finding printers…</option>'
+      : none ? '<option>No printers installed</option>'
+      : printers.map(p => `<option value="${esc(p.name)}"${p.name === printer ? ' selected' : ''}>${esc(p.displayName)}</option>`).join('');
+    sel.disabled = none; props.disabled = none;
+    printBtn.disabled = sending || none || !printer;
   }
 
   function renderWarn() {
@@ -212,7 +250,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     }
     side.querySelector('#pd-warn').innerHTML = w.map(t => `<div class="warn">${t}</div>`).join('');
     const n = lay.sheets.length;
-    info.textContent = `${n} sheet${n === 1 ? '' : 's'} · ${round(sw)} × ${round(sh)} mm · prints at 100% (actual size)`;
+    if (!sending) info.textContent = `${n} sheet${n === 1 ? '' : 's'} · ${round(sw)} × ${round(sh)} mm · prints at 100% (actual size)`;
   }
 
   function currentLayout() {
@@ -293,7 +331,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   let opened = null;
   const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); };
   const keepAndClose = () => { if (JSON.stringify([o, nudge]) !== opened) persist(); close(); };
-  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); keepAndClose(); } };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); if (!sending) keepAndClose(); } };
   document.addEventListener('keydown', onKey, true);
 
   back.querySelector('[data-a="close"]').onclick = keepAndClose;
@@ -305,16 +343,31 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     const p = await api.exportPdf({ html, widthMm: lay.sw, heightMm: lay.sh, defaultName: (doc.name || 'publication') + (o.mode === 'actual' ? '' : '-' + o.sheet) + '.pdf' });
     if (p) toast('Saved ' + p);
   };
-  back.querySelector('[data-a="print"]').onclick = async () => {
+  // Print: straight to the chosen printer, no Windows dialog
+  printBtn.onclick = async () => {
     const lay = currentLayout(); if (!lay.sheets.length) return toast('Nothing to print with these settings.');
+    if (!printer || sending) return;
     persist();
-    const html = buildOutputHtml(doc, lay, { crop: o.crop && o.mode !== 'actual', nudge: o.mode === 'actual' ? { x: 0, y: 0 } : nudge });
+    saveSettings({ printer });
+    const actual = o.mode === 'actual';
+    const html = buildOutputHtml(doc, lay, { crop: o.crop && !actual, nudge: actual ? { x: 0, y: 0 } : nudge, portraitPaper: !actual });
+    const name = ((printers || []).find(p => p.name === printer) || {}).displayName || printer;
+    sending = true;
+    back.querySelectorAll('.modal-f .btn').forEach(b => b.disabled = true);
+    info.textContent = `Sending to ${name}…`;
+    const r = await api.printHtml({ html, sheet: actual ? null : o.sheet, widthMm: lay.sw, heightMm: lay.sh, copies: Math.max(1, o.copies | 0), deviceName: printer });
     close();
-    const r = await api.printHtml({ html, widthMm: lay.sw, heightMm: lay.sh, copies: Math.max(1, o.copies | 0) });
-    if (r && !r.ok && r.reason && r.reason !== 'cancelled') toast('Print failed: ' + r.reason);
+    const n = lay.sheets.length;
+    if (r && r.ok) toast(`Sent ${n} sheet${n === 1 ? '' : 's'} to ${name}`);
+    else toast('Print failed: ' + ((r && r.reason) || 'the printer did not take the job'), 6000);
   };
 
   update();
   opened = JSON.stringify([o, nudge]); // after update(), which fills in the default position
   requestAnimationFrame(renderPreview);
+  api.printers().then((list) => {
+    printers = list || [];
+    if (!printers.some(p => p.name === printer)) printer = (printers.find(p => p.isDefault) || printers[0] || {}).name || null;
+    if (back.isConnected) fillPrinters();
+  }, () => { printers = []; printer = null; if (back.isConnected) fillPrinters(); });
 }

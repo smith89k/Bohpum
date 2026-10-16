@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('api', {
   writePdf: (opts) => ipcRenderer.invoke('write-pdf', opts),
   exportPng: (opts) => ipcRenderer.invoke('export-png', opts),
   printHtml: (opts) => ipcRenderer.invoke('print-html', opts),
+  printers: () => ipcRenderer.invoke('printers'),
+  printerPrefs: (name) => ipcRenderer.invoke('printer-prefs', name),
   setDirty: (v) => ipcRenderer.send('set-dirty', v),
   setTitle: (t) => ipcRenderer.send('set-title', t),
   closeNow: () => ipcRenderer.send('close-now'),

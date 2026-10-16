@@ -210,9 +210,16 @@ main { display: grid; grid-template-columns: 170px 1fr 268px; min-height: 0; }
 .custom-size .numf { width: 110px; }
 .custom-size .x { color: var(--ink-3); }
 
-/* print dialog */
-.print-wrap { display: grid; grid-template-columns: 300px 1fr; gap: 18px; width: min(1000px, calc(100vw - 80px)); }
-.print-preview { background: var(--pasteboard); border-radius: 8px; display: flex; align-items: center; justify-content: center; min-height: 520px; position: relative; overflow: hidden; }
+/* print dialog: settings column (scrolls on its own) | preview */
+.print-wrap { display: grid; grid-template-columns: 300px 1fr; gap: 18px; width: min(1000px, calc(100vw - 80px)); height: min(600px, calc(100vh - 170px)); }
+.print-side { overflow: auto; min-height: 0; padding-right: 6px; }
+.print-side .psec { padding: 0 0 12px; margin-bottom: 12px; }
+.print-side .grid2 .field { width: 100%; min-width: 0; }
+.print-side input[type=radio], .print-side input[type=checkbox] { accent-color: var(--accent); }
+.pr-printer { display: flex; gap: 6px; margin-bottom: 6px; }
+.pr-printer .field { flex: 1; min-width: 0; }
+.pr-printer .btn { height: 28px; border-color: var(--line-2); background: #fff; }
+.print-preview { background: var(--pasteboard); border-radius: 8px; display: flex; align-items: center; justify-content: center; min-height: 0; position: relative; overflow: hidden; }
 .sheet { background: #fff; position: relative; box-shadow: 0 4px 18px rgba(0,0,0,.2); }
 .sheet .nopr { position: absolute; inset: 0; pointer-events: none; }
 .pos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; max-width: 200px; }

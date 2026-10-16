@@ -283,13 +283,31 @@ ipcMain.handle('write-pdf', async (_e, { html, widthMm, heightMm, path: p }) => 
   return writePdf(html, widthMm, heightMm, p);
 });
 
-ipcMain.handle('print-html', async (_e, { html, widthMm, heightMm, copies }) => {
+// ---------- printing: straight to the printer chosen in the Print dialog (no Windows dialog) ----------
+const SHEET_NAMES = ['A4', 'A3', 'A5', 'Letter', 'Legal'];
+async function printerList() {
+  if (!win) return [];
+  return (await win.webContents.getPrintersAsync()).map(p => ({ name: p.name, displayName: p.displayName || p.name, isDefault: !!p.isDefault }));
+}
+ipcMain.handle('printers', () => printerList());
+// Windows' "Printing preferences" for one printer; changes there become that printer's defaults
+ipcMain.handle('printer-prefs', async (_e, name) => {
+  if (!(await printerList()).some(p => p.name === name)) return false;
+  execFile('rundll32.exe', ['printui.dll,PrintUIEntry', '/e', '/n', name], () => {});
+  return true;
+});
+// sheet: a named paper (the page turns landscape sheets itself, so landscape is always false here),
+// or null for "Page size = paper size" (custom size in microns)
+ipcMain.handle('print-html', async (_e, { html, sheet, widthMm, heightMm, copies, deviceName }) => {
+  if (!(await printerList()).some(p => p.name === deviceName)) return { ok: false, reason: 'that printer is not installed any more' };
+  const named = SHEET_NAMES.includes(sheet);
+  if (!named && !(+widthMm > 0 && +heightMm > 0)) return { ok: false, reason: 'unknown paper size' };
+  const pageSize = named ? sheet : { width: Math.round(+widthMm * 1000), height: Math.round(+heightMm * 1000) };
   return withHiddenWindow(html, (w) => new Promise((resolve) => {
     w.webContents.print({
-      silent: false, printBackground: true, copies: copies || 1,
-      margins: { marginType: 'none' },
-      pageSize: { width: Math.round(widthMm * 1000), height: Math.round(heightMm * 1000) },
-      scaleFactor: 100
+      silent: true, deviceName, printBackground: true, landscape: false,
+      copies: Math.min(999, Math.max(1, copies | 0)),
+      margins: { marginType: 'none' }, pageSize, scaleFactor: 100
     }, (ok, reason) => resolve({ ok, reason }));
   }));
 });
