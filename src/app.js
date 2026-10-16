@@ -785,7 +785,7 @@ function updateTextbar() {
   $('tb-i').classList.toggle('on', st.italic);
   $('tb-u').classList.toggle('on', st.underline);
   $('tb-s').classList.toggle('on', st.strike);
-  $('tb-color').value = st.color; $('tb-color-sw').style.background = st.color;
+  $('tb-color').setColor(st.color);
   for (const [id, a] of [['tb-al', 'left'], ['tb-ac', 'center'], ['tb-ar', 'right'], ['tb-aj', 'justify']]) $(id).classList.toggle('on', st.align === a);
   const o = S.editing ? getObj(S.editing) : textBoxesSelected()[0];
   const va = o ? o.valign : 'top';
@@ -830,8 +830,9 @@ function setupTextbar() {
   $('tb-font').addEventListener('change', setFont);
   $('tb-font').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); setFont(); } });
   $('tb-font').addEventListener('focus', loadLocalFonts, { once: true });
-  let colorT = null;
-  $('tb-color').addEventListener('input', () => { $('tb-color-sw').style.background = $('tb-color').value; clearTimeout(colorT); colorT = setTimeout(() => applyText({ color: $('tb-color').value }), 120); });
+  const tbColor = colorButton('#000000', (c) => applyText({ color: c }), { title: 'Text colour' });
+  tbColor.id = 'tb-color';
+  $('tb-color-slot').replaceWith(tbColor);
   fillFontList(DEFAULT_FONTS);
 }
 
@@ -927,17 +928,17 @@ function labelOf(o) {
 function boxProps(P, sel) {
   const o = sel[0];
   const f = section(P, 'Fill & line');
-  f.append(row('Fill', colorField(o.fill, v => setProp(x => { x.fill = v; if (v === 'none') { x.fill2 = null; x.gradKind = null; } }))));
+  f.append(row('Fill', colorField(o.fill, v => setProp(x => { x.fill = v; if (v === 'none') { x.fill2 = null; x.gradKind = null; } }), 'No Fill')));
   const gr = document.createElement('label'); gr.className = 'chk under-field';
   gr.innerHTML = `<input type="checkbox" ${o.gradKind ? 'checked' : ''}> Gradient`;
   gr.querySelector('input').onchange = (e) => setProp(x => { if (e.target.checked) { x.gradKind = 'linear'; x.fill = x.fill !== 'none' ? x.fill : '#ffffff'; x.fill2 = x.fill2 || '#b7791f'; } else { x.gradKind = null; } });
   f.append(gr);
   if (o.gradKind) {
-    f.append(row('To', colorField(o.fill2, v => setProp(x => x.fill2 = v === 'none' ? '#ffffff' : v), false)));
+    f.append(row('To', colorField(o.fill2, v => setProp(x => x.fill2 = v))));
     f.append(row('Type', select([['linear', 'Linear'], ['axial', 'Axial'], ['radial', 'Radial']], o.gradKind, v => setProp(x => x.gradKind = v))));
     f.append(row('Angle', numInput(o.gradAngle || 0, v => setProp(x => x.gradAngle = v), 15, '°')));
   }
-  f.append(row('Line', colorField(o.stroke, v => setProp(x => { x.stroke = v; if (v !== 'none' && !x.strokeW) x.strokeW = 0.3528; }))));
+  f.append(row('Line', colorField(o.stroke, v => setProp(x => { x.stroke = v; if (v !== 'none' && !x.strokeW) x.strokeW = 0.3528; }), 'No Line')));
   f.append(row('Weight', numInput(ptOf(o.strokeW), v => setProp(x => x.strokeW = mmOfPt(Math.max(0, v))), 0.25, 'pt')));
   f.append(row('Dash', select([['solid', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted'], ['dashdot', 'Dash-dot']], o.dash || 'solid', v => setProp(x => x.dash = v))));
   const s = section(P, 'Shape');
@@ -957,7 +958,7 @@ function imageProps(P, sel) {
   const o = sel[0];
   const s = section(P, 'Picture');
   s.append(row('Fit', select([['fill', 'Stretch'], ['contain', 'Fit inside'], ['cover', 'Fill & crop']], o.fit, v => setProp(x => x.fit = v))));
-  s.append(row('Border', colorField(o.stroke, v => setProp(x => { x.stroke = v; if (v !== 'none' && !x.strokeW) x.strokeW = 0.3528; }))));
+  s.append(row('Border', colorField(o.stroke, v => setProp(x => { x.stroke = v; if (v !== 'none' && !x.strokeW) x.strokeW = 0.3528; }), 'No Line')));
   s.append(row('Weight', numInput(ptOf(o.strokeW || 0), v => setProp(x => x.strokeW = mmOfPt(Math.max(0, v))), 0.25, 'pt')));
   const b = btns(s); b.style.marginTop = '6px';
   b.append(btn('Replace…', () => replaceImage(o)), btn('Original ratio', () => resetRatio(o)));
@@ -967,7 +968,7 @@ function imageProps(P, sel) {
 function lineProps(P, sel) {
   const o = sel[0];
   const s = section(P, 'Line');
-  s.append(row('Colour', colorField(o.stroke, v => setProp(x => x.stroke = v === 'none' ? '#000000' : v), false)));
+  s.append(row('Colour', colorField(o.stroke, v => setProp(x => x.stroke = v))));
   s.append(row('Weight', numInput(ptOf(o.strokeW), v => setProp(x => x.strokeW = mmOfPt(Math.max(0.05, v))), 0.25, 'pt')));
   s.append(row('Dash', select([['solid', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted'], ['dashdot', 'Dash-dot']], o.dash || 'solid', v => setProp(x => x.dash = v))));
   const c1 = document.createElement('label'); c1.className = 'chk'; c1.innerHTML = `<input type="checkbox" ${o.arrowStart ? 'checked' : ''}> Arrow at start`;
@@ -1017,7 +1018,7 @@ function renderPageProps(P) {
     // Background and master visibility are set per page, so name the page when there is more than one
     const bg = section(P, d.pages.length > 1 ? `Background · page ${S.page + 1}` : 'Background');
     const page = d.pages[S.page];
-    bg.append(row('Colour', colorField(page.bg || 'none', v => setDoc(() => { if (v === 'none') delete page.bg; else page.bg = v; }))));
+    bg.append(row('Colour', colorField(page.bg || 'none', v => setDoc(() => { if (v === 'none') delete page.bg; else page.bg = v; }), 'No Colour')));
     const c = document.createElement('label'); c.className = 'chk';
     c.innerHTML = `<input type="checkbox" ${page.hideMaster ? '' : 'checked'}> Show master page items`;
     c.querySelector('input').onchange = (e) => setDoc(() => { page.hideMaster = !e.target.checked; });
@@ -1062,19 +1063,77 @@ function select(opts, value, onChange) {
   s.innerHTML = opts.map(([v, l]) => `<option value="${v}" ${v === value ? 'selected' : ''}>${l}</option>`).join('');
   s.onchange = () => onChange(s.value); return s;
 }
-function colorField(value, onChange, allowNone = true) {
-  const w = document.createElement('div'); w.className = 'colorf';
-  const none = !value || value === 'none';
-  const c = document.createElement('input'); c.type = 'color'; c.value = none ? '#ffffff' : TE.rgbToHex(value);
-  c.oninput = () => { clearTimeout(c._t); c._t = setTimeout(() => onChange(c.value), 150); };
-  w.append(c);
-  if (allowNone) {
-    const l = document.createElement('label'); l.className = 'none';
-    l.innerHTML = `<input type="checkbox" ${none ? 'checked' : ''}> None`;
-    l.querySelector('input').onchange = (e) => onChange(e.target.checked ? 'none' : c.value);
-    w.append(l);
-  }
-  return w;
+// none: label of the "no colour" item ('No Fill', 'No Line', …), or null where a colour is required
+function colorField(value, onChange, none = null) { return colorButton(value, onChange, { none }); }
+
+// ---------------------------------------------------------------- colour list (like Publisher 2003)
+const PALETTE = ['#000000', '#993300', '#333300', '#003300', '#003366', '#000080', '#333399', '#333333',
+  '#800000', '#ff6600', '#808000', '#008000', '#008080', '#0000ff', '#666699', '#808080',
+  '#ff0000', '#ff9900', '#99cc00', '#339966', '#33cccc', '#3366ff', '#800080', '#969696',
+  '#ff00ff', '#ffcc00', '#ffff00', '#00ff00', '#00ffff', '#00ccff', '#993366', '#c0c0c0',
+  '#ff99cc', '#ffcc99', '#ffff99', '#ccffcc', '#ccffff', '#99ccff', '#cc99ff', '#ffffff'];
+let colorPop = null; // { el, btn } while a colour list is open
+// A swatch button that opens the colour list; b.setColor(v) shows a new colour without calling onChange
+function colorButton(value, onChange, { none = null, title = '' } = {}) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'cbtn'; if (title) b.title = title;
+  b.innerHTML = '<i></i><b></b>';
+  b.setColor = (v) => {
+    const isNone = !v || v === 'none', i = b.querySelector('i');
+    b.dataset.color = isNone ? 'none' : TE.rgbToHex(v).toLowerCase();
+    i.className = isNone ? 'none' : ''; i.style.background = isNone ? '' : v;
+  };
+  b.setColor(value);
+  b.addEventListener('mousedown', (e) => e.preventDefault()); // keep the text selection while editing
+  b.addEventListener('click', (e) => {
+    if (colorPop && colorPop.btn === b) return closeColorPop();
+    openColorPop(b, (v) => { b.setColor(v); onChange(v); }, none, e.detail === 0);
+  });
+  return b;
+}
+function openColorPop(btn, pick, noneLabel, byKeyboard) {
+  closeColorPop(); closeCtx();
+  const cur = btn.dataset.color, recent = (S.settings.recentColors || []).slice(0, 8);
+  const sw = (c) => `<button type="button" class="sw${c === cur ? ' on' : ''}" data-c="${c}" style="background:${c}" title="${c}" aria-label="${c}"></button>`;
+  const el = document.createElement('div');
+  el.id = 'colorpop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Colours');
+  el.innerHTML = (noneLabel ? `<button type="button" class="ci" data-c="none"><i class="none"></i>${noneLabel}</button>` : '')
+    + `<div class="cgrid">${PALETTE.map(sw).join('')}</div>`
+    + (recent.length ? `<div class="ccap">Recent colours</div><div class="cgrid">${recent.map(sw).join('')}</div>` : '')
+    + '<hr><button type="button" class="ci" data-more><i class="more"></i>More colours…</button><input type="color" tabindex="-1" aria-hidden="true">';
+  document.body.append(el);
+  // under the button, or above it when there is no room below; always inside the window
+  const r = btn.getBoundingClientRect(), p = el.getBoundingClientRect();
+  el.style.left = Math.max(8, Math.min(r.left, innerWidth - p.width - 8)) + 'px';
+  el.style.top = Math.max(8, r.bottom + 4 + p.height > innerHeight - 8 ? r.top - 4 - p.height : r.bottom + 4) + 'px';
+  const done = (c) => { closeColorPop(); if (c !== 'none') rememberColor(c); pick(c); };
+  el.addEventListener('mousedown', (e) => e.preventDefault()); // keep the text selection while editing
+  el.querySelectorAll('[data-c]').forEach(x => x.onclick = () => done(x.dataset.c));
+  const more = el.querySelector('input[type=color]');
+  more.value = /^#[0-9a-f]{6}$/.test(cur) ? cur : '#000000';
+  more.addEventListener('change', () => done(more.value.toLowerCase()));
+  el.querySelector('[data-more]').onclick = () => { try { more.showPicker(); } catch { more.click(); } }; // Windows' colour window
+  el.addEventListener('keydown', onColorKey);
+  colorPop = { el, btn };
+  btn.classList.add('open');
+  if (byKeyboard) (el.querySelector('.sw.on') || el.querySelector('.sw')).focus();
+}
+function closeColorPop() {
+  if (!colorPop) return;
+  colorPop.el.remove(); colorPop.btn.classList.remove('open'); colorPop = null;
+}
+// Keys inside the list stay in the list: arrows move between colours, Esc closes, Enter / Space pick
+function onColorKey(e) {
+  const sws = [...colorPop.el.querySelectorAll('.sw')], i = sws.indexOf(document.activeElement);
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const b = colorPop.btn; closeColorPop(); b.focus(); return; }
+  const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -8, ArrowDown: 8 }[e.key];
+  if (step) { e.preventDefault(); e.stopPropagation(); sws[i < 0 ? 0 : Math.max(0, Math.min(sws.length - 1, i + step))].focus(); }
+  else if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); // the focused button's own click picks it
+}
+function rememberColor(c) {
+  const list = [c, ...(S.settings.recentColors || []).filter(x => x !== c)].slice(0, 8);
+  S.settings.recentColors = list;
+  api.setSettings({ recentColors: list }).then((s) => { if (s) S.settings = s; }, () => {});
 }
 
 // ---- property actions
@@ -1550,6 +1609,7 @@ function openMenu(i) {
 
 // ---------------------------------------------------------------- keyboard
 function onKey(e) {
+  if (colorPop && e.key === 'Escape') { e.preventDefault(); return closeColorPop(); }
   if ($('modal-root').children.length) return;
   const ctrl = e.ctrlKey || e.metaKey, k = e.key;
   // File shortcuts work everywhere, also while typing (Windows no longer handles them: see main.js buildMenu)
@@ -1565,6 +1625,7 @@ function onKey(e) {
   }
   // (option = an item in an open dropdown list: its keys belong to the list)
   if (e.target.matches('input, select, option, textarea, [contenteditable="true"]')) { if (k === 'Escape') e.target.blur(); return; }
+  if (e.target.matches('button') && (k === 'Enter' || k === ' ')) return; // the focused button's own click
   if (e.altKey && !ctrl && !e.shiftKey && MENU_KEYS[k.toLowerCase()] != null) { e.preventDefault(); return openMenu(MENU_KEYS[k.toLowerCase()]); }
   if (k === 'F10' && !ctrl && !e.altKey) { e.preventDefault(); return openMenu(0); }
   const sel = selObjs();
@@ -1637,7 +1698,11 @@ function wire() {
   $('ruler-v').addEventListener('pointerdown', (e) => startNewGuide(e, 'v'));
   document.addEventListener('keydown', onKey);
   document.addEventListener('keyup', (e) => { if (e.key === ' ') { S.space = false; $('workspace').style.cursor = ''; } });
-  document.addEventListener('mousedown', (e) => { if (!e.target.closest('#ctxmenu')) closeCtx(); });
+  document.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('#ctxmenu')) closeCtx();
+    if (colorPop && !e.target.closest('#colorpop') && !colorPop.btn.contains(e.target)) closeColorPop();
+  });
+  $('props').addEventListener('scroll', closeColorPop);
   document.addEventListener('paste', (e) => {
     if (S.editing || e.target.matches('input, textarea')) return;
     const items = [...(e.clipboardData?.items || [])];

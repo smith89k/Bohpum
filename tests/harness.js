@@ -44,6 +44,9 @@ function driver(win, ctx) {
   const center = (selector) => js(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return null; const b = el.getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }; })()`);
   const key = async (keyCode, modifiers = []) => {
     wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+    // a real keyboard also sends the typed character; buttons are pressed by it (Enter, Space)
+    const ch = { Enter: '\r', Space: ' ' }[keyCode];
+    if (ch && !modifiers.length) wc.sendInputEvent({ type: 'char', keyCode: ch });
     wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
     await sleep(250);
   };
