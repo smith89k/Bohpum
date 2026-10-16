@@ -119,7 +119,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     </div></div>
     <div class="modal-f">
       <span class="muted" style="margin-right:auto" id="pd-info"></span>
-      <button class="btn" data-a="cancel">Cancel</button>
+      <button class="btn" data-a="close">Close</button>
       <button class="btn" data-a="pdf">Save as PDF</button>
       <button class="btn primary" data-a="print">Print…</button>
     </div>
@@ -288,11 +288,15 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     onDocChange && onDocChange();
   }
 
+  // Close / Esc keep what the user set (position, paper, mode …), like Print does.
+  // Nothing is written when nothing changed, so just looking at the dialog leaves the publication unchanged.
+  let opened = null;
   const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); };
-  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  const keepAndClose = () => { if (JSON.stringify([o, nudge]) !== opened) persist(); close(); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); keepAndClose(); } };
   document.addEventListener('keydown', onKey, true);
 
-  back.querySelector('[data-a="cancel"]').onclick = close;
+  back.querySelector('[data-a="close"]').onclick = keepAndClose;
   back.querySelector('[data-a="pdf"]').onclick = async () => {
     const lay = currentLayout(); if (!lay.sheets.length) return toast('Nothing to print with these settings.');
     persist();
@@ -311,5 +315,6 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   };
 
   update();
+  opened = JSON.stringify([o, nudge]); // after update(), which fills in the default position
   requestAnimationFrame(renderPreview);
 }

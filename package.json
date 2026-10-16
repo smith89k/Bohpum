@@ -8,6 +8,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
+    "test": "node tests/run.js",
     "bundle-libreoffice": "node scripts/bundle-libreoffice.js",
     "dist": "node scripts/bundle-libreoffice.js && electron-builder --win nsis"
   },
