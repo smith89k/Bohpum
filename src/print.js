@@ -209,9 +209,9 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
         { v: 'grid', icon: 'grid', title: 'Multiple copies per sheet', sub: g.cols * g.rows ? `${g.cols * g.rows} per sheet (${g.cols} × ${g.rows})` : 'Page is larger than the paper' },
         { v: 'actual', icon: 'actual', title: 'Page size = paper size', sub: `Print on ${round(doc.pageW)} × ${round(doc.pageH)} mm paper` }
       ], o.mode)}
-      ${o.mode === 'single' ? `<div class="pr-sub pr-pos">${field('left', 'Left')}${field('top', 'Top')}
+      ${o.mode === 'single' ? `<div class="pr-box pr-pos">${field('left', 'Left')}${field('top', 'Top')}
         <div class="pos-pad" id="pd-pos" role="group" aria-label="Snap to">${PAD.map(([k, t]) => `<button data-pos="${k}" title="${t}" aria-label="${t}"></button>`).join('')}</div></div>` : ''}
-      ${o.mode === 'grid' ? `<div class="pr-sub">
+      ${o.mode === 'grid' ? `<div class="pr-box">
         <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
         <select class="field" data-k="order" aria-label="Page order" style="width:100%"><option value="repeat" ${o.order === 'repeat' ? 'selected' : ''}>Fill each sheet with one page</option><option value="sequence" ${o.order === 'sequence' ? 'selected' : ''}>Different pages in sequence</option></select>
         <div class="grid2">${field('marginT', 'Top')}${field('marginL', 'Left')}${field('marginB', 'Bottom')}${field('marginR', 'Right')}${field('gapX', 'Gap ↔')}${field('gapY', 'Gap ↕')}</div>

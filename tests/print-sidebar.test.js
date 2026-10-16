@@ -30,6 +30,15 @@ run(async (t, check) => {
     /^One per sheet, at a position Place the page anywhere/.test(s1.layoutShown) && /^Office HP Default printer/.test(s1.printerShown), s1);
   check('Position: Left / Top shown, centre of the 3×3 pad lit', s1.left && !s1.margins && s1.pad.join() === 'mc', s1);
 
+  // The chosen layout's own settings sit together in one box (a border round them)
+  const boxOf = (keys) => t.js(`(() => {
+    const boxes = ${JSON.stringify(keys)}.map(s => document.querySelector(s).closest('.pr-box'));
+    const b = boxes[0];
+    return { same: !!b && boxes.every(x => x === b), border: b ? getComputedStyle(b).borderTopWidth : null };
+  })()`);
+  const b1 = await boxOf(['[data-k="left"]', '[data-k="top"]', '#pd-pos']);
+  check('One per sheet: Left, Top and the 3×3 pad are boxed together', b1.same && b1.border === '1px', b1);
+
   await t.click('#pd-pos [data-pos="tl"]');
   const s2 = await side();
   check('Top-left on the pad: Left 10, Top 10, that cell lit', s2.pos.left === 10 && s2.pos.top === 10 && s2.pad.join() === 'tl', s2);
@@ -52,6 +61,8 @@ run(async (t, check) => {
   const m1 = await grid();
   check('Multiple: Center and the order dropdown come before the margins', m1.order, m1);
   check('Multiple: margins and gaps stay usable with Center ticked', m1.center && !m1.marginsOff.some(Boolean) && !m1.gapsOff.some(Boolean), m1);
+  const b2 = await boxOf(['[data-k="center"]', '[data-k="order"]', '[data-k="marginT"]', '[data-k="marginR"]', '[data-k="gapX"]', '[data-k="gapY"]']);
+  check('Multiple: Center, order, margins and gaps are boxed together', b2.same && b2.border === '1px', b2);
 
   await t.click('select[data-k="mode"]');
   await t.click('select[data-k="mode"] option[value="actual"]');
