@@ -49,14 +49,17 @@ credit LibreOffice on the About page.
 - Multiple pages, a master page (items appear on every page), margin guides and ruler guides
 - Undo / redo, copy / paste between pages and publications, paste pictures from the clipboard
 
-**Print and export**
+**Print and save**
 - **Print** (Ctrl+P), like Publisher:
+  - Pick the printer in the dialog; **Print** sends straight to it (**Properties** opens the printer's own settings). The last printer is remembered.
   - *One per sheet, at a position*: drag the card on the A4 preview or type Left/Top in mm
   - *Multiple copies per sheet*: margins, gaps, centred block, the same page or different pages
   - *Page size = paper size*
   - Crop marks, page range, copies
   - *Printer adjustment*: if your printer is a little off, enter X/Y in mm once and it is remembered
-- Export PDF (Ctrl+E), export the current page as a 300 dpi PNG
+  - *Save as PDF* saves the sheets as laid out (e.g. 8 cards on an A4)
+- **Save As** (Ctrl+Shift+S) can also save a PDF of the publication (every page at page size); the publication keeps its own file
+- File > Export Page as PNG saves the current page as a 300 dpi PNG
 
 ## Shortcuts
 
@@ -72,6 +75,7 @@ credit LibreOffice on the About page.
 | Space+drag, middle mouse | Pan |
 | Ctrl+M | Master page |
 | PageUp / PageDown | Previous / next page |
+| Alt+F, E, I, A, V, H / F10 | Open the File, Edit, Insert, Arrange, View, Help menu / the File menu |
 
 ## Known limits of `.pub` import
 
@@ -94,4 +98,5 @@ src/print.js     Publisher-style print dialog and sheet layout
 src/model.js     Document model (all sizes in mm)
 scripts/bundle-libreoffice.js  Copies a trimmed LibreOffice into vendor/libreoffice for the installer
 vendor/libreoffice             The bundled LibreOffice (generated, not edited by hand)
+tests/                         Electron tests: npm test (each tests/*.test.js runs the real app)
 ```
