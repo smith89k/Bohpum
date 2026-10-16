@@ -105,6 +105,8 @@ html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust
 
 // ---------------- dialog ----------------
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+// An open dropdown list handles its own Esc / Enter
+const pickerOpen = (e) => { const s = e.target.closest && e.target.closest('select'); return !!(s && s.matches(':open')); };
 
 export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, toast, onDocChange }) {
   const small = doc.pageW * 2 <= 210 || doc.pageH * 2 <= 297;
@@ -121,9 +123,9 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   let sending = false;
 
   const back = document.createElement('div');
-  back.className = 'modal-back';
+  back.className = 'modal-back print-screen';
   back.innerHTML = `
-  <div class="modal" role="dialog" aria-label="Print">
+  <div class="modal print" role="dialog" aria-label="Print">
     <div class="modal-h">Print</div>
     <div class="modal-b"><div class="print-wrap">
       <div class="print-side" id="pd-side"></div>
@@ -328,11 +330,13 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
 
   // Close / Esc keep what the user set (position, paper, mode …), like Print does.
   // Nothing is written when nothing changed, so just looking at the dialog leaves the publication unchanged.
-  let opened = null;
-  const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); };
+  let opened = null, resizeT = 0;
+  const onResize = () => { clearTimeout(resizeT); resizeT = setTimeout(renderPreview, 100); }; // re-fit the preview
+  const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); window.removeEventListener('resize', onResize); clearTimeout(resizeT); };
   const keepAndClose = () => { if (JSON.stringify([o, nudge]) !== opened) persist(); close(); };
-  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); if (!sending) keepAndClose(); } };
+  const onKey = (e) => { if (e.key === 'Escape' && !pickerOpen(e)) { e.stopPropagation(); if (!sending) keepAndClose(); } };
   document.addEventListener('keydown', onKey, true);
+  window.addEventListener('resize', onResize);
 
   back.querySelector('[data-a="close"]').onclick = keepAndClose;
   back.querySelector('[data-a="pdf"]').onclick = async () => {

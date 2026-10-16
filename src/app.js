@@ -1541,7 +1541,7 @@ const MENU_KEYS = { f: 0, e: 1, i: 2, a: 3, v: 4, h: 5 }; // Alt+F File, Alt+E E
 const FILE_KEYS = { n: 'new', o: 'open', p: 'print' };    // Ctrl+letter; Ctrl+S / Ctrl+Shift+S below
 function openMenu(i) {
   const b = document.querySelector(`#menus [data-menu="${i}"]`);
-  if (!b || !api.showMenu) return;
+  if (!b || !api.showMenu || $('modal-root').children.length) return; // not behind a dialog / the print screen
   closeCtx();
   const r = b.getBoundingClientRect();
   b.classList.add('open');
