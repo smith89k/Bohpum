@@ -33,6 +33,14 @@ function loadSettings() {
 function saveSettings(s) {
   try { fs.mkdirSync(path.dirname(settingsFile()), { recursive: true }); fs.writeFileSync(settingsFile(), JSON.stringify(s, null, 2)); } catch (e) { console.error(e); }
 }
+// File windows start where you last worked: 'lastDir' is the folder of the last publication opened or saved,
+// 'lastImageDir' of the last picture inserted. Without one (or when it is gone) Windows chooses.
+function rememberDir(key, file) { if (!file) return; const s = loadSettings(); s[key] = path.dirname(file); saveSettings(s); }
+function startIn(key, name) {
+  const d = loadSettings()[key];
+  if (!d || !fs.existsSync(d)) return name;
+  return name ? path.join(d, path.basename(name)) : d;
+}
 
 // ---------- LibreOffice (bundled; used only to read .pub and other foreign formats, never shown in the UI) ----------
 // The bundle comes from scripts/bundle-libreoffice.js; a normal LibreOffice install is the fallback.
@@ -324,7 +332,7 @@ function openPathInRenderer(p) {
 // ---------- IPC ----------
 ipcMain.handle('open-dialog', async () => {
   const r = await dialog.showOpenDialog(win, {
-    title: 'Open publication', properties: ['openFile'],
+    title: 'Open publication', properties: ['openFile'], defaultPath: startIn('lastDir'),
     filters: [
       { name: 'All supported', extensions: ['bpum', 'kbach', 'pub', 'odg', 'fodg', 'vsd', 'vsdx', 'cdr', 'p65', 'pmd', 'qxd'] },
       { name: 'Bohpum', extensions: ['bpum', 'kbach'] },
@@ -337,13 +345,16 @@ ipcMain.handle('open-dialog', async () => {
 
 ipcMain.handle('read-document', async (_e, p) => {
   if (!fs.existsSync(p)) return { error: 'The file was moved or deleted.', missing: true };
+  rememberDir('lastDir', p); // also files opened from Explorer, Recent or a drop
   try { return await readAnyDocument(p); }
   catch (err) { return { error: String(err && err.message || err) }; }
 });
 
 ipcMain.handle('save-dialog', async (_e, { defaultName, filters }) => {
-  const r = await dialog.showSaveDialog(win, { defaultPath: defaultName, filters });
-  return r.canceled ? null : r.filePath;
+  const r = await dialog.showSaveDialog(win, { defaultPath: startIn('lastDir', defaultName), filters });
+  if (r.canceled) return null;
+  rememberDir('lastDir', r.filePath);
+  return r.filePath;
 });
 
 // true, or { error } in plain words (the page shows it)
@@ -360,9 +371,10 @@ ipcMain.handle('write-file', async (_e, { path: p, text, base64 }) => {
 });
 
 ipcMain.handle('pick-images', async () => {
-  const r = await dialog.showOpenDialog(win, { title: 'Insert picture', properties: ['openFile', 'multiSelections'],
+  const r = await dialog.showOpenDialog(win, { title: 'Insert picture', properties: ['openFile', 'multiSelections'], defaultPath: startIn('lastImageDir'),
     filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'] }] });
   if (r.canceled) return [];
+  rememberDir('lastImageDir', r.filePaths[0]);
   return r.filePaths.map(p => {
     const ext = path.extname(p).slice(1).toLowerCase();
     const mime = ext === 'svg' ? 'image/svg+xml' : ext === 'jpg' ? 'image/jpeg' : 'image/' + ext;
@@ -423,8 +435,9 @@ async function writePdf(html, widthMm, heightMm, filePath) {
 
 // The Print dialog's Save as PDF (the sheets as laid out): asks for the file itself
 ipcMain.handle('export-pdf', async (_e, { html, widthMm, heightMm, defaultName }) => {
-  const r = await dialog.showSaveDialog(win, { defaultPath: defaultName || 'publication.pdf', filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+  const r = await dialog.showSaveDialog(win, { defaultPath: startIn('lastDir', defaultName || 'publication.pdf'), filters: [{ name: 'PDF', extensions: ['pdf'] }] });
   if (r.canceled) return null;
+  rememberDir('lastDir', r.filePath);
   return writePdf(html, widthMm, heightMm, r.filePath);
 });
 
@@ -464,8 +477,9 @@ ipcMain.handle('print-html', async (_e, { html, sheet, widthMm, heightMm, copies
 });
 
 ipcMain.handle('export-png', async (_e, { html, widthMm, heightMm, dpi, defaultName }) => {
-  const r = await dialog.showSaveDialog(win, { defaultPath: defaultName || 'page.png', filters: [{ name: 'PNG', extensions: ['png'] }] });
+  const r = await dialog.showSaveDialog(win, { defaultPath: startIn('lastDir', defaultName || 'page.png'), filters: [{ name: 'PNG', extensions: ['png'] }] });
   if (r.canceled) return null;
+  rememberDir('lastDir', r.filePath);
   const factor = (dpi || 300) / 96;
   const W = Math.round(widthMm / 25.4 * 96 * factor), H = Math.round(heightMm / 25.4 * 96 * factor);
   const tmp = path.join(os.tmpdir(), 'bohpum-png-' + Date.now() + '.html');

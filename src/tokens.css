@@ -1,4 +1,6 @@
 /* Bohpum colours and font: the editor (app.css) and the Explorer menu's convert window (task.html) share them */
+/* The UI fonts of Sastra PDF, shipped inside the app: IBM Plex Sans and Mono, Noto Sans Khmer (SIL OFL 1.1) */
+@import url(fonts/fonts.css);
 :root {
   --chrome: #f7f5f1;
   --chrome-2: #efece6;
@@ -32,8 +34,9 @@
   --warn-bg: #fff7e6; --warn-fg: #8a5a00; --warn-line: #f2d28b;
   --linkedin: #0a66c2;        /* the About page's LinkedIn icon */
   color-scheme: light;
-  --ui-font: "Segoe UI", "Khmer OS Siemreap", "Khmer UI", system-ui, sans-serif;
-  --mono-font: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  /* as in Sastra PDF: English in IBM Plex, Khmer in Noto Sans Khmer (each file only covers its own letters) */
+  --ui-font: "IBM Plex Sans", "Noto Sans Khmer", "Khmer UI", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono-font: "IBM Plex Mono", "Noto Sans Khmer", "Khmer UI", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 /* Dark theme (View > Theme or the toolbar's theme button; System follows Windows). Paper stays white. */
@@ -51,7 +54,3 @@
     color-scheme: dark;
   }
 }
-
-/* The Khmer app name in Noto Sans Khmer, as in Sastra PDF. Ships with Bohpum (fonts/noto-sans-khmer, SIL OFL 1.1). */
-@font-face { font-family: 'Noto Sans Khmer'; font-style: normal; font-display: block; font-weight: 500;
-  src: url(fonts/noto-sans-khmer/noto-sans-khmer-khmer-500-normal.woff2) format('woff2'); unicode-range: U+1780-17FF, U+19E0-19FF, U+200C-200D, U+25CC; }

@@ -33,8 +33,10 @@ and ship the new installer. To bundle a LibreOffice from another folder, set `LI
 LibreOffice is licensed under MPL 2.0. Its `license.txt` and `LICENSE.html` ship inside the bundle;
 credit LibreOffice on the About page.
 
-The Khmer app name uses **Noto Sans Khmer** (Medium), shipped in `src/fonts/noto-sans-khmer` under the SIL Open Font
-License 1.1 (its `LICENSE` file ships with it), the same Khmer font as Sastra PDF.
+The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same files and `@font-face` rules, made from
+@fontsource packages): **IBM Plex Sans** and **IBM Plex Mono** for English and numbers, **Noto Sans Khmer** for Khmer
+(each file only covers its own letters, by `unicode-range`). All are under the SIL Open Font License 1.1; each font's
+`LICENSE` file ships with it. Text inside a publication keeps the fonts chosen for it.
 
 ## What it does
 

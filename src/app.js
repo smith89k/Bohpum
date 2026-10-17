@@ -55,9 +55,16 @@ const ICONS = {
   print: 'M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z',
   al: 'M4 6h16M4 10h10M4 14h16M4 18h10', ac: 'M4 6h16M7 10h10M4 14h16M7 18h10',
   ar: 'M4 6h16M10 10h10M4 14h16M10 18h10', aj: 'M4 6h16M4 10h16M4 14h16M4 18h16',
-  vt: 'M4 4h16M8 9h8M8 13h8', vm: 'M8 9h8M8 15h8M4 12h2M18 12h2', vb: 'M4 20h16M8 11h8M8 15h8'
+  vt: 'M4 4h16M8 9h8M8 13h8', vm: 'M8 9h8M8 15h8M4 12h2M18 12h2', vb: 'M4 20h16M8 11h8M8 15h8',
+  // right panel headings (as in Sastra PDF's Tools panel); `pages` is Sastra PDF's own. Markup, not one path:
+  pages: '<rect x="4" y="5" width="11" height="15" rx="1.5"/><path d="M8 3h10.5A1.5 1.5 0 0 1 20 4.5V17"/>',
+  shapes: '<rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/><circle cx="15.5" cy="15.5" r="5"/>',
+  fill: '<path d="M12 3.5s6 6.3 6 10.5a6 6 0 0 1-12 0c0-4.2 6-10.5 6-10.5z"/>',
+  opacity: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none" opacity=".4"/>',
+  margins: '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 3v18M16 3v18M4 7h16M4 17h16" stroke-dasharray="1.5 2.5"/>',
+  bg: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12l8-8M4 19.5L19.5 4M11.5 20L20 11.5"/>'
 };
-const icon = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS[n] || ''}"/></svg>`;
+const icon = (n) => { const v = ICONS[n] || ''; return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${v.startsWith('<') ? v : `<path d="${v}"/>`}</svg>`; };
 
 // ---------------------------------------------------------------- helpers
 const objs = () => S.master ? S.doc.master.objects : S.doc.pages[S.page].objects;
@@ -1086,7 +1093,7 @@ function renderProps() {
   const bb = bbox(sel);
 
   // position & size
-  const pos = section(P, single ? labelOf(single) : `${sel.length} objects selected`);
+  const pos = section(P, single ? labelOf(single) : `${sel.length} objects selected`, single ? iconOf(single) : 'group');
   const locked = sel.some(o => o.locked);
   const lockBtn = btn(locked ? 'Locked' : 'Lock', () => cmd('lock'), 'cell-btn' + (locked ? ' on' : ''));
   lockBtn.insertAdjacentHTML('afterbegin', icon(locked ? 'lock' : 'unlock'));
@@ -1111,7 +1118,7 @@ function renderProps() {
     if (sel.some(o => o.groupId)) ab.append(btn('Ungroup', () => cmd('ungroup')));
   }
 
-  const ar = section(P, 'Arrange');
+  const ar = section(P, 'Arrange', 'front');
   ar.append(row('Order', seg(
     iconBtn('ordFront', 'Bring to front (Ctrl+Shift+])', () => cmd('front')), iconBtn('ordFwd', 'Bring forward (Ctrl+])', () => cmd('forward')),
     iconBtn('ordBwd', 'Send backward (Ctrl+[)', () => cmd('backward')), iconBtn('ordBack', 'Send to back (Ctrl+Shift+[)', () => cmd('back')))));
@@ -1129,7 +1136,7 @@ function renderProps() {
   if (types.size === 1 && types.has('box')) boxProps(P, sel);
   if (types.size === 1 && types.has('image')) imageProps(P, sel);
   if (types.size === 1 && types.has('line')) lineProps(P, sel);
-  const op = section(P, 'Transparency');
+  const op = section(P, 'Transparency', 'opacity');
   const rr = document.createElement('div'); rr.className = 'range-row';
   const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = 100; r.value = Math.round((1 - (sel[0].opacity ?? 1)) * 100);
   const rv = document.createElement('span'); rv.textContent = r.value + ' %';
@@ -1139,6 +1146,11 @@ function renderProps() {
 }
 renderProps._force = false;
 
+function iconOf(o) { // the toolbar icon of the object's kind
+  if (o.type === 'image') return 'image';
+  if (o.type === 'line') return 'line';
+  return { ellipse: 'ellipse', none: 'text', path: 'shapes' }[o.shape] || 'rect';
+}
 function labelOf(o) {
   if (o.type === 'image') return 'Picture';
   if (o.type === 'line') return 'Line';
@@ -1150,7 +1162,7 @@ function labelOf(o) {
 
 function boxProps(P, sel) {
   const o = sel[0];
-  const f = section(P, 'Fill & line');
+  const f = section(P, 'Fill & line', 'fill');
   f.append(row('Fill', colorField(o.fill, v => setProp(x => { x.fill = v; if (v === 'none') { x.fill2 = null; x.gradKind = null; } }), 'No Fill')));
   const gr = document.createElement('label'); gr.className = 'chk under-field';
   gr.innerHTML = `<input type="checkbox" ${o.gradKind ? 'checked' : ''}> Gradient`;
@@ -1165,10 +1177,10 @@ function boxProps(P, sel) {
   f.append(row('Weight', numInput(ptOf(o.strokeW), v => setProp(x => x.strokeW = mmOfPt(Math.max(0, v))), 0.25, 'pt')));
   f.append(row('Dash', select([['solid', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted'], ['dashdot', 'Dash-dot']], o.dash || 'solid', v => setProp(x => x.dash = v))));
   if (hasLine(o)) f.append(alignLineRow(o, 'line'));
-  const s = section(P, 'Shape');
+  const s = section(P, 'Shape', 'shapes');
   s.append(row('Type', select([['none', 'Frame'], ['rect', 'Rectangle'], ['roundrect', 'Rounded'], ['ellipse', 'Ellipse'], ...(o.shape === 'path' ? [['path', 'Custom']] : [])], o.shape, v => setProp(x => { x.shape = v; if (v === 'roundrect' && !x.radius) x.radius = round2(Math.min(x.w, x.h) * 0.15); }))));
   if (o.shape === 'roundrect' || o.shape === 'rect') s.append(row('Corner', numInput(o.radius || 0, v => setProp(x => x.radius = Math.max(0, v)), 0.5, 'mm')));
-  const t = section(P, 'Text box');
+  const t = section(P, 'Text box', 'text');
   caption(t, 'Inner margins (mm)');
   const g = grid(t);
   const pad = o.pad || { t: 0, r: 0, b: 0, l: 0 };
@@ -1199,7 +1211,7 @@ function alignLineRow(o, what) {
 
 function imageProps(P, sel) {
   const o = sel[0];
-  const s = section(P, 'Picture');
+  const s = section(P, 'Picture', 'image');
   s.append(row('Fit', select([['fill', 'Stretch'], ['contain', 'Fit inside'], ['cover', 'Fill & crop']], o.fit, v => setProp(x => x.fit = v))));
   s.append(row('Border', colorField(o.stroke, v => setProp(x => { x.stroke = v; if (v !== 'none' && !x.strokeW) x.strokeW = 0.3528; }), 'No Line')));
   s.append(row('Weight', numInput(ptOf(o.strokeW || 0), v => setProp(x => x.strokeW = mmOfPt(Math.max(0, v))), 0.25, 'pt')));
@@ -1211,7 +1223,7 @@ function imageProps(P, sel) {
 
 function lineProps(P, sel) {
   const o = sel[0];
-  const s = section(P, 'Line');
+  const s = section(P, 'Line', 'line');
   s.append(row('Colour', colorField(o.stroke, v => setProp(x => x.stroke = v))));
   s.append(row('Weight', numInput(ptOf(o.strokeW), v => setProp(x => x.strokeW = mmOfPt(Math.max(0.05, v))), 0.25, 'pt')));
   s.append(row('Dash', select([['solid', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted'], ['dashdot', 'Dash-dot']], o.dash || 'solid', v => setProp(x => x.dash = v))));
@@ -1226,13 +1238,13 @@ function renderPageProps(P) {
   const d = S.doc;
   const note = (el, text) => el.append(Object.assign(document.createElement('div'), { className: 'muted', textContent: text }));
   if (S.master) {
-    const ms = section(P, 'Master page');
+    const ms = section(P, 'Master page', 'pages');
     note(ms, 'Items on the master page appear on every page.');
     const mb = btns(ms); mb.style.marginTop = '6px';
     mb.append(btn('Back to pages', () => setMaster(false)));
   }
   // Size, margins and guides belong to the whole publication, so this isn't labelled "Page 1"
-  const s = section(P, 'Page size');
+  const s = section(P, 'Page size', d.pageW > d.pageH ? 'landscape' : 'portrait');
   const cur = PAGE_PRESETS.findIndex(p => p.w === d.pageW && p.h === d.pageH);
   const presets = select([['', cur < 0 ? 'Custom size' : 'Choose a size…'], ...PAGE_PRESETS.map((p, i) => [String(i), p.name])], cur < 0 ? '' : String(cur),
     v => { if (v !== '') { const p = PAGE_PRESETS[+v]; setPageSize(p.w, p.h); } });
@@ -1246,7 +1258,7 @@ function renderPageProps(P) {
   orient.classList.add('full');
   s.append(orient);
   note(s, 'Every page uses this size.');
-  const m = section(P, 'Margin guides');
+  const m = section(P, 'Margin guides', 'margins');
   caption(m, 'Distance from the page edge (mm)');
   const g2 = grid(m);
   const mg = d.margins || { t: 0, r: 0, b: 0, l: 0 };
@@ -1260,7 +1272,7 @@ function renderPageProps(P) {
   note(m, 'Drag from a ruler to add a guide; drag it back to remove it.');
   if (!S.master) {
     // Background and master visibility are set per page, so name the page when there is more than one
-    const bg = section(P, d.pages.length > 1 ? `Background · page ${S.page + 1}` : 'Background');
+    const bg = section(P, d.pages.length > 1 ? `Background · page ${S.page + 1}` : 'Background', 'bg');
     const page = d.pages[S.page];
     bg.append(row('Colour', colorField(page.bg || 'none', v => setDoc(() => { if (v === 'none') delete page.bg; else page.bg = v; }), 'No Colour')));
     const c = document.createElement('label'); c.className = 'chk';
@@ -1273,7 +1285,8 @@ function renderPageProps(P) {
 }
 
 // ---- panel widgets
-function section(P, title) { const s = document.createElement('div'); s.className = 'psec'; s.innerHTML = `<h4>${title}</h4>`; P.append(s); return s; }
+// a right panel section; its heading has an icon in front, as in Sastra PDF
+function section(P, title, ic) { const s = document.createElement('div'); s.className = 'psec'; s.innerHTML = `<h4>${ic ? icon(ic) : ''}${title}</h4>`; P.append(s); return s; }
 function grid(parent) { const g = document.createElement('div'); g.className = 'grid2'; parent.append(g); return g; }
 function btns(parent) { const b = document.createElement('div'); b.className = 'pbtns'; parent.append(b); return b; }
 function btn(label, fn, cls = '') { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label; b.onclick = fn; return b; }
@@ -1805,9 +1818,10 @@ const LINK_ICONS = {
 const CREDITS = [
   ['Electron', 'Electron contributors, GitHub Inc.', 'MIT', 'https://www.electronjs.org/'],
   ['LibreOffice', 'The Document Foundation', 'MPL-2.0', 'https://www.libreoffice.org/'],
+  ['IBM Plex Sans & Mono', 'IBM', 'SIL OFL 1.1', 'https://github.com/IBM/plex'],
   ['Noto Sans Khmer', 'Google', 'SIL OFL 1.1', 'https://github.com/notofonts/khmer']
 ];
-const CREDITS_NOTE = 'LibreOffice reads Publisher and other files; its licence files are in the libreoffice folder inside the app. Electron includes Chromium, Node.js and FFmpeg; their licences are in LICENSES.chromium.html in the app folder. The installer is made with electron-builder (MIT) and NSIS (zlib).';
+const CREDITS_NOTE = 'LibreOffice reads Publisher and other files; its licence files are in the libreoffice folder inside the app. Electron includes Chromium, Node.js and FFmpeg; their licences are in LICENSES.chromium.html in the app folder. The installer is made with electron-builder (MIT) and NSIS (zlib). The font files are packaged by Fontsource (MIT).';
 function openAbout() {
   if (document.querySelector('#modal-root .modal.about')) return;
   const A = AUTHOR, out = 'target="_blank" rel="noopener"'; // links open in the normal browser (main.js)
