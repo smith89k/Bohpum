@@ -234,14 +234,37 @@ function showSnapLines(lines) {
   }
 }
 
+// ---------------------------------------------------------------- Pages panel width: drag its right edge
+const PAGES_W = 180, PAGES_MIN = 140, PAGES_MAX = 400;
+let pagesWidth = PAGES_W;
+function setPagesWidth(w) { // null: the normal width
+  pagesWidth = w == null ? PAGES_W : Math.round(Math.max(PAGES_MIN, Math.min(PAGES_MAX, w)));
+  if (w == null) document.documentElement.style.removeProperty('--pages-w');
+  else document.documentElement.style.setProperty('--pages-w', pagesWidth + 'px');
+}
+function savePagesWidth(w) { api.setSettings({ pagesW: w }).then((s) => { if (s) S.settings = s; }, () => {}); }
+function startPagesResize(e) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const sx = e.clientX, w0 = pagesWidth;
+  document.body.classList.add('pages-resizing');
+  dragLoop(e, (ev) => { setPagesWidth(w0 + ev.clientX - sx); drawRulers(); scheduleThumbs(); }, () => {
+    document.body.classList.remove('pages-resizing');
+    if (pagesWidth === w0) return;
+    clearTimeout(thumbTimer); renderThumbs(); savePagesWidth(pagesWidth);
+  });
+}
+function resetPagesWidth() { setPagesWidth(null); drawRulers(); renderThumbs(); savePagesWidth(null); }
+
 // ---------------------------------------------------------------- thumbnails
 let thumbTimer = null;
 function scheduleThumbs() { clearTimeout(thumbTimer); thumbTimer = setTimeout(renderThumbs, 250); }
 function renderThumbs() {
+  if (document.body.classList.contains('page-dragging')) return scheduleThumbs(); // not under a page being dragged
   const list = $('page-list');
   list.innerHTML = '';
   const W = S.doc.pageW, H = S.doc.pageH;
-  const tw = Math.min(130, 150 * W / H), th = tw * H / W;
+  const tw = (pagesWidth - 50) / 130 * Math.min(130, 150 * W / H), th = tw * H / W; // they fill the panel's width
   const mk = (label, page, active, isMaster, onClick) => {
     const t = document.createElement('div'); t.className = 'pthumb' + (active ? ' active' : '') + (isMaster ? ' master' : '');
     const box = document.createElement('div'); box.className = 'tw'; box.style.width = tw + 'px'; box.style.height = th + 'px';
@@ -276,6 +299,54 @@ function openPageCtx(e) {
     ['Delete page', 'page-delete', '', on && n > 1], '-',
     [S.master ? 'Back to pages' : 'Edit master page', 'toggle-master', 'Ctrl+M', true]
   ]);
+}
+
+// Drag a page in the list to move it: a drop line shows where it lands, the list scrolls near its top or bottom
+// edge, Esc cancels. The moved page becomes the current page (one undo step). The master page stays put.
+let pageDragClick = false; // the click that ends a drag must not open the page under the mouse
+function startPageDrag(e) {
+  const t = e.target.closest('.pthumb');
+  if (e.button !== 0 || !t || t.dataset.page === 'master') return;
+  const list = $('page-list'), from = +t.dataset.page, sx = e.clientX, sy = e.clientY;
+  let dragging = false, cancelled = false, to = from, y = sy, timer = null;
+  const line = document.createElement('div'); line.className = 'page-drop'; line.hidden = true;
+  const place = () => {
+    const ts = [...list.querySelectorAll('.pthumb:not(.master)')];
+    to = ts.findIndex(x => { const b = x.getBoundingClientRect(); return y < b.top + b.height / 2; });
+    if (to < 0) to = ts.length;
+    line.hidden = to === from || to === from + 1; // its own place: nothing would change
+    const last = ts[ts.length - 1];
+    line.style.top = (to < ts.length ? ts[to].offsetTop - 8 : last.offsetTop + last.offsetHeight + 8) - 1.5 + 'px'; // mid-gap (gap 16)
+  };
+  const edgeScroll = () => {
+    const b = list.getBoundingClientRect(), zone = 36;
+    const d = y < b.top + zone ? y - (b.top + zone) : y > b.bottom - zone ? y - (b.bottom - zone) : 0;
+    if (d) { list.scrollTop += Math.max(-12, Math.min(12, d / 3)); place(); }
+  };
+  const stop = () => { clearInterval(timer); line.remove(); t.classList.remove('dragged'); document.body.classList.remove('page-dragging'); window.removeEventListener('keydown', key, true); };
+  const key = (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cancelled = true; stop(); } };
+  dragLoop(e, (ev) => {
+    y = ev.clientY;
+    if (cancelled) return;
+    if (!dragging) {
+      if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+      dragging = true; finishEditing();
+      t.classList.add('dragged'); document.body.classList.add('page-dragging'); list.append(line);
+      window.addEventListener('keydown', key, true);
+      timer = setInterval(edgeScroll, 16);
+    }
+    place();
+  }, () => {
+    if (!dragging) return;
+    pageDragClick = true; setTimeout(() => { pageDragClick = false; });
+    if (cancelled) return;
+    stop();
+    if (to === from || to === from + 1) return;
+    const a = S.doc.pages, [p] = a.splice(from, 1), j = to > from ? to - 1 : to;
+    a.splice(j, 0, p);
+    S.master = false; S.page = j; S.sel.clear();
+    commit(); renderAll();
+  });
 }
 
 function goPage(i) {
@@ -1972,6 +2043,11 @@ function wire() {
   });
   ws.addEventListener('contextmenu', openCtx);
   $('page-list').addEventListener('contextmenu', openPageCtx);
+  $('page-list').addEventListener('pointerdown', startPageDrag);
+  $('page-list').addEventListener('click', (e) => { if (pageDragClick) e.stopPropagation(); }, true);
+  $('page-list').addEventListener('dragstart', (e) => e.preventDefault()); // no browser drag of a thumbnail's picture
+  $('pages-resizer').addEventListener('pointerdown', startPagesResize);
+  $('pages-resizer').addEventListener('dblclick', resetPagesWidth);
   ws.addEventListener('scroll', () => drawRulers());
   ws.addEventListener('pointermove', (e) => { if (!pageEl) return; mouseMm = mmFromEvent(e); drawRulers(); $('st-pos').textContent = `${fmt(mouseMm.x)}, ${fmt(mouseMm.y)} mm`; });
   ws.addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(S.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), e); } }, { passive: false });
@@ -2021,6 +2097,7 @@ async function init() {
   wire();
   try { S.settings = (await api.getSettings()) || {}; } catch { S.settings = {}; }
   setTheme(THEMES.includes(S.settings.theme) ? S.settings.theme : 'system');
+  if (+S.settings.pagesW) setPagesWidth(+S.settings.pagesW);
   loadDoc(newDoc(210, 297), null);
   if (!window.__noWelcome) newDialog(true);
 }

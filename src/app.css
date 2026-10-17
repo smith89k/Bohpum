@@ -140,15 +140,24 @@ i.none { background: #fff linear-gradient(to top right, transparent calc(50% - 1
 .sep { width: 1px; height: 20px; background: var(--line-2); margin: 0 8px; }
 
 /* ---------- main ---------- */
-main { display: grid; grid-template-columns: 180px 1fr 292px; min-height: 0; }
-#pages { border-right: 1px solid var(--line); background: var(--chrome); display: flex; flex-direction: column; min-height: 0; }
+main { display: grid; grid-template-columns: var(--pages-w, 180px) 1fr 292px; min-height: 0; }
+#pages { position: relative; border-right: 1px solid var(--line); background: var(--chrome); display: flex; flex-direction: column; min-height: 0; }
+/* the Pages panel's right edge: drag to resize (--pages-w, set by app.js), double-click for the normal width */
+#pages-resizer { position: absolute; top: 0; bottom: 0; right: -4px; width: 7px; z-index: 5; cursor: col-resize; }
+#pages-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 3px; background: var(--accent); opacity: 0; transition: opacity .12s; }
+#pages-resizer:hover::after, body.pages-resizing #pages-resizer::after { opacity: 1; }
+body.pages-resizing, body.pages-resizing * { cursor: col-resize !important; user-select: none; }
 .panel-h { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--ink-2); border-bottom: 1px solid var(--line); }
 .panel-h .btn { height: 26px; min-width: 26px; padding: 0 4px; color: var(--ink-2); }
 .panel-h .btn:hover { color: var(--accent); }
 .panel-h .btn svg { width: 16px; height: 16px; }
 .panel-h .count { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: var(--chrome-2); border: 1px solid var(--line); color: var(--ink-3); font-size: 11px; letter-spacing: 0; text-align: center; }
 .panel-tools { display: flex; gap: 2px; }
-#page-list { overflow: auto; padding: 14px 12px 24px; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+#page-list { position: relative; overflow: auto; padding: 14px 12px 24px; display: flex; flex-direction: column; gap: 16px; align-items: center; user-select: none; }
+/* dragging a page: it fades, a green line shows where it lands */
+.pthumb.dragged { opacity: .4; }
+.page-drop { position: absolute; left: 10px; right: 10px; height: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .pthumb { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
 .pthumb .tw { background: #fff; box-shadow: 0 0 0 1px var(--line-2), 0 1px 3px rgba(0,0,0,.12); overflow: hidden; position: relative; }
 .pthumb.active .tw { box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0,0,0,.15); }
@@ -156,7 +165,9 @@ main { display: grid; grid-template-columns: 180px 1fr 292px; min-height: 0; }
 .pthumb.active .pn { color: var(--accent); font-weight: 600; }
 .pthumb.master .pn::before { content: "◆ "; color: var(--gold); }
 
-#workspace-wrap { position: relative; display: grid; grid-template-columns: 22px 1fr; grid-template-rows: 22px 1fr; min-width: 0; min-height: 0; background: var(--pasteboard); }
+/* minmax(0, …): the rulers' canvases are drawn at the screen's scale (125 % = 1.25 × the pixels); that size must
+   not stretch the tracks, or they grow at every redraw and run over the status bar */
+#workspace-wrap { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: 22px minmax(0, 1fr); min-width: 0; min-height: 0; background: var(--pasteboard); }
 #corner { background: var(--chrome-2); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 #ruler-h, #ruler-v { background: var(--ruler); display: block; width: 100%; height: 100%; cursor: default; }
 #ruler-h { border-bottom: 1px solid var(--line); cursor: s-resize; }
