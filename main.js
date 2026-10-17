@@ -60,14 +60,29 @@ function findSoffice() {
   return null;
 }
 
-// One conversion at a time: the editor and the Explorer menu's convert window share LibreOffice's profile
-let loQueue = Promise.resolve();
-function convertWithLibreOffice(inputPath) {
-  const job = loQueue.then(() => convertOne(inputPath));
-  loQueue = job.catch(() => {});
-  return job;
+// One conversion at a time: the editor and the Explorer menu's convert window share LibreOffice's profile.
+// job: step('waiting') when files are ahead of it, step('reading') on its turn; cancelled before its turn it never
+// starts, and stopRead() ends it while LibreOffice reads (the editor's progress box: Cancel).
+let loQueue = Promise.resolve(), loJobs = 0;
+const CANCELLED = new Error('cancelled');
+function convertWithLibreOffice(inputPath, job = {}) {
+  if (loJobs++) job.step?.('waiting');
+  const run = loQueue.then(() => {
+    if (job.cancelled) throw CANCELLED;
+    job.step?.('reading');
+    return convertOne(inputPath, job);
+  });
+  loQueue = run.then(() => {}, () => {}).then(() => { loJobs--; });
+  return run;
 }
-function convertOne(inputPath) {
+function stopRead(job) {
+  job.cancelled = true;
+  const child = job.child; if (!child) return;
+  // soffice.exe only starts soffice.bin and waits for it: end both, or the one left keeps the profile busy
+  if (process.platform === 'win32' && child.pid) execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true }, () => {});
+  else child.kill();
+}
+function convertOne(inputPath, job) {
   return new Promise((resolve, reject) => {
     const soffice = findSoffice();
     if (!soffice) return reject(new Error('Part of Bohpum is missing. Please reinstall Bohpum.'));
@@ -81,8 +96,10 @@ function convertOne(inputPath) {
     const profileUrl = pathToFileURL(profile).href;
     const args = ['-env:UserInstallation=' + profileUrl, '--headless', '--norestore', '--nolockcheck',
       '--convert-to', 'fodg', '--outdir', tmp, tmpIn];
-    execFile(soffice, args, { timeout: 180000, windowsHide: true }, (err) => {
+    job.child = execFile(soffice, args, { timeout: 180000, windowsHide: true }, (err) => {
+      job.child = null;
       const out = path.join(tmp, 'input.fodg');
+      if (job.cancelled) { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} return reject(CANCELLED); }
       if (fs.existsSync(out)) {
         const xml = fs.readFileSync(out, 'utf8');
         try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
@@ -318,11 +335,11 @@ function buildMenu() {
 
 const FOREIGN = ['.pub', '.odg', '.vsd', '.vsdx', '.cdr', '.wpg', '.cmx', '.p65', '.pmd', '.qxd', '.zmf'];
 
-async function readAnyDocument(p) {
+async function readAnyDocument(p, job) {
   const ext = path.extname(p).toLowerCase();
   if (ext === '.bpum' || ext === '.kbach' || ext === '.json') return { kind: 'bpum', text: fs.readFileSync(p, 'utf8'), path: p };
   if (ext === '.fodg') return { kind: 'fodg', text: fs.readFileSync(p, 'utf8'), path: p };
-  const xml = await convertWithLibreOffice(p);
+  const xml = await convertWithLibreOffice(p, job);
   return { kind: 'fodg', text: xml, path: p };
 }
 
@@ -344,12 +361,18 @@ ipcMain.handle('open-dialog', async () => {
   return r.canceled ? null : r.filePaths[0];
 });
 
-ipcMain.handle('read-document', async (_e, p) => {
+// Each window's file being read: the editor's progress box shows its steps ('read-step') and its Cancel stops it
+const reading = new Map(); // webContents id → job (see convertWithLibreOffice)
+ipcMain.handle('read-document', async (e, p) => {
   if (!fs.existsSync(p)) return { error: 'The file was moved or deleted.', missing: true };
   rememberDir('lastDir', p); // also files opened from Explorer, Recent or a drop
-  try { return await readAnyDocument(p); }
-  catch (err) { return { error: String(err && err.message || err) }; }
+  const id = e.sender.id, job = { step: (s) => { if (!e.sender.isDestroyed()) e.sender.send('read-step', s); } };
+  reading.set(id, job);
+  try { return await readAnyDocument(p, job); }
+  catch (err) { return err === CANCELLED ? { cancelled: true } : { error: String(err && err.message || err) }; }
+  finally { if (reading.get(id) === job) reading.delete(id); }
 });
+ipcMain.on('cancel-read', (e) => { const job = reading.get(e.sender.id); if (job) stopRead(job); });
 
 ipcMain.handle('save-dialog', async (_e, { defaultName, filters }) => {
   const r = await dialog.showSaveDialog(win, { defaultPath: startIn('lastDir', defaultName), filters });

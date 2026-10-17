@@ -15,6 +15,7 @@ const NOTES = Object.freeze([
     ['new', 'Text boxes with Khmer and English text, shapes, lines and pictures, on many pages with a master page.'],
     ['new', 'A Print screen like Publisher: one card anywhere on A4, or many copies on one sheet, with a preview you can zoom. Save as PDF saves exactly what would print.'],
     ['new', 'Right-click .pub files in File Explorer → Convert to Bohpum.'],
+    ['new', 'While a .pub file opens, a small box shows that it is being read, with Cancel to stop.'],
     ['new', 'Drag pages in the Pages panel to change their order. Make the panel wider or narrower by dragging its edge.'],
     ['new', 'Each section of the panel on the right folds and opens from its heading, and stays that way after a restart. Bring to front, Send to back, Group and Ungroup are in its Arrange section.'],
     ['new', 'System, Light and Dark themes, and Maximize to give the page the whole window.'],

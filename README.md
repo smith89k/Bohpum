@@ -47,6 +47,9 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
 **Open**
 - `.pub` (Publisher 98–2019+), plus `.odg`, `.vsd/.vsdx`, `.cdr`, `.p65/.pmd`, `.qxd` through the bundled LibreOffice
 - Its own format, `.bpum` (older `.kbach` files still open). Saving an imported `.pub` creates a `.bpum` file; the original `.pub` is never changed.
+- While a `.pub` is read, a box with the look of the right-click convert window covers the editor: "Opening card.pub",
+  a moving bar, **Cancel** (or Esc; the publication on screen stays as it was). It closes by itself when the file is in;
+  a problem stays in it with Close. While the convert window is busy it says it is waiting for those files.
 - Drag a file onto the window to open it. Drag a picture in to insert it.
 - After installing, double-clicking a `.bpum` file opens it in Bohpum (it has its own file icon). For `.pub` files
   Bohpum is added to "Open with"; Microsoft Publisher stays the default if it is installed.

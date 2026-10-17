@@ -1641,17 +1641,49 @@ async function confirmDiscard() {
   if (r === 0) return await save();
   return r === 1;
 }
+// While LibreOffice reads a .pub (or another outside format), a box with the look of the Explorer menu's convert
+// window (task.html) covers the editor: the file, what it's doing, a moving bar, Cancel (also Esc). It closes by
+// itself when the file is in; a problem stays in it, with Close. main.js says when it waits for other files.
+let reading = null; // that box while the file is being read
+function readingBox(name) {
+  const back = document.createElement('div'); back.className = 'modal-back';
+  back.innerHTML = `<div class="modal progress" role="dialog">
+    <div class="p-head"><img src="img/bpum-file.png" alt="" width="28" height="38" draggable="false"><div><div class="p-what"></div><div class="p-step"></div></div></div>
+    <div class="p-bar"><div class="p-fill"></div></div><ul class="p-lines" hidden></ul>
+    <div class="p-foot"><button class="btn">Cancel</button></div></div>`;
+  const q = (s) => back.querySelector(s), btn = q('.p-foot .btn');
+  const steps = { waiting: 'Waiting for the other files to finish…', reading: /\.pub$/i.test(name) ? 'Reading the Publisher file…' : 'Reading the file…' };
+  const box = { name, cancelled: false };
+  const close = () => { back.remove(); document.removeEventListener('keydown', key, true); if (reading === box) reading = null; };
+  const key = (e) => { if (back === $('modal-root').lastElementChild && e.key === 'Escape') { e.stopPropagation(); btn.click(); } };
+  box.step = (s) => { if (steps[s]) q('.p-step').textContent = steps[s]; };
+  box.done = close;
+  box.fail = (why) => {
+    if (reading === box) reading = null;
+    q('.modal').classList.add('failed');
+    q('.p-what').textContent = `Couldn't open ${name}`; q('.p-step').textContent = '1 problem below';
+    const li = document.createElement('li'); li.textContent = why; q('.p-lines').append(li); q('.p-lines').hidden = false;
+    btn.textContent = 'Close'; btn.classList.add('primary'); btn.onclick = close; btn.focus();
+  };
+  btn.onclick = () => { box.cancelled = true; api.cancelRead(); close(); };
+  q('.p-what').textContent = `Opening ${name}`;
+  document.addEventListener('keydown', key, true);
+  $('modal-root').append(back);
+  return reading = box;
+}
 async function openFile(p) {
+  if (reading) return toast(`Please wait: ${reading.name} is still opening.`);
   finishEditing();
   if (!(await confirmDiscard())) return;
   if (!p) p = await api.openDialog();
   if (!p) return;
   const isForeign = !/\.(bpum|kbach|json|fodg)$/i.test(p);
-  if (isForeign) toast('Reading ' + p.split(/[\\/]/).pop() + ' …', 15000);
+  const box = isForeign ? readingBox(p.split(/[\\/]/).pop()) : null;
   const r = await api.readDocument(p);
+  if (box && box.cancelled) return; // Cancel: the publication on screen stays as it was
   if (r.error) {
     if (r.missing) rememberRecent(p, false);
-    return toast('Could not open the file: ' + r.error, 6000);
+    return box ? box.fail(r.error) : toast('Could not open the file: ' + r.error, 6000);
   }
   const base = p.split(/[\\/]/).pop().replace(/\.[^.]+$/, '');
   try {
@@ -1664,12 +1696,13 @@ async function openFile(p) {
       toast('Opened ' + base);
     } else {
       const { doc: d, warnings: warn } = docFromFodg(r.text, base);
+      if (box) box.done();
       loadDoc(d, null);
       S.importedFrom = p;
       rememberRecent(p);
       toast(`Opened ${base} (${d.pages.length} page${d.pages.length > 1 ? 's' : ''}, ${fmt(d.pageW)} × ${fmt(d.pageH)} mm)` + (warn.length ? ' – ' + warn.join(' ') : '') + ' Save will create a .bpum file.', warn.length ? 9000 : 5000);
     }
-  } catch (err) { toast('Could not read the file: ' + err.message, 6000); }
+  } catch (err) { if (box) box.fail('It may be damaged, or not a Publisher file.'); else toast('Could not read the file: ' + err.message, 6000); }
 }
 async function save(as = false) {
   finishEditing();
@@ -2162,6 +2195,7 @@ function wire() {
   });
   window.addEventListener('resize', () => drawRulers());
   api.onMenu(cmd);
+  api.onReadStep((s) => { if (reading) reading.step(s); });
   // a file double-clicked in Explorer (or "Open with"): it replaces the welcome screen
   api.onOpenPath((p) => { if (welcome) welcome.close(); openFile(p); });
   setupTextbar();

@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('api', {
   __native: true,
   openDialog: () => ipcRenderer.invoke('open-dialog'),
   readDocument: (p) => ipcRenderer.invoke('read-document', p),
+  // the editor's progress box while LibreOffice reads a file: 'waiting' | 'reading', and its Cancel
+  onReadStep: (fn) => ipcRenderer.on('read-step', (_e, s) => fn(s)),
+  cancelRead: () => ipcRenderer.send('cancel-read'),
   saveDialog: (opts) => ipcRenderer.invoke('save-dialog', opts),
   writeFile: (opts) => ipcRenderer.invoke('write-file', opts),
   pickImages: () => ipcRenderer.invoke('pick-images'),
