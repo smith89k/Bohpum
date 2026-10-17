@@ -38,7 +38,14 @@ function findSoffice() {
   return null;
 }
 
+// One conversion at a time: the editor and the Explorer menu's convert window share LibreOffice's profile
+let loQueue = Promise.resolve();
 function convertWithLibreOffice(inputPath) {
+  const job = loQueue.then(() => convertOne(inputPath));
+  loQueue = job.catch(() => {});
+  return job;
+}
+function convertOne(inputPath) {
   return new Promise((resolve, reject) => {
     const soffice = findSoffice();
     if (!soffice) return reject(new Error('Part of Bohpum is missing. Please reinstall Bohpum.'));
@@ -227,10 +234,17 @@ ipcMain.handle('save-dialog', async (_e, { defaultName, filters }) => {
   return r.canceled ? null : r.filePath;
 });
 
+// true, or { error } in plain words (the page shows it)
 ipcMain.handle('write-file', async (_e, { path: p, text, base64 }) => {
-  if (base64 != null) fs.writeFileSync(p, Buffer.from(base64, 'base64'));
-  else fs.writeFileSync(p, text, 'utf8');
-  return true;
+  try {
+    if (base64 != null) fs.writeFileSync(p, Buffer.from(base64, 'base64'));
+    else fs.writeFileSync(p, text, 'utf8');
+    return true;
+  } catch (err) {
+    const c = err && err.code;
+    return { error: c === 'EACCES' || c === 'EPERM' ? 'no permission to save there' : c === 'ENOSPC' ? 'the disk is full'
+      : c === 'EBUSY' ? 'the file is open in another program' : c === 'ENOENT' ? 'its folder is gone' : String(err && err.message || err) };
+  }
 });
 
 ipcMain.handle('pick-images', async () => {

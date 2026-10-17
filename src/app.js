@@ -2,7 +2,7 @@
 import { newDoc, newPage, makeObject, uid, clone, round2, bbox, corners, PAGE_PRESETS, DEFAULT_FONT } from './model.js';
 import { renderObject, renderPage, fixLineHeights } from './render.js';
 import { RENDER_CSS } from './renderCss.js';
-import { importFodg } from './odgImport.js';
+import { docFromFodg, bpumText, withDefaults } from './docfile.js';
 import * as TE from './textedit.js';
 import { openPrintDialog, buildOutputHtml } from './print.js';
 
@@ -903,10 +903,13 @@ function comboList(input, { items, pick, find, known, cls = '' }) {
     if (isOpen()) return closeListPop();
     input.focus(); fresh = false; input.select(); open();
   });
-  input.addEventListener('focus', () => { fresh = true; });
+  // the first click into the box selects its text, so typing replaces it (judged on the press: Windows only
+  // sends the focus event while Bohpum is the front window)
+  input.addEventListener('mousedown', () => { fresh = document.activeElement !== input; });
   input.addEventListener('click', () => { if (fresh) input.select(); fresh = false; open(); });
   input.addEventListener('input', async () => { typed = true; await open(); markMatch(); });
   input.addEventListener('blur', () => {
+    if (!document.hasFocus()) return; // only another program came to the front: keep the list and the typing
     closeListPop();
     // a typed value counts when it is a real choice; otherwise the box shows the text's value again
     if (typed) { typed = false; const v = known(input.value); if (v) pick(v); else updateTextbar(); }
@@ -1427,9 +1430,7 @@ function movePage(d) {
 
 // ---------------------------------------------------------------- files
 function loadDoc(doc, path) {
-  S.doc = doc; S.path = path; S.page = 0; S.master = false; S.sel.clear(); S.editing = null;
-  if (!S.doc.guides) S.doc.guides = { v: [], h: [] };
-  if (!S.doc.master) S.doc.master = { objects: [] };
+  S.doc = withDefaults(doc); S.path = path; S.page = 0; S.master = false; S.sel.clear(); S.editing = null;
   resetHistory(); setDirty(false);
   renderAll();
   requestAnimationFrame(zoomFit);
@@ -1462,8 +1463,7 @@ async function openFile(p) {
       rememberRecent(p);
       toast('Opened ' + base);
     } else {
-      const d = importFodg(r.text, base);
-      const warn = d.importWarnings || []; delete d.importWarnings;
+      const { doc: d, warnings: warn } = docFromFodg(r.text, base);
       loadDoc(d, null);
       S.importedFrom = p;
       rememberRecent(p);
@@ -1482,8 +1482,8 @@ async function save(as = false) {
     if (!p) return false;
     if (/\.pdf$/i.test(p)) { await savePdf(p); return false; } // a copy: the publication itself is not saved
   }
-  S.doc.name = p.split(/[\\/]/).pop().replace(/\.bpum$/i, '');
-  await api.writeFile({ path: p, text: JSON.stringify(S.doc) });
+  const w = await api.writeFile({ path: p, text: bpumText(S.doc, p) });
+  if (w && w.error) { toast('Could not save: ' + w.error, 6000); return false; }
   S.path = p; setDirty(false); renderProps();
   rememberRecent(p);
   toast('Saved ' + S.doc.name);
