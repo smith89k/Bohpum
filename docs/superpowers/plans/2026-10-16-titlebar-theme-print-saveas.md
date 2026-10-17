@@ -6,7 +6,7 @@
 
 **Architecture:** Electron app, no framework: `main.js` (window, menus, IPC, printing), `preload.js` (the `window.api` bridge), `src/` (plain ES modules + one CSS file). The title row is HTML drawn by the page with Windows' caption buttons laid over it (`titleBarOverlay`); keyboard shortcuts move from the (now hidden) Windows menu into the page's keydown handler. Printing stays "render HTML in a hidden window", but with `silent: true` and a `deviceName`.
 
-**Tech Stack:** Electron ^44.8.0, plain JavaScript (CommonJS in main, ES modules in `src/`), CSS. Tests: Electron scripts in `tests/` that load the real `main.js` and drive the window (`npm test`).
+**Tech Stack:** Electron ^44.8.0, plain JavaScript (CommonJS in main, ES modules in `src/`), CSS. Tests: Electron scripts in `tests/` that load the real `main.js` and drive the window (`pnpm test`).
 
 **Spec:** `docs/superpowers/specs/2026-10-16-titlebar-theme-print-saveas-design.md`
 
@@ -153,12 +153,12 @@ function driver(win, ctx) {
 module.exports = { run, sleep, ROOT };
 ```
 
-- [ ] **Step 2: Write the runner and the npm script**
+- [ ] **Step 2: Write the runner and the package.json script**
 
 Create `tests/run.js`:
 
 ```js
-// Runs each tests/*.test.js (or the files given) in its own Electron process: npm test [-- file …]
+// Runs each tests/*.test.js (or the files given) in its own Electron process: pnpm test [-- file …]
 const { spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -245,7 +245,7 @@ run(async (t, check) => {
 
 - [ ] **Step 4: Run it**
 
-Run: `npm test`
+Run: `pnpm test`
 Expected (a Bohpum window flashes up for a few seconds):
 ```
 # print-position.test.js
@@ -318,7 +318,7 @@ run(async (t, check) => {
 
 - [ ] **Step 2: Run it to see it fail**
 
-Run: `npm test -- tests/theme.test.js`
+Run: `pnpm test -- tests/theme.test.js`
 Expected: `FAIL  Accent colour is jade green`, `FAIL  Print button is green`, `FAIL  Khmer logo text is green`, `FAIL  No red-brown left in the sources` (lists `src/app.css: #9a3412` … and `src/app.js: #9a3412`).
 
 - [ ] **Step 3: Change the colours**
@@ -403,7 +403,7 @@ In `src/app.js` (ruler mark that follows the mouse):
 
 - [ ] **Step 4: Run it to see it pass**
 
-Run: `npm test -- tests/theme.test.js`
+Run: `pnpm test -- tests/theme.test.js`
 Expected: four `PASS` lines, `All 1 test files passed`.
 
 - [ ] **Step 5: Commit**
@@ -484,7 +484,7 @@ run(async (t, check) => {
 
 - [ ] **Step 2: Run it to see it fail**
 
-Run: `npm test -- tests/save-as.test.js`
+Run: `pnpm test -- tests/save-as.test.js`
 Expected: FAIL on "Save As offers Bohpum publication and PDF" (filters are `Bohpum:bpum`), "PDF written…" (no file), "PDF leaves the publication…" (the .pdf path was saved as a publication), "PDF is opened…", "Export PDF is gone…". "Save As .bpum…" and "Plain Save…" may already pass.
 
 - [ ] **Step 3: Main process — one PDF writer, new `write-pdf`, menu item removed**
@@ -623,7 +623,7 @@ In `src/index.html`, delete the toolbar button:
 
 - [ ] **Step 5: Run it to see it pass, plus the earlier tests**
 
-Run: `npm test`
+Run: `pnpm test`
 Expected: every check in `print-position`, `save-as` and `theme` PASSes; `All 3 test files passed`.
 
 - [ ] **Step 6: Commit**
@@ -717,7 +717,7 @@ run(async (t, check) => {
 
 - [ ] **Step 2: Run it to see it fail**
 
-Run: `npm test -- tests/titlebar.test.js`
+Run: `pnpm test -- tests/titlebar.test.js`
 Expected: every check FAILs (no `#titlebar`; `bar` is `null`), except possibly "Ctrl+P opens Print".
 
 - [ ] **Step 3: Main process — hidden title bar, menu pop-up, page-owned shortcuts**
@@ -946,12 +946,12 @@ In `wire()`, after the line `document.querySelectorAll('[data-tool]').forEach(b 
 
 - [ ] **Step 6: Run it to see it pass, plus the earlier tests**
 
-Run: `npm test`
+Run: `pnpm test`
 Expected: all checks in `print-position`, `save-as`, `theme`, `titlebar` PASS; `All 4 test files passed`.
 
 - [ ] **Step 7: Look at it**
 
-Run: `npm start`. Check by eye: one title row (logo · File … Help · "Untitled" · ─ □ ✕ in the cream colour), toolbar below it; dragging the empty title row moves the window; double-click maximizes / restores; File opens under the word; Ctrl+S, Ctrl+O, Ctrl+P, Ctrl+N work, also while typing in the font box. Close the app.
+Run: `pnpm start`. Check by eye: one title row (logo · File … Help · "Untitled" · ─ □ ✕ in the cream colour), toolbar below it; dragging the empty title row moves the window; double-click maximizes / restores; File opens under the word; Ctrl+S, Ctrl+O, Ctrl+P, Ctrl+N work, also while typing in the font box. Close the app.
 
 - [ ] **Step 8: Commit**
 
@@ -1063,7 +1063,7 @@ run(async (t, check) => {
 
 - [ ] **Step 2: Run it to see it fail**
 
-Run: `npm test -- tests/print-direct.test.js`
+Run: `pnpm test -- tests/print-direct.test.js`
 Expected: `FAIL  test ran to the end` with "timed out waiting for: …pd-printer…" (the dialog has no printer list yet).
 
 - [ ] **Step 3: Main process — printer list, Properties, silent print**
@@ -1462,12 +1462,12 @@ with:
 
 - [ ] **Step 6: Run it to see it pass, plus the earlier tests**
 
-Run: `npm test`
+Run: `pnpm test`
 Expected: all checks in `print-direct`, `print-position`, `save-as`, `theme`, `titlebar` PASS; `All 5 test files passed`.
 
 - [ ] **Step 7: Look at it**
 
-Run: `npm start`, open `samples/card-original.pub` (or any publication), Ctrl+P. Check by eye: Printer (list + Properties, Copies) · Paper · Layout · Pages · Printer adjustment, same heading style and spacing; the column scrolls when the window is short; the preview still drags. Do not press Print here (that would print on paper) — Close.
+Run: `pnpm start`, open `samples/card-original.pub` (or any publication), Ctrl+P. Check by eye: Printer (list + Properties, Copies) · Paper · Layout · Pages · Printer adjustment, same heading style and spacing; the column scrolls when the window is short; the preview still drags. Do not press Print here (that would print on paper) — Close.
 
 - [ ] **Step 8: Commit**
 
@@ -1528,12 +1528,12 @@ In the shortcuts table, after the row `| PageUp / PageDown | Previous / next pag
 In the project layout block, after the line `vendor/libreoffice             The bundled LibreOffice (generated, not edited by hand)` add:
 
 ```
-tests/                         Electron tests: npm test (each tests/*.test.js runs the real app)
+tests/                         Electron tests: pnpm test (each tests/*.test.js runs the real app)
 ```
 
 - [ ] **Step 2: Full test run**
 
-Run: `npm test`
+Run: `pnpm test`
 Expected: `All 5 test files passed`, no FAIL lines.
 
 - [ ] **Step 3: Commit**

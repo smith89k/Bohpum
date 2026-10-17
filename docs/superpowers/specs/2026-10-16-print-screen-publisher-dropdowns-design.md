@@ -75,7 +75,7 @@ min-height 48 px, full column width; picture 30 px square, `--accent-soft` backg
 Behaviour kept from today: settings saved on the publication (also on Close / Esc when changed), printer
 and printer adjustment app-wide, direct printing, landscape turn, drag on the preview.
 
-## Testing (Electron harness, `npm test`)
+## Testing (Electron harness, `pnpm test`)
 - `tests/dropdowns.test.js`: every `select` in the editor, the properties panel and the print screen has
   computed `appearance: base-select`; a real click opens the zoom dropdown, a real click on "100%" picks
   it (zoom changes); keyboard: focus the line-spacing dropdown, open with Enter, ArrowDown + Enter picks the

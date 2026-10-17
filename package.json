@@ -6,6 +6,7 @@
   "main": "main.js",
   "author": "Sunnguon TAING",
   "license": "UNLICENSED",
+  "packageManager": "pnpm@12.4.1",
   "scripts": {
     "start": "electron .",
     "test": "node tests/run.js",
@@ -17,9 +18,6 @@
   "devDependencies": {
     "electron": "^44.8.0",
     "electron-builder": "^26.15.3"
-  },
-  "overrides": {
-    "global-agent": "^4.1.3"
   },
   "build": {
     "appId": "kh.bohpum.app",

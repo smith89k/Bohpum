@@ -9,13 +9,13 @@ panel sections that fold from their headings and stay folded, and the Arrange bu
 `scripts/check-notes.js`. `src/app.js` shows them with the existing `modal()` (fixed so only the top box takes Esc / Enter).
 Fold state and "seen" version go into Bohpum's settings file (`api.setSettings`), like the theme.
 
-**Tech Stack:** Electron 44, plain ES modules in the page, tests = `tests/*.test.js` driving the real app (`npm test -- tests/x.test.js`).
+**Tech Stack:** Electron 44, plain ES modules in the page, tests = `tests/*.test.js` driving the real app (`pnpm test -- tests/x.test.js`).
 
 Spec: `docs/superpowers/specs/2026-10-17-whats-new-props-fold-design.md`.
 
 ## Global Constraints
 - Work on `main`, commit after each task, message ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-- Never run `npm run dist` (the installer build) without the user's yes.
+- Never run `pnpm run dist` (the installer build) without the user's yes.
 - Settings keys: `notesSeen` (version string), `propsFolded` (array of section keys).
 - Section keys: `object`, `arrange`, `fill`, `shape`, `textbox`, `picture`, `line`, `opacity`, `master`, `pagesize`, `margins`, `background`.
 - Tag order and words: `new` New, `improved` Improved, `fixed` Fixed, `removed` Removed.
@@ -64,7 +64,7 @@ run(async (t, check) => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npm test -- tests/modal-stack.test.js` → "Esc closes only the top box" and the Enter checks FAIL (both boxes close).
+- [ ] **Step 2: Run it, expect FAIL** — `pnpm test -- tests/modal-stack.test.js` → "Esc closes only the top box" and the Enter checks FAIL (both boxes close).
 
 - [ ] **Step 3: Implement** in `modal()`'s `key` handler:
 
@@ -79,7 +79,7 @@ run(async (t, check) => {
   };
 ```
 
-- [ ] **Step 4: Run it, expect PASS** — `npm test -- tests/modal-stack.test.js`.
+- [ ] **Step 4: Run it, expect PASS** — `pnpm test -- tests/modal-stack.test.js`.
 - [ ] **Step 5: Commit** — `git add src/app.js tests/modal-stack.test.js` · `fix: Esc and Enter act on the top box only, when one box is over another`.
 
 ### Task 2: Notes file and the build check
@@ -94,7 +94,7 @@ entry = `{ version, date, notes: [{ kind, text }] }`.
 - [ ] **Step 1: Write the failing test** `tests/check-notes.test.js`
 
 ```js
-// scripts/check-notes.js stops `npm run dist` when src/notes.js has no What's new for package.json's version, or an
+// scripts/check-notes.js stops `pnpm run dist` when src/notes.js has no What's new for package.json's version, or an
 // entry is broken (as in Sastra PDF): it passes on the real file and names the problem in a broken copy.
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -123,14 +123,14 @@ run(async (t, check) => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npm test -- tests/check-notes.test.js` (no script, no notes file).
+- [ ] **Step 2: Run it, expect FAIL** — `pnpm test -- tests/check-notes.test.js` (no script, no notes file).
 
 - [ ] **Step 3: Create `src/notes.js`**
 
 ```js
 // Bohpum — What's new: what changed in each version, newest first, and when the window shows by itself
 // (as in Sastra PDF). Written by hand at release time, in plain words: what someone can now do. Text only.
-// The newest entry must be package.json's version: scripts/check-notes.js stops `npm run dist` otherwise,
+// The newest entry must be package.json's version: scripts/check-notes.js stops `pnpm run dist` otherwise,
 // because a release with no notes would show nothing and nobody would notice.
 // A classic script (not a module) so check-notes.js can run it; index.html loads it before app.js (openNotes there).
 (() => {
@@ -166,7 +166,7 @@ window.BohpumNotes = Object.freeze({ KINDS, NOTES, noteFor, earlierNotes, should
 - [ ] **Step 4: Create `scripts/check-notes.js`** — Sastra PDF's script with `src/notes.js`, `window.BohpumNotes`:
 
 ```js
-// Run first by `npm run dist`: stops the build when src/notes.js has no What's new entry for package.json's
+// Run first by `pnpm run dist`: stops the build when src/notes.js has no What's new entry for package.json's
 // version, or an entry is broken — a release would otherwise ship an empty What's new and nobody would notice
 // (as in Sastra PDF). `node scripts/check-notes.js [file]` checks another copy (tests/check-notes.test.js).
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -204,7 +204,7 @@ console.log(`What's new: ${N.NOTES.length} versions, newest ${N.NOTES[0].version
 
 - [ ] **Step 5: Wire it** — package.json `"dist": "node scripts/check-notes.js && node scripts/bundle-libreoffice.js && node scripts/build-explorer-menu.js && electron-builder --win nsis"`;
   src/index.html before `<script type="module" src="app.js">`: `<script src="notes.js"></script>`.
-- [ ] **Step 6: Run it, expect PASS** — `npm test -- tests/check-notes.test.js`.
+- [ ] **Step 6: Run it, expect PASS** — `pnpm test -- tests/check-notes.test.js`.
 - [ ] **Step 7: Commit** — `feat: What's new notes (src/notes.js) and a build check that the new version has them`.
 
 ### Task 3: The What's new window
@@ -284,7 +284,7 @@ run(async (t, check) => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npm test -- tests/whats-new.test.js` (times out waiting for `data-notes`).
+- [ ] **Step 2: Run it, expect FAIL** — `pnpm test -- tests/whats-new.test.js` (times out waiting for `data-notes`).
 
 - [ ] **Step 3: app.js** — after `openAbout()`:
 
@@ -369,7 +369,7 @@ async function notesAtStart() {
     await key('Escape');
 ```
 
-- [ ] **Step 7: Run** `npm test -- tests/whats-new.test.js tests/modal-stack.test.js tests/about.test.js` → PASS.
+- [ ] **Step 7: Run** `pnpm test -- tests/whats-new.test.js tests/modal-stack.test.js tests/about.test.js` → PASS.
 - [ ] **Step 8: Commit** — `feat: What's new window, once per version over the welcome screen and from Help > What's New (as in Sastra PDF)`.
 
 ### Task 4: Right panel sections fold
@@ -442,7 +442,7 @@ run(async (t, check) => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npm test -- tests/props-fold.test.js`.
+- [ ] **Step 2: Run it, expect FAIL** — `pnpm test -- tests/props-fold.test.js`.
 
 - [ ] **Step 3: app.js** — ICONS (after `minus`): `chevUp: 'M6 15l6-6 6 6',`. Replace `section()`:
 
@@ -491,7 +491,7 @@ function foldSection(s) {
   and `.psec-head svg.chev` in the reduced-motion rule: `@media (prefers-reduced-motion: reduce) { .about .links a, .psec-head svg.chev { transition: none; } }`.
 
 - [ ] **Step 5: props-icons.test.js** — read the icon inside the button: in `heads`, `const b = h.querySelector('.psec-head'), s = b && b.firstElementChild, cs = s && getComputedStyle(s);` and `gap: b && getComputedStyle(b).columnGap`.
-- [ ] **Step 6: Run** `npm test -- tests/props-fold.test.js tests/props-icons.test.js tests/margins-grid.test.js tests/spacing.test.js` → PASS.
+- [ ] **Step 6: Run** `pnpm test -- tests/props-fold.test.js tests/props-icons.test.js tests/margins-grid.test.js tests/spacing.test.js` → PASS.
 - [ ] **Step 7: Commit** — `feat: right panel sections fold from their headings and stay folded, as in Sastra PDF`.
 
 ### Task 5: Arrange buttons move from the top bar to the panel
@@ -543,7 +543,7 @@ run(async (t, check) => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npm test -- tests/arrange-panel.test.js`.
+- [ ] **Step 2: Run it, expect FAIL** — `pnpm test -- tests/arrange-panel.test.js`.
 - [ ] **Step 3: index.html** — delete the block:
 
 ```html
@@ -574,13 +574,13 @@ run(async (t, check) => {
 ```
 
 - [ ] **Step 5: app.css** after `.seg-row`: `.seg.words .btn { gap: 6px; padding: 0 10px; font-size: 12px; }`
-- [ ] **Step 6: Run** `npm test -- tests/arrange-panel.test.js tests/sastra-bar.test.js tests/group-resize.test.js tests/spacing.test.js` → PASS.
+- [ ] **Step 6: Run** `pnpm test -- tests/arrange-panel.test.js tests/sastra-bar.test.js tests/group-resize.test.js tests/spacing.test.js` → PASS.
 - [ ] **Step 7: Commit** — `feat: Bring to front, Send to back, Group and Ungroup move from the top bar into the panel's Arrange section`.
 
 ### Task 6: README and the whole suite
 
 - [ ] **Step 1: README** — under **Look**: What's new (once per version over the welcome screen; Help › What's New), the
-  folding right panel (remembered), Arrange buttons in the panel. Under **Run it**: before `npm run dist`, write the new
+  folding right panel (remembered), Arrange buttons in the panel. Under **Run it**: before `pnpm run dist`, write the new
   version's notes at the top of `src/notes.js` (the build stops otherwise). Project layout: `src/notes.js`, `scripts/check-notes.js`.
-- [ ] **Step 2: Run** `npm test` → all test files pass.
+- [ ] **Step 2: Run** `pnpm test` → all test files pass.
 - [ ] **Step 3: Commit** — `docs: README — What's new, the folding right panel, Arrange in the panel`.

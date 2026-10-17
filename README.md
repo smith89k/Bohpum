@@ -5,33 +5,33 @@ lets you edit them, and prints them, including placing a small card anywhere on 
 
 ## Run it
 
-You need **Node.js** (LTS) and, on the build PC only, **LibreOffice**. The app ships its own trimmed copy of
+You need **Node.js** (LTS), **pnpm** and, on the build PC only, **LibreOffice**. The app ships its own trimmed copy of
 LibreOffice to read `.pub` files, so users install nothing extra and never see LibreOffice in the app.
 
 ```
 cd E:\_httdocs\Bohpum
-npm install
-npm run bundle-libreoffice
-npm start
+pnpm install
+pnpm run bundle-libreoffice
+pnpm start
 ```
 
 To build an installer (`dist\Bohpum Setup <version>.exe`):
 
 ```
-npm run dist
+pnpm run dist
 ```
 
 **Before each release**, after changing the version in `package.json`, write that version's notes at the top of
-`src/notes.js` (the What's new window). `npm run dist` stops with a plain message when the newest entry is not
+`src/notes.js` (the What's new window). `pnpm run dist` stops with a plain message when the newest entry is not
 `package.json`'s version or an entry is broken (`scripts/check-notes.js`).
 
-`npm run dist` then copies the LibreOffice installed on the build PC into `vendor\libreoffice`
-(skipped when that version is already bundled), builds the File Explorer menu add-on (`npm run build:menu`),
+`pnpm run dist` then copies the LibreOffice installed on the build PC into `vendor\libreoffice`
+(skipped when that version is already bundled), builds the File Explorer menu add-on (`pnpm run build:menu`),
 then builds the installer. The menu add-on needs **Visual Studio Build Tools** ("Desktop development with C++",
 x64) and the **Windows 10/11 SDK** on the build PC.
 
 **Keeping LibreOffice patched.** The bundled copy only changes when you ship a new Bohpum release.
-When LibreOffice publishes a security fix, update LibreOffice on the build PC, then run `npm run dist`
+When LibreOffice publishes a security fix, update LibreOffice on the build PC, then run `pnpm run dist`
 and ship the new installer. To bundle a LibreOffice from another folder, set `LIBREOFFICE_DIR`.
 
 LibreOffice is licensed under MPL 2.0. Its `license.txt` and `LICENSE.html` ship inside the bundle;
@@ -145,12 +145,12 @@ src/tokens.css   Colours and font (light and dark), shared by the editor and the
 src/notes.js     What's new: the notes of each version, newest first (Help > What's New)
 explorer-menu.js Explorer menu: reads a menu click, registers / removes the menu (installer hooks)
 explorer-menu/   The menu add-on: menu.cpp (BohpumMenu.dll), AppxManifest.xml + Assets (Windows 11 package)
-build/           logo.png and bpum-file.png: the logo and the .bpum file icon (source pictures); npm run icons
+build/           logo.png and bpum-file.png: the logo and the .bpum file icon (source pictures); pnpm run icons
                  makes icon.ico / icon.png, bpum.ico, the menu package logos and src/img from them. installer.nsh:
                  menu install / update / uninstall steps, .pub in "Open with"
 scripts/build-explorer-menu.js Builds BohpumMenu.dll and Bohpum.ExplorerMenu.msix into explorer-menu/out
 scripts/bundle-libreoffice.js  Copies a trimmed LibreOffice into vendor/libreoffice for the installer
-scripts/check-notes.js         Stops npm run dist when src/notes.js has no notes for package.json's version
+scripts/check-notes.js         Stops pnpm run dist when src/notes.js has no notes for package.json's version
 vendor/libreoffice             The bundled LibreOffice (generated, not edited by hand)
-tests/                         Electron tests: npm test (each tests/*.test.js runs the real app)
+tests/                         Electron tests: pnpm test (each tests/*.test.js runs the real app)
 ```

@@ -1,4 +1,4 @@
-// Runs each tests/*.test.js (or the files given) in its own Electron process: npm test [-- file …]
+// Runs each tests/*.test.js (or the files given) in its own Electron process: pnpm test [-- file …]
 const { spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');

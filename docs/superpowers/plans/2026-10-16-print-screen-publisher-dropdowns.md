@@ -6,7 +6,7 @@
 
 **Architecture:** All dropdowns stay real `<select>` elements styled with Chromium's customizable select (`appearance: base-select`, Chromium 152 in Electron 44.8). Big dropdowns put a picture + title + explanation inside each `<option>` and mirror the choice with `<button><selectedcontent>`. The print screen is the same modal, with a `print-screen` class that pins it under the title row.
 
-**Tech Stack:** Electron 44.8 / Chromium 152, plain JS + CSS, Electron test harness (`npm test`, `tests/harness.js`).
+**Tech Stack:** Electron 44.8 / Chromium 152, plain JS + CSS, Electron test harness (`pnpm test`, `tests/harness.js`).
 
 **Spec:** `docs/superpowers/specs/2026-10-16-print-screen-publisher-dropdowns-design.md`
 
@@ -83,7 +83,7 @@ run(async (t, check) => {
 
 - [ ] **Step 2: Run it to see it fail**
 
-Run: `npm test -- tests/dropdowns.test.js`
+Run: `pnpm test -- tests/dropdowns.test.js`
 Expected: `FAIL  Every dropdown in the editor uses the custom look` (appearance `auto`); the mouse check fails (a native list is not in the page); the arrow check FAILs because the second Down nudges the objects.
 
 - [ ] **Step 3: Styles**
@@ -139,7 +139,7 @@ with:
 
 - [ ] **Step 5: Run it to see it pass, plus the others**
 
-Run: `npm test`
+Run: `pnpm test`
 Expected: the 4 new checks PASS; all earlier checks PASS; `All 6 test files passed`.
 
 - [ ] **Step 6: Look at it**
@@ -219,7 +219,7 @@ run(async (t, check) => {
 
 - [ ] **Step 2: Run it to see it fail**
 
-Run: `npm test -- tests/print-screen.test.js`
+Run: `pnpm test -- tests/print-screen.test.js`
 Expected: FAIL on "fills the window" (centred box), "Menus do nothing" (File pops up), "After resizing…", and "Esc in an open dropdown…" (the print screen closes).
 
 - [ ] **Step 3: Print screen classes, resize, Esc**
@@ -329,7 +329,7 @@ with:
 
 - [ ] **Step 6: Run it to see it pass, plus the others**
 
-Run: `npm test`
+Run: `pnpm test`
 Expected: 4 new checks PASS; all earlier checks PASS; `All 7 test files passed`.
 
 - [ ] **Step 7: Commit**
@@ -463,7 +463,7 @@ with:
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `npm test -- tests/print-sidebar.test.js tests/print-direct.test.js`
+Run: `pnpm test -- tests/print-sidebar.test.js tests/print-direct.test.js`
 Expected: print-sidebar FAILs (no big dropdowns, no `.pr-copies`); print-direct FAILs on the headings check only.
 
 - [ ] **Step 3: The left column**
@@ -837,12 +837,12 @@ Delete the now-unused rules (their markup is gone):
 
 - [ ] **Step 5: Run everything**
 
-Run: `npm test`
+Run: `pnpm test`
 Expected: the 7 print-sidebar checks PASS; print-direct PASSes again; all other checks PASS; `All 8 test files passed`.
 
 - [ ] **Step 6: Look at it**
 
-Window screenshots (scratch `desktopCapturer` script): the print screen closed, and with the Layout dropdown open. Compare with mockup D: big dropdowns with green pictures, explanation lines, 3×3 pad, Printer Properties link, preview filling the right side. Fix spacing by eye if needed, then re-run `npm test`.
+Window screenshots (scratch `desktopCapturer` script): the print screen closed, and with the Layout dropdown open. Compare with mockup D: big dropdowns with green pictures, explanation lines, 3×3 pad, Printer Properties link, preview filling the right side. Fix spacing by eye if needed, then re-run `pnpm test`.
 
 - [ ] **Step 7: Commit**
 
@@ -891,7 +891,7 @@ with:
 
 - [ ] **Step 2: Full run**
 
-Run: `npm test`
+Run: `pnpm test`
 Expected: `All 8 test files passed`, no FAIL lines.
 
 - [ ] **Step 3: Commit**

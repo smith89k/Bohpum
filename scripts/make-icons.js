@@ -1,4 +1,4 @@
-// Makes every icon from the two source pictures (npm run icons; run it again after changing either picture):
+// Makes every icon from the two source pictures (pnpm run icons; run it again after changing either picture):
 //   build/logo.png       → build/icon.ico (16–256) + icon.png (the app: exe, installer, windows, Explorer menu item),
 //                          explorer-menu/Assets/* (the Windows 11 menu package), src/img/logo.png (title row, welcome)
 //   build/bpum-file.png  → build/bpum.ico (.bpum files in Explorer), src/img/bpum-file.png (the convert window)

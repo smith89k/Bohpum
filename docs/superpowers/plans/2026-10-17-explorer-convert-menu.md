@@ -6,7 +6,7 @@
 
 **Architecture:** Port Sastra PDF's Explorer menu (`E:\_httdocs\SastraPDF`: `explorer-menu/menu.cpp`, `AppxManifest.xml`, `scripts/build-explorer-menu.js`, `explorer-menu.js`, `build/installer.nsh`, main.js task window, `app/task.*`) with Bohpum names, a single command instead of a submenu, and a convert job that reuses the editor's importer through a new shared `src/docfile.js`.
 
-**Tech Stack:** Electron 44.8, plain JS (ES modules in `src/`), C++17 + WRL (MSVC 14.51, Windows SDK 10.0.26100), electron-builder 26 NSIS, Electron test harness (`npm test`).
+**Tech Stack:** Electron 44.8, plain JS (ES modules in `src/`), C++17 + WRL (MSVC 14.51, Windows SDK 10.0.26100), electron-builder 26 NSIS, Electron test harness (`pnpm test`).
 
 **Spec:** `docs/superpowers/specs/2026-10-17-explorer-convert-menu-design.md`
 
@@ -76,7 +76,7 @@ export function bpumText(doc, filePath) {
 
 - [ ] app.js: import `{ docFromFodg, bpumText, withDefaults }`; `loadDoc` uses `withDefaults(doc)`; `openFile` foreign branch uses `docFromFodg(r.text, base)` (warnings from it); `save` writes `bpumText(S.doc, p)`.
 - [ ] main.js: serialize LibreOffice (`let loQueue = Promise.resolve()`; each conversion chains on it); `write-file` catches and returns `{ error: err.code || err.message }`; the editor's `save` shows "Could not save: …" when it gets `{ error }`.
-- [ ] Run `npm test` → all 16 files pass. Commit.
+- [ ] Run `pnpm test` → all 16 files pass. Commit.
 
 ### Task 2: explorer-menu.js (no Electron in it)
 
@@ -96,7 +96,7 @@ Port `E:\_httdocs\SastraPDF\explorer-menu.js` with: `PKG='Bohpum.ExplorerMenu'`,
 - [ ] preload: `taskReady`, `taskSize`, `taskFocus`, `onTaskBatch`, `nameClashes`, `resolveNames`.
 - [ ] `src/task.html` (CSP as index.html, `app.css` tokens via `<link>`, own small styles) + `src/task.js` (module): per batch → groups `[{ dir, names:[base+'.bpum'] }]` → one `nameClashes` → `ask` → `resolveNames` → per file: `show('Converting X', 'File k of n', k/n)`, `api.readDocument(p)` → `{ error }` → problem; `docFromFodg` (throws → problem "it may be damaged or not a Publisher file"); warnings → notes; `api.writeFile({ path, text: bpumText(doc, path) })` → `{ error }` → problem (EACCES/EPERM → "no permission to save there", ENOSPC → "the disk is full", EBUSY → "the file is open in another program"); saved++. Finish / Cancel / Esc / 2 s close as Sastra; `body.dataset.done` counter.
 - [ ] Test `tests/convert-task.test.js` (setup writes the list file into `%TEMP%\Bohpum` and pushes the two args into `process.argv` before main.js loads): first window is the task window, not the editor; `.bpum` saved and equal to `docFromFodg`+`bpumText` run in the editor page on the same fodg… (opened by `api.readDocument`); second click via `app.emit('second-instance', …)` with the same file → question → Keep both → `card (2).bpum`; third → Replace → same name, newer time; fourth → Cancel → nothing new; a damaged `.pub` with a good one → one problem line, good one saved, window stays open; finished window with no problems closes after 2 s.
-- [ ] Run → pass; `npm test` → all pass. Commit.
+- [ ] Run → pass; `pnpm test` → all pass. Commit.
 
 ### Task 4: App icon
 
@@ -104,14 +104,14 @@ Port `E:\_httdocs\SastraPDF\explorer-menu.js` with: `PKG='Bohpum.ExplorerMenu'`,
 
 ### Task 5: Menu DLL and package
 
-- [ ] Port `menu.cpp` (single `Root` command: title from `.pub` count, icon `exe,0`, hidden without `.pub`, `Invoke` → list file + launch), `menu.def` (`LIBRARY BohpumMenu`), `AppxManifest.xml` (names above, `.pub`), `scripts/build-explorer-menu.js` (outputs `BohpumMenu.dll`, `Bohpum.ExplorerMenu.msix`). `npm run build:menu` → both files.
+- [ ] Port `menu.cpp` (single `Root` command: title from `.pub` count, icon `exe,0`, hidden without `.pub`, `Invoke` → list file + launch), `menu.def` (`LIBRARY BohpumMenu`), `AppxManifest.xml` (names above, `.pub`), `scripts/build-explorer-menu.js` (outputs `BohpumMenu.dll`, `Bohpum.ExplorerMenu.msix`). `pnpm run build:menu` → both files.
 - [ ] C++ harness in scratchpad: titles for 1 / 3 / mixed / Khmer / none; hidden state; icon path; `Invoke` with `BOHPUM_MENU_EXE` = a stub exe that writes its command line → list file content + args. Pass. Commit.
 
 ### Task 6: Installer and registration
 
 - [ ] `build/installer.nsh` (Sastra's, Bohpum text); package.json: `files` + `explorer-menu.js`, `win.icon`, `nsis.include`, `extraResources` `explorer-menu/out` → `explorer-menu` (filter dll + msix), scripts `build:menu`, `dist` runs it; `.gitignore` `explorer-menu/out/`.
-- [ ] `npm run dist` → installer + win-unpacked. With the user: `win-unpacked\Bohpum.exe --explorer-menu=install` (UAC Yes) → `Get-AppxPackage Bohpum.ExplorerMenu`, `packageWorks`; user right-clicks a `.pub` → converted; `--explorer-menu=uninstall` → gone. Commit.
+- [ ] `pnpm run dist` → installer + win-unpacked. With the user: `win-unpacked\Bohpum.exe --explorer-menu=install` (UAC Yes) → `Get-AppxPackage Bohpum.ExplorerMenu`, `packageWorks`; user right-clicks a `.pub` → converted; `--explorer-menu=uninstall` → gone. Commit.
 
 ### Task 7: Docs
 
-- [ ] README: "Right-click menu" section, build needs (VS Build Tools + SDK), project layout. Commit. Full `npm test`.
+- [ ] README: "Right-click menu" section, build needs (VS Build Tools + SDK), project layout. Commit. Full `pnpm test`.

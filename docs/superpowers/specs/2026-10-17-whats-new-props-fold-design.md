@@ -34,7 +34,7 @@ Model: Sastra PDF `app/notes.js`, `openNotes` / `notesAtStart` in `app/index.htm
 - **main.js** — Help: `{ label: "What's New", click: () => send('whats-new') }` before About.
 - **scripts/check-notes.js** — runs src/notes.js in `vm`; exit 1 with a plain list when the newest entry is not
   package.json's version, a version is listed twice, an entry has no date (YYYY-MM-DD) or no notes, or a note has an
-  unknown kind or empty text. Run first by `npm run dist`.
+  unknown kind or empty text. Run first by `pnpm run dist`.
 - **Release step (README)**: after changing the version in package.json, write the new entry at the top of src/notes.js.
 
 ### Stacked boxes (needed for "on top of the welcome screen")

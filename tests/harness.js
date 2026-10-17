@@ -16,7 +16,7 @@ function run(test, { setup, timeout = 90000 } = {}) {
   // wheel zoom would then never finish while someone works in another program during the tests)
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
   app.commandLine.appendSwitch('disable-renderer-backgrounding');
-  // started as `electron tests/x.test.js` the app would report Electron's version; `npm start` reports package.json's
+  // started as `electron tests/x.test.js` the app would report Electron's version; `pnpm start` reports package.json's
   const version = require(path.join(ROOT, 'package.json')).version;
   app.getVersion = () => version;
   const ctx = { userData, tmp: fs.mkdtempSync(path.join(os.tmpdir(), 'bohpum-out-')) };

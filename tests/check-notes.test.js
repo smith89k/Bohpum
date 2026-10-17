@@ -1,4 +1,4 @@
-// scripts/check-notes.js stops `npm run dist` when src/notes.js has no What's new for package.json's version, or an
+// scripts/check-notes.js stops `pnpm run dist` when src/notes.js has no What's new for package.json's version, or an
 // entry is broken (as in Sastra PDF): it passes on the real file and names the problem in a broken copy.
 const { spawnSync } = require('child_process');
 const fs = require('fs');

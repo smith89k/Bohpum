@@ -1,0 +1,6 @@
+allowBuilds:
+  # Its install step only prepares Squirrel installers; this project builds NSIS (electron-builder --win nsis)
+  electron-winstaller: false
+
+overrides:
+  global-agent: ^4.1.3
