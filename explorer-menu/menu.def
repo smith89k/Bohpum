@@ -1,0 +1,4 @@
+LIBRARY BohpumMenu
+EXPORTS
+  DllGetClassObject PRIVATE
+  DllCanUnloadNow PRIVATE
