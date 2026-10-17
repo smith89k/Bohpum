@@ -1705,6 +1705,60 @@ function choiceBox(title, text, labels) {
   const d = document.createElement('div'); d.textContent = text;
   return modal(title, d, labels.map((l, i) => [l, i, i === 0])).done.then(v => v == null ? labels.length - 1 : v);
 }
+// ✕ with unsaved changes (main.js sends 'close-request'): the same question as New / Open, in the app's own box
+let closeAsking = false;
+async function askClose() {
+  if (closeAsking) return; // ✕ clicked again while the question is open
+  finishEditing();
+  if (!S.dirty) return api.closeNow();
+  closeAsking = true;
+  const r = await choiceBox('Save changes first?', 'Your publication has unsaved changes. Save them before closing?', ['Save', "Don't save", 'Cancel']);
+  const ok = r === 0 ? await save() : r === 1;
+  closeAsking = false;
+  if (ok) api.closeNow();
+}
+
+// ---------------------------------------------------------------- About (Help > About), as in Sastra PDF
+const AUTHOR = {
+  name: 'Sunnguon Taing', handle: 'smith89k', role: 'Full-stack & DevOps developer · Cambodia', photo: 'img/author.jpg',
+  bio: 'I build web apps, run my own servers and make everyday tools.',
+  stack: ['Laravel', 'PHP', 'JavaScript', 'TypeScript', 'Tailwind CSS', 'Docker', 'Electron'],
+  links: [['Website', 'smith89k.com', 'https://smith89k.com', 'web'], ['LinkedIn', 'in/sunnguon', 'https://www.linkedin.com/in/sunnguon/', 'linkedin'], ['GitHub', 'smith89k', 'https://github.com/smith89k', 'github']]
+};
+const LINK_ICONS = {
+  web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9c-2.6-2.6-3.8-5.6-3.8-9S9.4 5.6 12 3z"/>',
+  linkedin: '<path fill="currentColor" stroke="none" fill-rule="evenodd" d="M5.5 2.5h13a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3h-13a3 3 0 0 1-3-3v-13a3 3 0 0 1 3-3zM8 6.1a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8zM6.8 10.1h2.4v7.6H6.8zM11 10.1h2.3v1.1c.4-.7 1.3-1.3 2.6-1.3 2.2 0 2.9 1.4 2.9 3.5v4.3h-2.4v-3.9c0-1-.3-1.8-1.3-1.8s-1.7.8-1.7 1.9v3.8H11z"/>',
+  github: '<path fill="currentColor" stroke="none" transform="scale(1.5)" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/>'
+};
+// open-source code that ships in the app: [name, by, licence, link]; Electron's version comes from the running app
+const CREDITS = [
+  ['Electron', 'Electron contributors, GitHub Inc.', 'MIT', 'https://www.electronjs.org/'],
+  ['LibreOffice', 'The Document Foundation', 'MPL-2.0', 'https://www.libreoffice.org/'],
+  ['Noto Sans Khmer', 'Google', 'SIL OFL 1.1', 'https://github.com/notofonts/khmer']
+];
+const CREDITS_NOTE = 'LibreOffice reads Publisher and other files; its licence files are in the libreoffice folder inside the app. Electron includes Chromium, Node.js and FFmpeg; their licences are in LICENSES.chromium.html in the app folder. The installer is made with electron-builder (MIT) and NSIS (zlib).';
+function openAbout() {
+  if (document.querySelector('#modal-root .modal.about')) return;
+  const A = AUTHOR, out = 'target="_blank" rel="noopener"'; // links open in the normal browser (main.js)
+  const body = document.createElement('div'); body.className = 'about-body';
+  body.innerHTML = `
+    <div class="about-head"><img src="img/logo.png" alt="" width="56" height="56" draggable="false">
+      <div><div class="about-name">Bohpum<span class="km" lang="km">បោះពុម្ព</span></div><div class="about-ver"></div></div></div>
+    <p>Open, edit and print Microsoft Publisher files, or start a new publication. Your files stay on this computer.</p>
+    <p class="note"><span lang="km">បោះពុម្ព</span> (bohpum) is Khmer for “to print”.</p>
+    <section aria-label="Made by"><h3>Made by</h3>
+      <div class="author"><img src="${A.photo}" alt="" width="64" height="64" draggable="false"><div><b>${A.name}<span class="nick">${A.handle}</span></b><span>${A.role}</span></div></div>
+      <p>${A.bio}</p>
+      <ul class="chips" aria-label="Skills">${A.stack.map(s => `<li>${s}</li>`).join('')}</ul>
+      <div class="links">${A.links.map(([n, v, u, ic]) => `<a class="link-${ic}" href="${u}" ${out} title="${u}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${LINK_ICONS[ic]}</svg><span><b>${n}</b><small>${v}</small></span></a>`).join('')}</div>
+    </section>
+    <section aria-label="Open-source credits"><h3>Built with open source</h3>
+      <ul class="credits">${CREDITS.map(([n, by, lic, u]) => `<li><span class="cn"><a href="${u}" ${out}>${n}</a>${n === 'Electron' ? ' <span class="cv"></span>' : ''}</span><span>${by}</span><span>${lic}</span></li>`).join('')}</ul>
+      <p class="note">${CREDITS_NOTE}</p></section>`;
+  modal(null, body, [['Close', null, true]], 'about');
+  body.closest('.modal').querySelector('.modal-f').insertAdjacentHTML('afterbegin', '<span class="note">© 2026 smith89k</span>');
+  api.appInfo().then(i => { body.querySelector('.about-ver').textContent = 'Version ' + i.version; body.querySelector('.cv').textContent = i.electron; }, () => {});
+}
 
 // ---------------------------------------------------------------- commands
 function setTool(t) { S.tool = t; updateTools(); }
@@ -1718,7 +1772,8 @@ function cmd(c) {
     case 'open': return openFile();
     case 'save': return save();
     case 'save-as': return save(true);
-    case 'save-and-close': return save().then(ok => ok && api.closeNow());
+    case 'close-request': return askClose();
+    case 'about': return openAbout();
     case 'export-png': return exportPng();
     case 'print': return printDialog();
     case 'page-setup': return pageSetup();

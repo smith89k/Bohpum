@@ -14,7 +14,10 @@ run(async (t, check) => {
     return {
       heads: [...document.querySelectorAll('.print-side h4')].map(h => h.textContent),
       bigs: [...document.querySelectorAll('.print-side select.big')].map(s => s.getAttribute('aria-label')),
-      copiesFirst: !!q('.print-side > .pr-copies:first-child [data-k="copies"]'),
+      // Copies sits under the printer list, in one row with the Printer Properties button
+      copiesRow: (() => { const c = q('#pd-printer + .pr-copies [data-k="copies"]'), p = q('#pd-printer + .pr-copies #pd-props');
+        if (!c || !p) return false; const a = c.getBoundingClientRect(), b = p.getBoundingClientRect();
+        return Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 4 && a.right < b.left && p.classList.contains('btn'); })(),
       layoutShown: sc('select[data-k="mode"]'), printerShown: sc('#pd-printer'),
       left: shown('[data-k="left"]'), margins: shown('[data-k="marginT"]'), range: shown('[data-k="range"]'),
       paperOff: q('select[data-k="sheet"]').disabled, orientOff: q('select[data-k="orient"]').disabled,
@@ -24,8 +27,8 @@ run(async (t, check) => {
   })()`);
 
   const s1 = await side();
-  check('Column: Copies, then Printer, Settings, Printer adjustment',
-    s1.copiesFirst && s1.heads.join('|') === 'Printer|Settings|Printer adjustment' && s1.bigs.join('|') === 'Printer|Pages to print|Layout|Paper|Orientation', s1);
+  check('Column: Printer, then Copies and Printer Properties in one row, Settings, Printer adjustment',
+    s1.copiesRow && s1.heads.join('|') === 'Printer|Settings|Printer adjustment' && s1.bigs.join('|') === 'Printer|Pages to print|Layout|Paper|Orientation', s1);
   check('Closed dropdowns show the chosen title and explanation',
     /^One per sheet, at a position Place the page anywhere/.test(s1.layoutShown) && /^Office HP Default printer/.test(s1.printerShown), s1);
   check('Position: Left / Top shown, centre of the 3×3 pad lit', s1.left && !s1.margins && s1.pad.join() === 'mc', s1);

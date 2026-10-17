@@ -198,10 +198,9 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     const g = gridInfo(doc, o, sw, sh);
     const n = doc.pages.length, actual = o.mode === 'actual';
     side.innerHTML = `
-      <div class="pr-copies">${field('copies', 'Copies', o, 1, '')}</div>
       <h4>Printer</h4>
       <select class="big" id="pd-printer" aria-label="Printer"></select>
-      <button class="linkbtn" id="pd-props" title="Opens Windows' printing preferences for this printer. Changes there become this printer's defaults.">Printer Properties</button>
+      <div class="pr-copies">${field('copies', 'Copies', o, 1, '')}<button class="btn" id="pd-props" title="Opens Windows' printing preferences for this printer. Changes there become this printer's defaults.">Printer Properties</button></div>
       <h4>Settings</h4>
       ${bigSelect('data-k="pages" aria-label="Pages to print"', [
         { v: 'all', icon: 'all', title: 'Print All Pages', sub: `The whole publication (${n} page${n === 1 ? '' : 's'})` },

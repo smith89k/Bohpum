@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
   saveDialog: (opts) => ipcRenderer.invoke('save-dialog', opts),
   writeFile: (opts) => ipcRenderer.invoke('write-file', opts),
   pickImages: () => ipcRenderer.invoke('pick-images'),
+  appInfo: () => ipcRenderer.invoke('app-info'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSettings: (patch) => ipcRenderer.invoke('set-settings', patch),
   exportPdf: (opts) => ipcRenderer.invoke('export-pdf', opts),

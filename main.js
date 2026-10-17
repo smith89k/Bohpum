@@ -122,15 +122,17 @@ function createWindow() {
   win.maximize();
   bringUp(win);
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
+  // Unsaved changes: the page asks in its own box (Save / Don't save / Cancel, as in Sastra PDF) and closes
+  // through 'close-now'. It must be visible for that, e.g. when closed from the taskbar.
   win.on('close', (e) => {
     if (!dirty) return;
-    const r = dialog.showMessageBoxSync(win, {
-      type: 'question', buttons: ['Save', "Don't Save", 'Cancel'], defaultId: 0, cancelId: 2,
-      title: APP_NAME, message: 'Save changes to this publication before closing?'
-    });
-    if (r === 2) { e.preventDefault(); return; }
-    if (r === 0) { e.preventDefault(); win.webContents.send('menu', 'save-and-close'); }
+    e.preventDefault();
+    if (win.isMinimized()) win.restore();
+    win.focus();
+    send('close-request');
   });
+  // Links (the About page) open in the normal browser, never inside the app
+  win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('did-finish-load', () => {
     if (pendingOpenPath) { openPathInRenderer(pendingOpenPath); pendingOpenPath = null; }
   });
@@ -299,7 +301,7 @@ function buildMenu() {
       { role: 'toggleDevTools' }
     ]},
     { label: 'Help', submenu: [
-      { label: 'About ' + APP_NAME, click: () => dialog.showMessageBox(win, { title: APP_NAME, message: APP_NAME + ' (បោះពុម្ព)', detail: 'Version ' + app.getVersion() }) }
+      { label: 'About ' + APP_NAME, click: () => send('about') } // the page shows its own About page
     ]}
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -368,6 +370,7 @@ ipcMain.handle('pick-images', async () => {
   });
 });
 
+ipcMain.handle('app-info', () => ({ version: app.getVersion(), electron: process.versions.electron }));
 ipcMain.handle('get-settings', () => loadSettings());
 ipcMain.handle('set-settings', (_e, patch) => { const s = { ...loadSettings(), ...patch }; saveSettings(s); return s; });
 
