@@ -42,6 +42,8 @@ credit LibreOffice on the About page.
 **Edit**
 - Text boxes with Khmer and Latin text: font, size, bold/italic/underline/strike, colour, alignment,
   line spacing (0.75 sp …), top/middle/bottom placement, inner margins
+- The font box lists every font installed in Windows, Khmer fonts first, each name in its own lettering;
+  typing jumps to the matching font. The chosen text stays highlighted while you pick a font, size or colour
 - Rectangles, rounded rectangles, ellipses, lines with arrows, pictures (stretch / fit / crop)
 - Fill colour or gradient, line colour, weight (pt) and dash
 - Move, resize, rotate (Shift = 15° steps), snap to page, margins, guides and other objects (hold Alt to turn off snapping)

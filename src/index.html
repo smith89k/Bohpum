@@ -58,10 +58,8 @@
   </header>
 
   <div id="textbar" class="disabled">
-    <input class="field" id="tb-font" list="font-list" placeholder="Font" spellcheck="false">
-    <datalist id="font-list"></datalist>
-    <input class="field" id="tb-size" list="size-list" placeholder="Size">
-    <datalist id="size-list"></datalist>
+    <span class="combo"><input class="field" id="tb-font" placeholder="Font" spellcheck="false" autocomplete="off" title="Font"><button type="button" class="combo-btn" tabindex="-1" title="Show all fonts"><b></b></button></span>
+    <span class="combo"><input class="field" id="tb-size" placeholder="Size" autocomplete="off" title="Font size (pt)"><button type="button" class="combo-btn" tabindex="-1" title="Show all sizes"><b></b></button></span>
     <button class="btn fmt" id="tb-grow" title="Grow font">A+</button>
     <button class="btn fmt" id="tb-shrink" title="Shrink font">A−</button>
     <span class="sep"></span>

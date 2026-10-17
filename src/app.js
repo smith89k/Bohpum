@@ -703,6 +703,7 @@ function finishEditing() {
   }
   S.justCreated = null; S.savedRange = null;
   window.getSelection().removeAllRanges();
+  paintKeptSelection();
   commit();
   renderStage(); renderProps(); updateTextbar(); updateStatus();
 }
@@ -717,13 +718,23 @@ function onEditPaste(e) {
 }
 document.addEventListener('selectionchange', () => {
   const kt = editingRoot();
-  if (!kt) return;
   const sel = window.getSelection();
-  if (sel.rangeCount && kt.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+  if (kt && sel.rangeCount && kt.contains(sel.getRangeAt(0).commonAncestorContainer)) {
     S.savedRange = sel.getRangeAt(0).cloneRange();
     clearTimeout(S._tbT); S._tbT = setTimeout(updateTextbar, 60);
   }
+  paintKeptSelection();
 });
+// When the font box, size box or another text bar control takes the focus, the browser stops showing
+// the chosen text; paint it ourselves so it stays visible until the change is made
+function paintKeptSelection() {
+  if (!window.Highlight) return;
+  const kt = editingRoot(), r = S.savedRange;
+  if (kt && r && !r.collapsed && !kt.contains(document.activeElement)) CSS.highlights.set('kept', new Highlight(r));
+  else CSS.highlights.delete('kept');
+}
+document.addEventListener('focusin', paintKeptSelection);
+document.addEventListener('focusout', () => setTimeout(paintKeptSelection));
 function restoreRange(kt) {
   const sel = window.getSelection();
   if (sel.rangeCount && kt.contains(sel.getRangeAt(0).commonAncestorContainer)) return;
@@ -824,33 +835,126 @@ function setupTextbar() {
   $('tb-vb').onclick = () => applyText(null, null, { boxProps: { valign: 'bottom' } });
   $('tb-ls').onchange = () => applyText(null, null, { ls: parseFloat($('tb-ls').value) });
   const SIZES = [6, 7, 8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48, 54, 60, 72, 96];
-  $('size-list').innerHTML = SIZES.map(s => `<option value="${s}">`).join('');
   const setSize = (v) => { v = parseFloat(v); if (v > 0 && v < 1000) applyText({ 'font-size': v + 'pt' }); };
-  $('tb-size').addEventListener('change', () => setSize($('tb-size').value));
-  $('tb-size').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); setSize($('tb-size').value); } });
   const step = (d) => { const st = currentTextStyle(); if (!st) return; const cur = st.size; const next = d > 0 ? SIZES.find(s => s > cur) || cur + 4 : [...SIZES].reverse().find(s => s < cur) || Math.max(1, cur - 1); setSize(next); };
   $('tb-grow').onclick = () => step(1); $('tb-shrink').onclick = () => step(-1);
-  const setFont = () => { const f = $('tb-font').value.trim(); if (f) applyText({ 'font-family': fontFamilyCss(f) }); };
-  $('tb-font').addEventListener('change', setFont);
-  $('tb-font').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); setFont(); } });
-  $('tb-font').addEventListener('focus', loadLocalFonts, { once: true });
+  comboList($('tb-font'), {
+    items: async () => fontItems(await loadLocalFonts()),
+    pick: (f) => applyText({ 'font-family': fontFamilyCss(f) }),
+    // typing jumps to the first font that starts with (or else contains) the text
+    find: (t, vals) => { t = t.trim().toLowerCase(); if (!t) return -1; const l = vals.map(v => v.toLowerCase()); const i = l.indexOf(t); return i >= 0 ? i : (j => j >= 0 ? j : l.findIndex(v => v.includes(t)))(l.findIndex(v => v.startsWith(t))); },
+    known: (t) => (fontNames || DEFAULT_FONTS).find(f => f.toLowerCase() === t.trim().toLowerCase()),
+    cls: 'fonts'
+  });
+  comboList($('tb-size'), {
+    items: async () => SIZES.map(s => ({ v: String(s), html: String(s) })),
+    pick: setSize,
+    find: (t, vals) => vals.indexOf(String(parseFloat(t))),
+    known: (t) => parseFloat(t) > 0 && parseFloat(t) < 1000 ? String(parseFloat(t)) : null
+  });
   const tbColor = colorButton('#000000', (c) => applyText({ color: c }), { title: 'Text colour' });
   tbColor.id = 'tb-color';
   $('tb-color-slot').replaceWith(tbColor);
-  fillFontList(DEFAULT_FONTS);
+}
+
+// ---------------------------------------------------------------- font and size lists (like Publisher)
+// An editable box with a ▾ button. The list always shows every choice: typing jumps to the first match
+// instead of hiding the rest. Arrows move, Enter or a click picks, Esc puts the old value back.
+let listPop = null; // { el, input, before } while a list is open
+function comboList(input, { items, pick, find, known, cls = '' }) {
+  const btn = input.nextElementSibling;
+  let fresh = false, typed = false;
+  const isOpen = () => !!listPop && listPop.input === input;
+  const lis = () => isOpen() ? [...listPop.el.querySelectorAll('.li')] : [];
+  const mark = (li, { center = false, fill = false } = {}) => {
+    for (const x of lis()) x.classList.toggle('on', x === li);
+    if (!li) return;
+    const el = listPop.el, top = li.offsetTop, h = li.offsetHeight;
+    if (center) el.scrollTop = top - (el.clientHeight - h) / 2;
+    else if (top < el.scrollTop) el.scrollTop = top;
+    else if (top + h > el.scrollTop + el.clientHeight) el.scrollTop = top + h - el.clientHeight;
+    if (fill) input.value = li.dataset.v;
+  };
+  const markMatch = (opts) => { const all = lis(); mark(all[find(input.value, all.map(x => x.dataset.v))] || null, opts); };
+  const open = async () => {
+    if (isOpen()) return;
+    closeListPop(); closeColorPop(); closeCtx();
+    const list = await items();
+    if (document.activeElement !== input || isOpen()) return; // the focus moved on while Windows listed the fonts
+    closeListPop();
+    const el = document.createElement('div');
+    el.id = 'listpop'; el.className = cls; el.setAttribute('role', 'listbox');
+    el.innerHTML = list.map(x => x.cap ? `<div class="lcap">${x.cap}</div>` : `<div class="li" role="option" data-v="${escHtml(x.v)}">${x.html}</div>`).join('');
+    document.body.append(el);
+    const r = input.parentElement.getBoundingClientRect();
+    el.style.minWidth = r.width + 'px';
+    el.style.left = Math.max(8, Math.min(r.left, innerWidth - el.offsetWidth - 8)) + 'px';
+    el.style.top = r.bottom + 4 + 'px';
+    el.style.maxHeight = Math.max(160, Math.min(440, innerHeight - r.bottom - 16)) + 'px';
+    el.addEventListener('mousedown', (e) => e.preventDefault()); // keep the focus, and the chosen text
+    el.addEventListener('click', (e) => { const li = e.target.closest('.li'); if (li) done(li.dataset.v); });
+    listPop = { el, input, before: input.value };
+    btn.classList.add('open');
+    markMatch({ center: true });
+  };
+  const done = (v) => { closeListPop(); typed = false; v = String(v).trim(); if (!v) return updateTextbar(); input.value = v; pick(v); };
+  btn.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (isOpen()) return closeListPop();
+    input.focus(); fresh = false; input.select(); open();
+  });
+  input.addEventListener('focus', () => { fresh = true; });
+  input.addEventListener('click', () => { if (fresh) input.select(); fresh = false; open(); });
+  input.addEventListener('input', async () => { typed = true; await open(); markMatch(); });
+  input.addEventListener('blur', () => {
+    closeListPop();
+    // a typed value counts when it is a real choice; otherwise the box shows the text's value again
+    if (typed) { typed = false; const v = known(input.value); if (v) pick(v); else updateTextbar(); }
+  });
+  input.addEventListener('keydown', (e) => {
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.ctrlKey) {
+      e.preventDefault(); e.stopPropagation();
+      if (!isOpen()) return open();
+      const all = lis(), i = all.findIndex(x => x.classList.contains('on'));
+      mark(all[i < 0 ? 0 : Math.max(0, Math.min(all.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))], { fill: true });
+      typed = false;
+    } else if (e.key === 'Enter') {
+      e.preventDefault(); e.stopPropagation();
+      const on = isOpen() && listPop.el.querySelector('.li.on');
+      done(on ? on.dataset.v : input.value);
+    } else if (e.key === 'Escape') {
+      typed = false;
+      if (isOpen()) { e.preventDefault(); e.stopPropagation(); input.value = listPop.before; closeListPop(); }
+      else updateTextbar();
+    } else if (e.key === 'Tab') closeListPop();
+  });
+}
+function closeListPop() {
+  if (!listPop) return;
+  listPop.el.remove(); listPop.input.nextElementSibling.classList.remove('open'); listPop = null;
 }
 
 const DEFAULT_FONTS = ['Khmer OS Siemreap', 'Khmer OS Content', 'Khmer OS Battambang', 'Khmer OS', 'Khmer OS System', 'Khmer OS Muol Light', 'Khmer OS Muol',
   'Khmer OS Muol Pali', 'Khmer OS Bokor', 'Khmer OS Freehand', 'Khmer OS Fasthand', 'Khmer OS Metal Chrieng', 'Khmer UI', 'Leelawadee UI',
   'Arial', 'Calibri', 'Cambria', 'Georgia', 'Segoe UI', 'Tahoma', 'Times New Roman', 'Verdana'];
-function fillFontList(list) { $('font-list').innerHTML = [...new Set(list)].map(f => `<option value="${f.replace(/"/g, '')}">`).join(''); }
+const KHMER_FONT = /khmer|moul|muol|battambang|siemreap|hanuman|bayon|bokor|dangrek|kantumruy|koulen|nokora|preahvihear|suwannaphum|taprom|angkor|chenla|fasthand|freehand/i;
+const SYMBOL_FONT = /wingdings|webdings|^symbol$|marlett|mt extra|holomdl|mdl2|fluent icons|bookshelf symbol|ms outlook|reference specialty/i;
+let fontNames = null; // every font installed in Windows, once Windows has listed them
 async function loadLocalFonts() {
-  try {
-    if (!window.queryLocalFonts) return;
-    const fonts = await window.queryLocalFonts();
-    const fams = [...new Set(fonts.map(f => f.family))].sort((a, b) => (/khmer/i.test(b) - /khmer/i.test(a)) || a.localeCompare(b));
-    fillFontList([...DEFAULT_FONTS.filter(f => fams.includes(f)), ...fams]);
-  } catch { /* keep defaults */ }
+  if (!fontNames) {
+    try { const fams = [...new Set((await window.queryLocalFonts()).map(f => f.family))]; if (fams.length) fontNames = fams; } catch { /* the usual fonts below */ }
+  }
+  return fontNames || DEFAULT_FONTS;
+}
+// Khmer fonts first, then the rest, A–Z; each name is drawn in its own font (symbol fonts in the normal one)
+function fontItems(names) {
+  const sorted = [...new Set(names)].sort((a, b) => a.localeCompare(b));
+  const item = (f) => {
+    const face = SYMBOL_FONT.test(f) ? '' : ` style="font-family:&quot;${escHtml(f)}&quot;, var(--ui-font)"`;
+    return { v: f, html: `<span${face}>${escHtml(f)}</span>` + (KHMER_FONT.test(f) ? `<small${face}>អក្សរខ្មែរ</small>` : '') };
+  };
+  const km = sorted.filter(f => KHMER_FONT.test(f)), rest = sorted.filter(f => !KHMER_FONT.test(f));
+  return [...(km.length ? [{ cap: 'Khmer fonts' }, ...km.map(item)] : []), { cap: km.length ? 'Other fonts' : 'Fonts' }, ...rest.map(item)];
 }
 
 // ---------------------------------------------------------------- properties panel
@@ -1030,10 +1134,6 @@ function renderPageProps(P) {
     const mb = btns(bg); mb.style.marginTop = '4px';
     mb.append(btn('Edit master page (Ctrl+M)', () => setMaster(true)));
   }
-  const info = section(P, 'Publication');
-  info.append(Object.assign(document.createElement('div'), { className: 'muted', innerHTML: `${d.pages.length} page${d.pages.length > 1 ? 's' : ''} · ${fmt(d.pageW)} × ${fmt(d.pageH)} mm<br>${S.path ? S.path.replace(/</g, '') : 'Not saved yet'}` }));
-  const ib = btns(info); ib.style.marginTop = '8px';
-  ib.append(btn('Print / place on A4…', () => cmd('print')));
 }
 
 // ---- panel widgets
@@ -1732,6 +1832,7 @@ function wire() {
   document.addEventListener('mousedown', (e) => {
     if (!e.target.closest('#ctxmenu')) closeCtx();
     if (colorPop && !e.target.closest('#colorpop') && !colorPop.btn.contains(e.target)) closeColorPop();
+    if (listPop && !e.target.closest('#listpop') && !listPop.input.parentElement.contains(e.target)) closeListPop();
   });
   $('props').addEventListener('scroll', closeColorPop);
   document.addEventListener('paste', (e) => {
