@@ -1,5 +1,5 @@
 // Bohpum - Electron main process
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, session } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, session, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -68,16 +68,31 @@ function convertWithLibreOffice(inputPath) {
   });
 }
 
+// ---------- theme ----------
+// System / Light / Dark, chosen with the toolbar's theme button (the page owns the choice) and saved in
+// settings.json. nativeTheme.themeSource switches the page's CSS (prefers-color-scheme) and Windows' parts.
+const THEMES = ['system', 'light', 'dark'];
+// Title-row colours for Windows' ─ □ ✕: --chrome / --ink of src/app.css, light and dark (keep in sync)
+const BAR_COLORS = { light: { color: '#f7f5f1', symbolColor: '#23201b' }, dark: { color: '#1f1d1b', symbolColor: '#ece8e2' } };
+const barColors = () => BAR_COLORS[nativeTheme.shouldUseDarkColors ? 'dark' : 'light'];
+function paintBar() { if (win) win.setTitleBarOverlay(barColors()); }
+function applyTheme(t) {
+  nativeTheme.themeSource = t;
+  const item = Menu.getApplicationMenu()?.getMenuItemById('theme-' + t);
+  if (item) item.checked = true;
+  paintBar();
+}
+
 // ---------- window ----------
 function createWindow() {
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     title: APP_NAME,
-    backgroundColor: '#e9e7e2',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1d1b' : '#e9e7e2',
     // Own title row (src/index.html #titlebar): Windows only draws ─ □ ✕ over its right end, in the row's
     // colours (--chrome / --ink in src/app.css — keep in sync). 36 = the row without its 1 px bottom line.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#f7f5f1', symbolColor: '#23201b', height: 36 },
+    titleBarOverlay: { ...barColors(), height: 36 },
     show: false,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false }
   });
@@ -161,6 +176,9 @@ function buildMenu() {
       { label: 'Master Page', accelerator: 'CmdOrCtrl+M', ...noReg, click: () => send('toggle-master') },
       { label: 'Show Guides', click: () => send('toggle-guides') },
       { type: 'separator' },
+      { label: 'Maximize Page Area', accelerator: 'F', ...noReg, click: () => send('maximize') },
+      { label: 'Theme', submenu: THEMES.map(t => ({ id: 'theme-' + t, label: t[0].toUpperCase() + t.slice(1), type: 'radio', click: () => send('theme-' + t) })) },
+      { type: 'separator' },
       { role: 'toggleDevTools' }
     ]},
     { label: 'Help', submenu: [
@@ -232,6 +250,12 @@ ipcMain.handle('set-settings', (_e, patch) => { const s = { ...loadSettings(), .
 
 ipcMain.on('set-dirty', (_e, v) => { dirty = !!v; });
 ipcMain.on('set-title', (_e, t) => { if (win) win.setTitle(t); });
+ipcMain.on('set-theme', (_e, t) => {
+  if (!THEMES.includes(t)) return;
+  applyTheme(t);
+  saveSettings({ ...loadSettings(), theme: t });
+});
+nativeTheme.on('updated', paintBar); // System: Windows switched light ↔ dark
 ipcMain.on('close-now', () => { dirty = false; if (win) win.close(); });
 // A menu word in the title row (or Alt+letter / F10): that application menu drops down under it.
 // x, y = the word's bottom-left in page pixels. Resolves when the menu closes.
@@ -347,6 +371,8 @@ else {
     const f = process.argv.slice(1).find(a => /\.(bpum|kbach|pub|odg|fodg|vsdx?|cdr)$/i.test(a));
     if (f) pendingOpenPath = f;
     buildMenu();
+    const t = loadSettings().theme;
+    applyTheme(THEMES.includes(t) ? t : 'system'); // before the window exists: no light flash in Dark
     createWindow();
   });
   app.on('window-all-closed', () => app.quit());

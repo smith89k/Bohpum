@@ -11,12 +11,12 @@ run(async (t, check) => {
     const cs = getComputedStyle(document.documentElement);
     return {
       accent: cs.getPropertyValue('--accent').trim(), soft: cs.getPropertyValue('--accent-soft').trim(),
-      printBg: getComputedStyle(document.querySelector('.btn.primary[data-cmd="print"]')).backgroundColor,
+      toolColor: getComputedStyle(document.querySelector('[data-tool="select"].on')).color,
       brand: getComputedStyle(document.querySelector('.brand .km')).color
     };
   })()`);
   check('Accent colour is jade green', c.accent === '#1f7a4c' && c.soft === '#e6f2eb', c);
-  check('Print button is green', c.printBg === 'rgb(31, 122, 76)', c);
+  check('The chosen tool is green', c.toolColor === 'rgb(31, 122, 76)', c);
   check('Khmer logo text is green', c.brand === 'rgb(31, 122, 76)', c);
 
   const files = ['src/app.css', 'src/app.js', 'src/print.js', 'src/index.html', 'main.js'];

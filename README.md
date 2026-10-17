@@ -62,6 +62,12 @@ credit LibreOffice on the About page.
 - **Save As** (Ctrl+Shift+S) can also save a PDF of the publication (every page at page size); the publication keeps its own file
 - File > Export Page as PNG saves the current page as a 300 dpi PNG
 
+**Look** (as in Sastra PDF)
+- New, Open, Save and Print sit at the start of the toolbar (icon + word; on narrow windows only the icons)
+- **Maximize** (F) hides the Pages panel, the side panel and the status bar so the page fills the window; Restore (F) brings them back
+- **Theme**: the button at the right end switches System → Light → Dark (also View > Theme); it is remembered,
+  and System follows Windows. In Dark the page itself stays white, like paper
+
 ## Shortcuts
 
 | Key | Action |
@@ -73,6 +79,7 @@ credit LibreOffice on the About page.
 | Ctrl+G / Ctrl+Shift+G | Group / Ungroup |
 | Ctrl+] / Ctrl+[ | Forward / Backward (add Shift for Front / Back) |
 | Ctrl+0, F9, Ctrl+wheel | Fit page, 100 %, zoom |
+| F | Maximize the page area / Restore the panels |
 | Space+drag, middle mouse | Pan |
 | Ctrl+M | Master page |
 | PageUp / PageDown | Previous / next page |

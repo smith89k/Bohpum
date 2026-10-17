@@ -21,8 +21,12 @@ window.__bohpum = S; // handy for debugging
 // ---------------------------------------------------------------- icons
 const ICONS = {
   new: 'M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5',
-  open: 'M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z',
-  save: 'M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 3v5h7V3M7 21v-7h10v7',
+  open: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', // icons as in Sastra PDF
+  save: 'M6 4h10l4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8 4v4h7V4M8 20v-5h8v5',
+  max: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8 9V8h1M16 9V8h-1M8 15v1h1M16 15v1h-1',
+  sys: 'M5 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8 20h8M12 16v4',
+  sun: 'M16 12a4 4 0 1 1-8 0a4 4 0 1 1 8 0zM12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4',
+  moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
   undo: 'M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11',
   redo: 'M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13',
   select: 'M6 3l12 9-5.5 1.2L15 19l-2.4 1.2-2.6-5.9L6 18z',
@@ -47,7 +51,7 @@ const ICONS = {
   lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5z', unlock: 'M7 11V8a5 5 0 0 1 9.6-2M5 11h14v10H5z',
   minus: 'M5 12h14',
   fit: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
-  print: 'M7 9V3h10v6M7 18H5a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v7H7z',
+  print: 'M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z',
   al: 'M4 6h16M4 10h10M4 14h16M4 18h10', ac: 'M4 6h16M7 10h10M4 14h16M7 18h10',
   ar: 'M4 6h16M10 10h10M4 14h16M10 18h10', aj: 'M4 6h16M4 10h16M4 14h16M4 18h16',
   vt: 'M4 4h16M8 9h8M8 13h8', vm: 'M8 9h8M8 15h8M4 12h2M18 12h2', vb: 'M4 20h16M8 11h8M8 15h8'
@@ -297,7 +301,7 @@ function drawRulers() {
     const origin = horiz ? pr.left - cr.left : pr.top - cr.top;
     const len = horiz ? w : h;
     // page extent
-    g.fillStyle = '#ffffff';
+    g.fillStyle = cssVar('--ruler-page');
     if (horiz) g.fillRect(origin, 0, S.doc.pageW * k, h); else g.fillRect(0, origin, w, S.doc.pageH * k);
     // selection band
     const sel = selObjs();
@@ -309,7 +313,7 @@ function drawRulers() {
     const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
     const major = steps.find(s => s * k >= 55) || 1000;
     const minor = major * k / 10 >= 4 ? major / 10 : major * k / 5 >= 4 ? major / 5 : major / 2;
-    g.strokeStyle = '#8b8478'; g.fillStyle = '#5d574d'; g.lineWidth = 1;
+    g.strokeStyle = cssVar('--ink-3'); g.fillStyle = cssVar('--ink-2'); g.lineWidth = 1;
     g.font = '10px Segoe UI, sans-serif';
     const startMm = Math.floor(-origin / k / minor) * minor, endMm = (len - origin) / k;
     g.beginPath();
@@ -327,7 +331,7 @@ function drawRulers() {
     }
     g.stroke();
     if (mouseMm) {
-      g.strokeStyle = '#1f7a4c'; g.beginPath(); // --accent
+      g.strokeStyle = cssVar('--accent'); g.beginPath();
       const p = Math.round(origin + (horiz ? mouseMm.x : mouseMm.y) * k) + 0.5;
       if (horiz) { g.moveTo(p, 0); g.lineTo(p, 22); } else { g.moveTo(0, p); g.lineTo(22, p); }
       g.stroke();
@@ -1554,6 +1558,9 @@ function cmd(c) {
     case 'zoom-100': return setZoom(1);
     case 'toggle-master': return setMaster(!S.master);
     case 'toggle-guides': S.showGuides = !S.showGuides; renderGuides(); return renderProps();
+    case 'maximize': return toggleMaximize();
+    case 'theme-next': return setTheme(THEMES[(THEMES.indexOf(S.theme) + 1) % THEMES.length], true);
+    case 'theme-system': case 'theme-light': case 'theme-dark': return setTheme(c.slice(6), true);
   }
 }
 
@@ -1594,6 +1601,29 @@ function showMenu(e, items) {
   m.style.top = Math.min(e.clientY, innerHeight - r.height - 8) + 'px';
   m.querySelectorAll('.mi').forEach(mi => mi.onclick = () => { closeCtx(); cmd(mi.dataset.c); });
 }
+
+// ---------------------------------------------------------------- Maximize and theme (as in Sastra PDF)
+// Maximize: the Pages panel, the side panel and the status bar go; the page fills the window. F or the button again restores.
+function toggleMaximize() {
+  const on = document.body.classList.toggle('maxi'), b = $('b-max');
+  b.classList.toggle('on', on);
+  b.querySelector('.lbl').textContent = on ? 'Restore' : 'Maximize';
+  b.title = on ? 'Restore the panels (F)' : 'Maximize the page area (F)';
+  requestAnimationFrame(() => { zoomFit(); drawRulers(); });
+}
+// Theme: System → Light → Dark. Main applies it (CSS follows prefers-color-scheme) and saves it.
+const THEMES = ['system', 'light', 'dark'], THEME_NAMES = { system: 'System', light: 'Light', dark: 'Dark' };
+function setTheme(t, announce) {
+  S.theme = t;
+  const next = THEMES[(THEMES.indexOf(t) + 1) % THEMES.length], b = $('b-theme');
+  b.innerHTML = icon(t === 'system' ? 'sys' : t === 'light' ? 'sun' : 'moon');
+  b.title = `Theme: ${THEME_NAMES[t]} (click for ${THEME_NAMES[next]})`;
+  api.setTheme(t);
+  if (announce) toast('Theme: ' + THEME_NAMES[t] + (t === 'system' ? ' (follows Windows)' : ''));
+}
+// canvas parts (rulers) read their colours from the theme, and redraw when it changes
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => drawRulers());
 
 // ---------------------------------------------------------------- title row menus
 const MENU_KEYS = { f: 0, e: 1, i: 2, a: 3, v: 4, h: 5 }; // Alt+F File, Alt+E Edit … (main.js menu order)
@@ -1663,6 +1693,7 @@ function onKey(e) {
     clearTimeout(S._nudgeT); S._nudgeT = setTimeout(() => { commit(); renderProps(); }, 400);
     return;
   }
+  if (k.toLowerCase() === 'f' && !e.altKey && !e.shiftKey) { e.preventDefault(); return toggleMaximize(); }
   const tools = { v: 'select', t: 'text', r: 'rect', e: 'ellipse', l: 'line' };
   if (!e.altKey && tools[k.toLowerCase()]) return setTool(tools[k.toLowerCase()]);
 }
@@ -1737,6 +1768,7 @@ window.__bohpumApp = { cmd: (c) => cmd(c), openFile: (p) => openFile(p), startEd
 async function init() {
   wire();
   try { S.settings = (await api.getSettings()) || {}; } catch { S.settings = {}; }
+  setTheme(THEMES.includes(S.settings.theme) ? S.settings.theme : 'system');
   loadDoc(newDoc(210, 297), null);
   if (!window.__noWelcome) newDialog(true);
 }
