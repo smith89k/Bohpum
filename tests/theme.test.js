@@ -19,7 +19,7 @@ run(async (t, check) => {
   check('The chosen tool is green', c.toolColor === 'rgb(31, 122, 76)', c);
   check('Khmer logo text is green', c.brand === 'rgb(31, 122, 76)', c);
 
-  const files = ['src/app.css', 'src/app.js', 'src/print.js', 'src/index.html', 'main.js'];
+  const files = ['src/tokens.css', 'src/app.css', 'src/app.js', 'src/print.js', 'src/index.html', 'src/task.html', 'main.js'];
   const found = [];
   for (const f of files) {
     const text = fs.readFileSync(path.join(ROOT, f), 'utf8').toLowerCase().replace(/\s+/g, '');

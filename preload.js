@@ -22,5 +22,12 @@ contextBridge.exposeInMainWorld('api', {
   showMenu: (index, x, y) => ipcRenderer.invoke('show-menu', index, x, y),
   pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return file.path || null; } },
   onMenu: (fn) => ipcRenderer.on('menu', (_e, cmd) => fn(cmd)),
-  onOpenPath: (fn) => ipcRenderer.on('open-path', (_e, p) => fn(p))
+  onOpenPath: (fn) => ipcRenderer.on('open-path', (_e, p) => fn(p)),
+  // the Explorer menu's convert window (src/task.js)
+  taskReady: () => ipcRenderer.send('task-ready'),
+  taskSize: (h) => ipcRenderer.send('task-size', h),
+  taskFocus: () => ipcRenderer.send('task-focus'),
+  onTaskBatch: (fn) => ipcRenderer.on('task-batch', (_e, b) => fn(b)),
+  nameClashes: (groups) => ipcRenderer.invoke('name-clashes', groups),
+  resolveNames: (groups, choice) => ipcRenderer.invoke('resolve-names', groups, choice)
 });

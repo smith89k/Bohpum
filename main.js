@@ -5,11 +5,24 @@ const fs = require('fs');
 const os = require('os');
 const { execFile } = require('child_process');
 const { pathToFileURL } = require('url');
+const menu = require('./explorer-menu');
 
 const APP_NAME = 'Bohpum';
 let win = null;
 let dirty = false;
 let pendingOpenPath = null;
+
+// Installer hooks (build/installer.nsh): "Bohpum.exe --explorer-menu=install|uninstall|release|add-package" sets up
+// the File Explorer right-click menu and exits — before the single-instance lock, with no window.
+const menuCmd = (process.argv.find(a => a.startsWith('--explorer-menu=')) || '').slice('--explorer-menu='.length);
+if (menuCmd) {
+  const res = path.join(process.resourcesPath, 'explorer-menu');
+  process.exit(app.isPackaged ? menu.runCommand(menuCmd, {
+    installDir: path.dirname(process.execPath), exe: process.execPath,
+    dll: path.join(res, 'BohpumMenu.dll'), msix: path.join(res, menu.PKG + '.msix'),
+    silent: process.argv.includes('--silent')
+  }) : 2);   // 2: only the installed app can register the menu
+}
 
 // ---------- settings ----------
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
@@ -79,7 +92,7 @@ function convertOne(inputPath) {
 // System / Light / Dark, chosen with the toolbar's theme button (the page owns the choice) and saved in
 // settings.json. nativeTheme.themeSource switches the page's CSS (prefers-color-scheme) and Windows' parts.
 const THEMES = ['system', 'light', 'dark'];
-// Title-row colours for Windows' ─ □ ✕: --chrome / --ink of src/app.css, light and dark (keep in sync)
+// Title-row colours for Windows' ─ □ ✕: --chrome / --ink of src/tokens.css, light and dark (keep in sync)
 const BAR_COLORS = { light: { color: '#f7f5f1', symbolColor: '#23201b' }, dark: { color: '#1f1d1b', symbolColor: '#ece8e2' } };
 const barColors = () => BAR_COLORS[nativeTheme.shouldUseDarkColors ? 'dark' : 'light'];
 function paintBar() { if (win) win.setTitleBarOverlay(barColors()); }
@@ -97,7 +110,7 @@ function createWindow() {
     title: APP_NAME,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1d1b' : '#e9e7e2',
     // Own title row (src/index.html #titlebar): Windows only draws ─ □ ✕ over its right end, in the row's
-    // colours (--chrome / --ink in src/app.css — keep in sync). 36 = the row without its 1 px bottom line.
+    // colours (--chrome / --ink in src/tokens.css — keep in sync). 36 = the row without its 1 px bottom line.
     titleBarStyle: 'hidden',
     titleBarOverlay: { ...barColors(), height: 36 },
     show: false,
@@ -106,7 +119,7 @@ function createWindow() {
   // Open maximized; 1400×900 stays as the size used when the user restores the window.
   // Maximize before loading so the editor fits the page to the full-size window.
   win.maximize();
-  win.show();
+  bringUp(win);
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
   win.on('close', (e) => {
     if (!dirty) return;
@@ -120,9 +133,105 @@ function createWindow() {
   win.webContents.on('did-finish-load', () => {
     if (pendingOpenPath) { openPathInRenderer(pendingOpenPath); pendingOpenPath = null; }
   });
+  win.on('closed', () => { win = null; dirty = false; }); // the convert window may still be open
 }
 
 function send(cmd) { if (win) win.webContents.send('menu', cmd); }
+
+// Windows won't let a program in the background take the front (its taskbar button only flashes), e.g. when
+// Bohpum was already running behind another program. A moment "always on top" still brings the window up.
+function bringUp(w) {
+  if (w.isMinimized()) w.restore();
+  w.setAlwaysOnTop(true); w.show(); w.focus(); w.setAlwaysOnTop(false);
+}
+
+// ---------- File Explorer menu "Convert to Bohpum" (BohpumMenu.dll → --bohpum-task / --bohpum-list) ----------
+// A small window converts the files (src/task.html); it never opens or touches the editor.
+let taskWin = null, taskReady = false, taskQueue = [];
+const TASK_W = 440;
+// true when argv is a menu click (handled, or nothing to do because its files are gone)
+function handleTask(argv) {
+  const t = menu.parseTaskArgs(argv); if (!t) return false;
+  const paths = menu.readTaskList(t.list);
+  if (!paths.length) return true;
+  taskQueue.push({ task: t.task, paths }); openTaskWindow(); flushTasks();
+  return true;
+}
+function openTaskWindow() {
+  if (taskWin) { bringUp(taskWin); return; }
+  taskReady = false;
+  taskWin = new BrowserWindow({
+    // no Windows title bar: it looks like Bohpum's own boxes (drag it anywhere; Cancel / Close / Esc close it)
+    frame: false, width: TASK_W, height: 140, useContentSize: true, resizable: false, maximizable: false, fullscreenable: false,
+    title: APP_NAME, backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1d1b' : '#f7f5f1', show: false,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false }
+  });
+  taskWin.setMenu(null);
+  taskWin.once('ready-to-show', () => bringUp(taskWin));
+  taskWin.loadFile(path.join(__dirname, 'src', 'task.html'));
+  taskWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  taskWin.webContents.on('will-navigate', (e) => e.preventDefault());
+  taskWin.on('closed', () => { taskWin = null; taskReady = false; taskQueue = []; });
+}
+function flushTasks() { if (taskWin && taskReady) for (const b of taskQueue.splice(0)) taskWin.webContents.send('task-batch', b); }
+ipcMain.on('task-ready', (e) => { if (taskWin && e.sender === taskWin.webContents) { taskReady = true; flushTasks(); } });
+// a question in the convert window ("already there"): bring it up so it's seen
+ipcMain.on('task-focus', (e) => { if (taskWin && e.sender === taskWin.webContents) bringUp(taskWin); });
+// The window is as tall as its contents (task.js measures them): small while working, taller with problems
+ipcMain.on('task-size', (e, h) => {
+  if (taskWin && e.sender === taskWin.webContents && Number.isFinite(h)) taskWin.setContentSize(TASK_W, Math.max(100, Math.min(420, Math.ceil(h))));
+});
+
+// Names already there (the convert window asks Replace / Keep both / Cancel in its own box): as Sastra PDF.
+const exists = (p) => fs.promises.access(p).then(() => true, () => false);
+const numbered = (name, k) => { const ext = path.extname(name); return `${name.slice(0, name.length - ext.length)} (${k})${ext}`; };
+// groups = [{ dir, names }] → file names only (never a path); the same name twice in one group gets " (2)", like Explorer
+function nameGroups(groups) {
+  return (Array.isArray(groups) ? groups : []).map(g => {
+    const seen = new Set(), names = (Array.isArray(g.names) ? g.names : []).map(n => {
+      const base = path.basename(String(n)); let name = base, k = 1;
+      while (seen.has(name.toLowerCase())) name = numbered(base, ++k);
+      seen.add(name.toLowerCase()); return name;
+    });
+    return { dir: String(g.dir), names, seen };
+  });
+}
+async function clashesOf(gs) {
+  const clash = [];
+  for (const g of gs) for (const n of g.names) if (await exists(path.join(g.dir, n))) clash.push({ g, n });
+  return clash;
+}
+// → { count: 0 } or { count, message, detail } for the window's question
+ipcMain.handle('name-clashes', async (_e, groups) => {
+  const gs = nameGroups(groups), clash = await clashesOf(gs);
+  if (!clash.length) return { count: 0 };
+  const dirs = new Set(gs.map(g => g.dir.toLowerCase())).size;
+  return {
+    count: clash.length,
+    message: clash.length === 1 ? `"${clash[0].n}" is already in ${dirs > 1 ? 'its folder' : 'this folder'}.` : `${clash.length} of these files are already in ${dirs > 1 ? 'their folders' : 'this folder'}.`,
+    detail: 'Replace them, or keep both? With Keep both the new files get a number added to their name.'
+  };
+});
+// choice 'keep': a clashing name gets the first free " (n)"; otherwise (replace / no clash) names stay → final names per group
+ipcMain.handle('resolve-names', async (_e, groups, choice) => {
+  const gs = nameGroups(groups);
+  const clash = choice === 'keep' ? await clashesOf(gs) : [];
+  const out = [];
+  for (const g of gs) {
+    const list = [];
+    for (const n of g.names) {
+      let name = n;
+      if (clash.some(c => c.g === g && c.n === n)) {
+        let k = 1;
+        do name = numbered(n, ++k); while (g.seen.has(name.toLowerCase()) || await exists(path.join(g.dir, name)));
+        g.seen.add(name.toLowerCase());
+      }
+      list.push(name);
+    }
+    out.push(list);
+  }
+  return out;
+});
 
 function buildMenu() {
   // The menu is never drawn as a row (own title row, menus pop up from it), so the page's keydown
@@ -374,19 +483,25 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); }
 else {
   app.on('second-instance', (_e, argv) => {
+    if (handleTask(argv)) return; // Explorer menu: the convert window, the editor stays as it is
     const f = argv.slice(1).find(a => /\.(bpum|kbach|pub|odg|fodg|vsdx?|cdr)$/i.test(a));
-    if (win) { if (win.isMinimized()) win.restore(); win.focus(); if (f) openPathInRenderer(f); }
+    if (!win) { pendingOpenPath = f || null; createWindow(); return; } // only the convert window was open
+    bringUp(win);
+    if (f) openPathInRenderer(f);
   });
   app.whenReady().then(() => {
     // allow listing installed fonts (Font menu)
     const ALLOWED = ['local-fonts', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'];
     session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(ALLOWED.includes(perm)));
     session.defaultSession.setPermissionCheckHandler((_wc, perm) => ALLOWED.includes(perm));
-    const f = process.argv.slice(1).find(a => /\.(bpum|kbach|pub|odg|fodg|vsdx?|cdr)$/i.test(a));
-    if (f) pendingOpenPath = f;
     buildMenu();
     const t = loadSettings().theme;
     applyTheme(THEMES.includes(t) ? t : 'system'); // before the window exists: no light flash in Dark
+    if (app.isPackaged) menu.cleanOld(path.dirname(process.execPath)); // menu DLLs moved aside by an update
+    // Started by the Explorer menu: only the convert window (Bohpum quits when it closes)
+    if (handleTask(process.argv)) { if (!taskWin) app.quit(); return; }
+    const f = process.argv.slice(1).find(a => /\.(bpum|kbach|pub|odg|fodg|vsdx?|cdr)$/i.test(a));
+    if (f) pendingOpenPath = f;
     createWindow();
   });
   app.on('window-all-closed', () => app.quit());

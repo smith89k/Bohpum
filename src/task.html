@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="km">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:">
+<title>Bohpum</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* The small window for the File Explorer menu's "Convert to Bohpum": what it's doing, a progress bar, problems
+   and notes, the "already there" question, Cancel / Close. Light and dark follow tokens.css. */
+:root { --err: #b3261e; }
+@media (prefers-color-scheme: dark) { :root { --err: #ff8a80; } }
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--chrome); color: var(--ink); font: 14px/1.45 var(--ui-font); user-select: none; cursor: default; overflow: hidden; }
+/* natural height: task.js reports it and main.js sizes the window to fit. No Windows title bar (frame:false):
+   drag anywhere to move; the buttons and the list stay clickable. */
+.task { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 14px; -webkit-app-region: drag; }
+button, #lines { -webkit-app-region: no-drag; }
+.head { display: flex; gap: 12px; align-items: center; }
+.head svg { flex: none; width: 28px; height: 34px; }
+.head > div { min-width: 0; }
+#what { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.muted { color: var(--ink-3); font-size: 13px; }
+#step { min-height: 1.45em; } /* keeps its line when empty, so the title doesn't jump */
+.bar { flex: none; height: 6px; overflow: hidden; border-radius: 3px; background: var(--line); }
+#fill { width: 0; height: 100%; background: var(--accent); transition: width .15s; }
+#ask p { margin: 0; }
+#askMsg { font-weight: 600; }
+#askDetail { margin-top: 2px !important; }
+#lines { max-height: 216px; overflow: auto; margin: 0; padding: 8px 10px 8px 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; font-size: 13px; user-select: text; }
+#lines .problem { color: var(--err); }
+#lines .note { color: var(--ink-2); }
+.foot { display: flex; justify-content: flex-end; gap: 8px; }
+.btn { height: 30px; padding: 0 16px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.btn:hover:not(:disabled) { background: var(--chrome-2); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.primary:hover { background: var(--accent-hover); }
+.btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+</style>
+</head>
+<body>
+<main class="task">
+  <div class="head">
+    <svg viewBox="0 0 28 34" aria-hidden="true"><path d="M3 1.5h15l7.5 7.5v22a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 31V3A1.5 1.5 0 0 1 3 1.5Z" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/><path d="M18 1.5V9h7.5" fill="none" stroke="var(--accent)" stroke-width="1.5"/><rect x="6" y="14" width="16" height="3" rx="1" fill="var(--accent)"/><rect x="6" y="20" width="16" height="2" rx="1" fill="var(--line-2)"/><rect x="6" y="25" width="11" height="2" rx="1" fill="var(--line-2)"/></svg>
+    <div><div id="what">Getting ready…</div><div id="step" class="muted"></div></div>
+  </div>
+  <div class="bar"><div id="fill"></div></div>
+  <div id="waiting" class="muted" hidden></div>
+  <div id="ask" hidden><p id="askMsg"></p><p id="askDetail" class="muted"></p></div>
+  <ul id="lines" hidden></ul>
+  <div class="foot">
+    <button class="btn" id="bNo" hidden>Cancel</button><button class="btn" id="bReplace" hidden>Replace</button><button class="btn primary" id="bKeep" hidden>Keep both</button>
+    <button class="btn" id="bCancel">Cancel</button><button class="btn primary" id="bClose" hidden>Close</button>
+  </div>
+</main>
+<script type="module" src="task.js"></script>
+</body>
+</html>
