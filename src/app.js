@@ -1770,10 +1770,12 @@ function modal(title, bodyEl, buttons, cls = '') {
   let resolve; const done = new Promise(r => resolve = r);
   const close = (v) => { back.remove(); document.removeEventListener('keydown', key, true); resolve(v); };
   const key = (e) => {
+    if (back !== $('modal-root').lastElementChild) return; // a box under another one leaves its keys to the top one
     const s = e.target.closest && e.target.closest('select');
     if (s && s.matches(':open')) return; // an open dropdown list handles its own Esc / Enter
     if (e.key === 'Escape') { e.stopPropagation(); close(null); }
-    if (e.key === 'Enter' && !e.target.matches('textarea')) { const p = buttons.find(x => x[2]); if (p) { e.preventDefault(); close(p[1]); } }
+    // a button marked data-enter-self (What's new's "See earlier versions") is pressed by Enter itself
+    if (e.key === 'Enter' && !e.target.matches('textarea, [data-enter-self]')) { const p = buttons.find(x => x[2]); if (p) { e.preventDefault(); close(p[1]); } }
   };
   document.addEventListener('keydown', key, true);
   for (const [label, val, primary] of buttons) { const bt = document.createElement('button'); bt.className = 'btn' + (primary ? ' primary' : ''); bt.textContent = label; bt.onclick = () => close(val); f.append(bt); }
