@@ -1115,8 +1115,6 @@ function renderProps() {
     g.append(num('X', bb.x, v => moveTo(v, null)), num('Y', bb.y, v => moveTo(null, v)));
     const ab = btns(pos);
     ab.append(lockBtn);
-    if (sel.length > 1) ab.append(btn('Group', () => cmd('group')));
-    if (sel.some(o => o.groupId)) ab.append(btn('Ungroup', () => cmd('ungroup')));
   }
 
   const ar = section(P, 'Arrange', 'front', 'arrange');
@@ -1132,6 +1130,13 @@ function renderProps() {
   alRow.append(seg(...['l', 'c', 'r'].map((k, i) => alBtn(k, i))), seg(...['t', 'm', 'b'].map((k, i) => alBtn(k, i + 3))));
   ar.append(row(sel.length > 1 ? 'Align' : 'On page', alRow));
   if (sel.length > 2) ar.append(row('Distribute', seg(iconBtn('distH', 'Space evenly left to right', () => distribute('x')), iconBtn('distV', 'Space evenly top to bottom', () => distribute('y')))));
+  // Group / Ungroup live here, not in the top bar; each is greyed out when it would do nothing
+  const oneGroup = sel.every(o => o.groupId && o.groupId === sel[0].groupId);
+  const gb = iconBtn('group', 'Group (Ctrl+G)', () => cmd('group'), false, 'Group');
+  const ub = iconBtn('ungroup', 'Ungroup (Ctrl+Shift+G)', () => cmd('ungroup'), false, 'Ungroup');
+  gb.disabled = sel.length < 2 || oneGroup; ub.disabled = !sel.some(o => o.groupId);
+  const gs = seg(gb, ub); gs.classList.add('words');
+  ar.append(row('Group', gs));
 
   const types = new Set(sel.map(o => o.type));
   if (types.size === 1 && types.has('box')) boxProps(P, sel);
