@@ -20,6 +20,9 @@ run(async (t, check) => {
   check('Accent colour is jade green', c.accent === '#1f7a4c' && c.soft === '#e6f2eb', c);
   check('The chosen tool is green', c.toolColor === 'rgb(31, 122, 76)', c);
   check('App name as in Sastra PDF: logo, Bohpum, then the Khmer name in grey after a thin line', c.brand.parts.join('|') === 'logo|Bohpum|បោះពុម្ព' && c.brand.logo && c.brand.line === '1px' && c.kmColor === 'rgb(139, 132, 120)', c);
+  const km = await t.js(`document.fonts.ready.then(() => ({ loaded: [...document.fonts].some(f => f.family.replace(/"/g, '') === 'Noto Sans Khmer' && f.status === 'loaded'),
+    first: getComputedStyle(document.querySelector('#titlebar .brand .km')).fontFamily.split(',')[0].replace(/"/g, '').trim() }))`);
+  check('The Khmer name is drawn in Noto Sans Khmer (the Khmer font of Sastra PDF, shipped with Bohpum)', km.loaded && km.first === 'Noto Sans Khmer', km);
 
   const files = ['src/tokens.css', 'src/app.css', 'src/app.js', 'src/print.js', 'src/index.html', 'src/task.html', 'main.js'];
   const found = [];

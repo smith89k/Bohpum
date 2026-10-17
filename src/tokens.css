@@ -48,3 +48,7 @@
     color-scheme: dark;
   }
 }
+
+/* The Khmer app name in Noto Sans Khmer, as in Sastra PDF. Ships with Bohpum (fonts/noto-sans-khmer, SIL OFL 1.1). */
+@font-face { font-family: 'Noto Sans Khmer'; font-style: normal; font-display: block; font-weight: 500;
+  src: url(fonts/noto-sans-khmer/noto-sans-khmer-khmer-500-normal.woff2) format('woff2'); unicode-range: U+1780-17FF, U+19E0-19FF, U+200C-200D, U+25CC; }
