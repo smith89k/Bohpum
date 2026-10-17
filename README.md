@@ -22,7 +22,9 @@ npm run dist
 ```
 
 `npm run dist` first copies the LibreOffice installed on the build PC into `vendor\libreoffice`
-(skipped when that version is already bundled), then builds the installer.
+(skipped when that version is already bundled), builds the File Explorer menu add-on (`npm run build:menu`),
+then builds the installer. The menu add-on needs **Visual Studio Build Tools** ("Desktop development with C++",
+x64) and the **Windows 10/11 SDK** on the build PC.
 
 **Keeping LibreOffice patched.** The bundled copy only changes when you ship a new Bohpum release.
 When LibreOffice publishes a security fix, update LibreOffice on the build PC, then run `npm run dist`
@@ -63,6 +65,16 @@ credit LibreOffice on the About page.
   - *Save as PDF* saves the sheets as laid out (e.g. 8 cards on an A4)
 - **Save As** (Ctrl+Shift+S) can also save a PDF of the publication (every page at page size); the publication keeps its own file
 - File > Export Page as PNG saves the current page as a 300 dpi PNG
+
+**Right-click in File Explorer** (as in Sastra PDF)
+- Right-click one or more `.pub` files → **Convert to Bohpum (.bpum)** (several: "Convert 3 files to Bohpum").
+  A small window converts them and saves each `.bpum` next to its `.pub` (the same file as opening it in Bohpum and
+  pressing Save); the `.pub` is never changed. It doesn't open the editor or touch an open publication.
+- A `.bpum` with that name already there → one question: Replace / Keep both ("Report (2).bpum") / Cancel.
+  A damaged file is listed and the others still convert. Clicks while it works wait their turn.
+- Installing: on Windows 11 the installer asks Windows' "allow changes" question once. Yes → the item is in the
+  first right-click menu; No, no admin rights or a silent install → it is under "Show more options". Windows 10: its
+  normal menu. Updates keep it; uninstalling removes it. Log: `%TEMP%\Bohpum\explorer-menu.log`
 
 **Look** (as in Sastra PDF)
 - New, Open, Save and Print sit at the start of the toolbar (icon + word; on narrow windows only the icons)
@@ -106,6 +118,13 @@ src/render.js    Draws objects (shared by editor, thumbnails, print, PDF)
 src/textedit.js  Rich-text editing helpers
 src/print.js     Publisher-style print dialog and sheet layout
 src/model.js     Document model (all sizes in mm)
+src/docfile.js   .pub (via LibreOffice) → document → .bpum text; shared by the editor and the convert window
+src/task.html/.js  The Explorer menu's convert window
+src/tokens.css   Colours and font (light and dark), shared by the editor and the convert window
+explorer-menu.js Explorer menu: reads a menu click, registers / removes the menu (installer hooks)
+explorer-menu/   The menu add-on: menu.cpp (BohpumMenu.dll), AppxManifest.xml + Assets (Windows 11 package)
+build/           App icon (icon.ico / icon.png) and installer.nsh (menu install / update / uninstall steps)
+scripts/build-explorer-menu.js Builds BohpumMenu.dll and Bohpum.ExplorerMenu.msix into explorer-menu/out
 scripts/bundle-libreoffice.js  Copies a trimmed LibreOffice into vendor/libreoffice for the installer
 vendor/libreoffice             The bundled LibreOffice (generated, not edited by hand)
 tests/                         Electron tests: npm test (each tests/*.test.js runs the real app)
