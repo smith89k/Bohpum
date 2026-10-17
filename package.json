@@ -11,7 +11,8 @@
     "test": "node tests/run.js",
     "bundle-libreoffice": "node scripts/bundle-libreoffice.js",
     "dist": "node scripts/bundle-libreoffice.js && node scripts/build-explorer-menu.js && electron-builder --win nsis",
-    "build:menu": "node scripts/build-explorer-menu.js"
+    "build:menu": "node scripts/build-explorer-menu.js",
+    "icons": "electron scripts/make-icons.js"
   },
   "devDependencies": {
     "electron": "^44.8.0",

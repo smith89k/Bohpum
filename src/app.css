@@ -21,6 +21,7 @@ body:has(#modal-root > *) #menus { opacity: .45; pointer-events: none; }
 /* ---------- top bar ---------- */
 #topbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--chrome); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .brand { display: flex; align-items: baseline; gap: 8px; padding-right: 10px; margin-right: 4px; border-right: 1px solid var(--line); white-space: nowrap; }
+.brand .logo { align-self: center; width: 20px; height: 20px; margin-right: -2px; }
 .brand .km { font-family: "Khmer OS Muol Light", "Moul", "Khmer OS Siemreap", serif; color: var(--accent); font-size: 15px; }
 .brand b { font-weight: 600; letter-spacing: .2px; }
 .tb-group { display: flex; align-items: center; gap: 4px; padding: 0 10px; border-right: 1px solid var(--line); }
@@ -343,6 +344,7 @@ body.dragging .drop-hint { display: flex; }
 .welcome { display: grid; grid-template-columns: 280px 1fr; width: min(1020px, calc(100vw - 80px)); height: min(660px, calc(100vh - 140px)); }
 .w-side { display: flex; flex-direction: column; gap: 8px; padding: 26px 20px 18px; background: var(--chrome); border-right: 1px solid var(--line); min-height: 0; }
 .w-brand { display: flex; flex-direction: column; padding: 0 6px 14px; }
+.w-brand .logo { width: 48px; height: 48px; margin-bottom: 8px; }
 .w-brand .km { font-family: "Khmer OS Muol Light", "Moul", "Khmer OS Siemreap", serif; color: var(--accent); font-size: 26px; line-height: 1.5; }
 .w-brand b { font-size: 17px; font-weight: 600; letter-spacing: .2px; }
 .w-brand .muted { margin-top: 2px; }

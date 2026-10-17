@@ -127,7 +127,9 @@ src/task.html/.js  The Explorer menu's convert window
 src/tokens.css   Colours and font (light and dark), shared by the editor and the convert window
 explorer-menu.js Explorer menu: reads a menu click, registers / removes the menu (installer hooks)
 explorer-menu/   The menu add-on: menu.cpp (BohpumMenu.dll), AppxManifest.xml + Assets (Windows 11 package)
-build/           App icon (icon.ico / icon.png) and installer.nsh (menu install / update / uninstall steps)
+build/           logo.png and bpum-file.png: the logo and the .bpum file icon (source pictures); npm run icons
+                 makes icon.ico / icon.png, bpum.ico, the menu package logos and src/img from them. installer.nsh:
+                 menu install / update / uninstall steps, .pub in "Open with"
 scripts/build-explorer-menu.js Builds BohpumMenu.dll and Bohpum.ExplorerMenu.msix into explorer-menu/out
 scripts/bundle-libreoffice.js  Copies a trimmed LibreOffice into vendor/libreoffice for the installer
 vendor/libreoffice             The bundled LibreOffice (generated, not edited by hand)
