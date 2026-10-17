@@ -172,6 +172,17 @@ function renderOverlay() {
   const k = pxPerMm(), hs = 8 / k, lw = 1 / k;
   const single = sel.length === 1 ? sel[0] : null;
   const grouped = sel.length > 1 && sel.every(o => o.groupId && o.groupId === sel[0].groupId);
+  const addResizeHandles = (b, w, h) => {
+    const pos = { nw: [0, 0], n: [50, 0], ne: [100, 0], e: [100, 50], se: [100, 100], s: [50, 100], sw: [0, 100], w: [0, 50] };
+    const cur = { nw: 'nwse', se: 'nwse', ne: 'nesw', sw: 'nesw', n: 'ns', s: 'ns', e: 'ew', w: 'ew' };
+    for (const key in pos) {
+      if (h * k < 24 && (key === 'e' || key === 'w')) continue;
+      if (w * k < 24 && (key === 'n' || key === 's')) continue;
+      const el = document.createElement('div'); el.className = 'handle'; el.dataset.h = key;
+      Object.assign(el.style, { left: `calc(${pos[key][0]}% - ${hs / 2}mm)`, top: `calc(${pos[key][1]}% - ${hs / 2}mm)`, width: hs + 'mm', height: hs + 'mm', borderWidth: 1.5 * lw + 'mm', cursor: cur[key] + '-resize' });
+      b.append(el);
+    }
+  };
   for (const o of sel) {
     if (o.type === 'line') {
       if (single && !o.locked && !S.editing) {
@@ -193,15 +204,7 @@ function renderOverlay() {
     Object.assign(b.style, { left: o.x + 'mm', top: o.y + 'mm', width: o.w + 'mm', height: o.h + 'mm', outlineWidth: lw + 'mm', transform: o.rot ? `rotate(${o.rot}deg)` : '' });
     ov.append(b);
     if (single && !o.locked && !S.editing) {
-      const pos = { nw: [0, 0], n: [50, 0], ne: [100, 0], e: [100, 50], se: [100, 100], s: [50, 100], sw: [0, 100], w: [0, 50] };
-      const cur = { nw: 'nwse', se: 'nwse', ne: 'nesw', sw: 'nesw', n: 'ns', s: 'ns', e: 'ew', w: 'ew' };
-      for (const key in pos) {
-        if (o.h * k < 24 && (key === 'e' || key === 'w')) continue;
-        if (o.w * k < 24 && (key === 'n' || key === 's')) continue;
-        const h = document.createElement('div'); h.className = 'handle'; h.dataset.h = key;
-        Object.assign(h.style, { left: `calc(${pos[key][0]}% - ${hs / 2}mm)`, top: `calc(${pos[key][1]}% - ${hs / 2}mm)`, width: hs + 'mm', height: hs + 'mm', borderWidth: 1.5 * lw + 'mm', cursor: cur[key] + '-resize' });
-        b.append(h);
-      }
+      addResizeHandles(b, o.w, o.h);
       const stem = document.createElement('div'); stem.className = 'rot-stem';
       Object.assign(stem.style, { top: -hs * 2.2 + 'mm', height: hs * 2.2 + 'mm', width: lw + 'mm' }); b.append(stem);
       const r = document.createElement('div'); r.className = 'handle rot'; r.dataset.h = 'rot'; r.title = 'Rotate (Shift = 15° steps)';
@@ -213,6 +216,8 @@ function renderOverlay() {
     const bb = bbox(sel);
     const b = document.createElement('div'); b.className = 'sel-box multi';
     Object.assign(b.style, { left: bb.x + 'mm', top: bb.y + 'mm', width: bb.w + 'mm', height: bb.h + 'mm', outlineWidth: lw + 'mm', outlineOffset: 2 * lw + 'mm' });
+    // a whole group resizes from its outer box, like one object
+    if (grouped && !S.editing && !sel.some(o => o.locked)) addResizeHandles(b, bb.w, bb.h);
     ov.append(b);
   }
 }
@@ -496,7 +501,9 @@ function startMove(e, m0) {
 }
 
 function startHandle(e, h) {
-  const o = selObjs()[0];
+  const sel = selObjs();
+  if (allSameGroup(sel)) return startGroupResize(e, h, sel);
+  const o = sel[0];
   if (!o) return;
   const k = pxPerMm();
   const o0 = { ...o };
@@ -555,6 +562,39 @@ function startHandle(e, h) {
     }
     o.x = round2(nx); o.y = round2(ny); o.w = round2(w); o.h = round2(hh);
     updateObjEl(o); renderOverlay(); showSnapLines(lines); updateStatus(); drawRulers();
+  }, () => { showSnapLines([]); commit(); renderProps(); });
+}
+
+// Resizes a whole group from its outer box: every member keeps its share of the box (place and size).
+// The opposite side stays put; Shift on a corner keeps the proportions (pictures keep them unless freeResize).
+function startGroupResize(e, h, sel) {
+  const k = pxPerMm();
+  const b0 = bbox(sel), orig = sel.map(o => ({ o, cx: o.x + o.w / 2, cy: o.y + o.h / 2, w: o.w, h: o.h }));
+  const targets = snapTargets(new Set(sel.map(o => o.id)));
+  const sxn = h.includes('w') ? -1 : h.includes('e') ? 1 : 0;
+  const syn = h.includes('n') ? -1 : h.includes('s') ? 1 : 0;
+  const ax = sxn > 0 ? b0.x : b0.x + b0.w, ay = syn > 0 ? b0.y : b0.y + b0.h; // the sides that stay put
+  const lockAspect = sel.some(o => o.type === 'image' && !o.freeResize);
+  dragLoop(e, (ev) => {
+    const m = mmFromEvent(ev), lines = [];
+    let w = sxn ? Math.max(1, (m.x - ax) * sxn) : b0.w;
+    let hh = syn ? Math.max(1, (m.y - ay) * syn) : b0.h;
+    const keep = ev.shiftKey !== (lockAspect && sxn && syn);
+    if (keep && sxn && syn) { const s = Math.max(w / b0.w, hh / b0.h); w = b0.w * s; hh = b0.h * s; }
+    else if (!ev.altKey) {
+      const thr = 6 / k;
+      if (sxn) { const sv = snapValue([ax + sxn * w], targets.xs, thr); if (sv) { w += sxn * sv.d; lines.push({ axis: 'x', v: sv.v }); } }
+      if (syn) { const sv = snapValue([ay + syn * hh], targets.ys, thr); if (sv) { hh += syn * sv.d; lines.push({ axis: 'y', v: sv.v }); } }
+    }
+    const fx = w / b0.w, fy = hh / b0.h;
+    const nx = sxn < 0 ? ax - w : b0.x, ny = syn < 0 ? ay - hh : b0.y;
+    for (const r of orig) {
+      const cw = r.w * fx, ch = r.h * fy;
+      r.o.x = round2(nx + (r.cx - b0.x) * fx - cw / 2); r.o.y = round2(ny + (r.cy - b0.y) * fy - ch / 2);
+      r.o.w = round2(cw); r.o.h = round2(ch);
+      updateObjEl(r.o);
+    }
+    renderOverlay(); showSnapLines(lines); updateStatus(); drawRulers();
   }, () => { showSnapLines([]); commit(); renderProps(); });
 }
 
