@@ -21,7 +21,11 @@ To build an installer (`dist\Bohpum Setup <version>.exe`):
 npm run dist
 ```
 
-`npm run dist` first copies the LibreOffice installed on the build PC into `vendor\libreoffice`
+**Before each release**, after changing the version in `package.json`, write that version's notes at the top of
+`src/notes.js` (the What's new window). `npm run dist` stops with a plain message when the newest entry is not
+`package.json`'s version or an entry is broken (`scripts/check-notes.js`).
+
+`npm run dist` then copies the LibreOffice installed on the build PC into `vendor\libreoffice`
 (skipped when that version is already bundled), builds the File Explorer menu add-on (`npm run build:menu`),
 then builds the installer. The menu add-on needs **Visual Studio Build Tools** ("Desktop development with C++",
 x64) and the **Windows 10/11 SDK** on the build PC.
@@ -93,6 +97,11 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
 - **Maximize** (F) hides the Pages panel, the side panel and the status bar so the page fills the window; Restore (F) brings them back
 - **Theme**: the button at the right end switches System → Light → Dark (also View > Theme); it is remembered,
   and System follows Windows. In Dark the page itself stays white, like paper
+- **What's new**: the first start of a new version shows what changed, once, over the welcome screen (each line tagged
+  New, Improved, Fixed or Removed; See earlier versions for older ones). **Help > What's New** shows it again
+- **Right panel**: each section (Page size, Fill & line, Arrange …) folds and opens from its heading; Bohpum remembers
+  which are folded, for every object of that kind and after a restart. **Arrange** holds Bring to front / Send to back
+  and **Group / Ungroup** (greyed out when they would do nothing); they are no longer in the toolbar
 
 ## Shortcuts
 
@@ -133,6 +142,7 @@ src/model.js     Document model (all sizes in mm)
 src/docfile.js   .pub (via LibreOffice) → document → .bpum text; shared by the editor and the convert window
 src/task.html/.js  The Explorer menu's convert window
 src/tokens.css   Colours and font (light and dark), shared by the editor and the convert window
+src/notes.js     What's new: the notes of each version, newest first (Help > What's New)
 explorer-menu.js Explorer menu: reads a menu click, registers / removes the menu (installer hooks)
 explorer-menu/   The menu add-on: menu.cpp (BohpumMenu.dll), AppxManifest.xml + Assets (Windows 11 package)
 build/           logo.png and bpum-file.png: the logo and the .bpum file icon (source pictures); npm run icons
@@ -140,6 +150,7 @@ build/           logo.png and bpum-file.png: the logo and the .bpum file icon (s
                  menu install / update / uninstall steps, .pub in "Open with"
 scripts/build-explorer-menu.js Builds BohpumMenu.dll and Bohpum.ExplorerMenu.msix into explorer-menu/out
 scripts/bundle-libreoffice.js  Copies a trimmed LibreOffice into vendor/libreoffice for the installer
+scripts/check-notes.js         Stops npm run dist when src/notes.js has no notes for package.json's version
 vendor/libreoffice             The bundled LibreOffice (generated, not edited by hand)
 tests/                         Electron tests: npm test (each tests/*.test.js runs the real app)
 ```

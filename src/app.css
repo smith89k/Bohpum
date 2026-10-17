@@ -282,6 +282,7 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .modal-f { padding: 16px 24px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; align-items: center; background: var(--surface-2); }
 .modal-f .btn { border-color: var(--line-2); background: var(--field); height: 34px; padding: 0 18px; }
 .modal-f .btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.modal-f .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } /* the app's green, not Chromium's ring */
 
 /* About (Help > About), as in Sastra PDF: the app, its author, credits */
 .modal.about { width: min(480px, calc(100vw - 32px)); }

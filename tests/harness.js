@@ -12,6 +12,10 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function run(test, { setup, timeout = 90000 } = {}) {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'bohpum-test-'));
   app.setPath('userData', userData); // never touches the user's real settings
+  // keep drawing when another window covers this one (Chromium pauses covered windows: resizes, drags and
+  // wheel zoom would then never finish while someone works in another program during the tests)
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
   // started as `electron tests/x.test.js` the app would report Electron's version; `npm start` reports package.json's
   const version = require(path.join(ROOT, 'package.json')).version;
   app.getVersion = () => version;
