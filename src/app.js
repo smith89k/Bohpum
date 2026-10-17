@@ -1552,7 +1552,7 @@ function newDialog(first = false) {
     body.className = 'welcome';
     body.innerHTML = `
       <div class="w-side">
-        <div class="w-brand"><img class="logo" src="img/logo.png" alt="" draggable="false"><span class="km">បោះពុម្ព</span><b>Bohpum</b><span class="muted">Open, edit and print your Publisher files</span></div>
+        <div class="w-brand"><img class="logo" src="img/logo.png" alt="" draggable="false"><div class="w-name"><span>Bohpum</span><span class="km" lang="km">បោះពុម្ព</span></div><span class="muted">Open, edit and print your Publisher files</span></div>
         <button class="w-action" data-open><i>${icon('open')}</i><span><b>Open a file…</b><small>.pub or .bpum file · Ctrl+O</small></span></button>
         <button class="w-action" data-blank><i>${icon('new')}</i><span><b>Blank A4 page</b><small>Empty page, 210 × 297 mm</small></span></button>
         <div class="preset-group">Recent</div>

@@ -7,7 +7,7 @@ body { display: grid; grid-template-rows: auto auto auto 1fr auto; }
 /* Windows draws ─ □ ✕ over the right end (main.js titleBarOverlay: 36 px = this row without its line,
    colours = --chrome / --ink); the right padding keeps the row's content out from under them. */
 #titlebar { display: flex; align-items: center; gap: 2px; height: 37px; padding: 0 calc(14px + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)) 0 14px; background: var(--chrome); border-bottom: 1px solid var(--line); -webkit-app-region: drag; user-select: none; }
-#titlebar .brand { margin-right: 6px; }
+#titlebar .brand { margin-right: 10px; }
 #menus { display: flex; gap: 1px; }
 .menu-btn { -webkit-app-region: no-drag; height: 28px; padding: 0 9px; border: 0; border-radius: 5px; background: transparent; font-size: 12.5px; cursor: default; }
 .menu-btn:hover { background: var(--chrome-2); }
@@ -20,10 +20,11 @@ body:has(#modal-root > *) #menus { opacity: .45; pointer-events: none; }
 
 /* ---------- top bar ---------- */
 #topbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--chrome); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.brand { display: flex; align-items: baseline; gap: 8px; padding-right: 10px; margin-right: 4px; border-right: 1px solid var(--line); white-space: nowrap; }
-.brand .logo { align-self: center; width: 20px; height: 20px; margin-right: -2px; }
-.brand .km { font-family: "Khmer OS Muol Light", "Moul", "Khmer OS Siemreap", serif; color: var(--accent); font-size: 15px; }
-.brand b { font-weight: 600; letter-spacing: .2px; }
+/* The app name as in Sastra PDF: logo, the English name, a thin line, the Khmer name in grey */
+.brand { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
+.brand .logo { flex: none; width: 26px; height: 26px; }
+.brand .km, .w-name .km { padding-left: 8px; border-left: 1px solid var(--line-2); font-family: "Noto Sans Khmer", "Khmer OS Battambang", "Khmer UI", sans-serif; font-weight: 500; font-size: 13px; color: var(--ink-3); }
+@media (max-width: 1409px) { #titlebar .brand .km { display: none; } }
 .tb-group { display: flex; align-items: center; gap: 4px; padding: 0 10px; border-right: 1px solid var(--line); }
 .tb-group:last-child { border-right: 0; }
 .spacer { flex: 1; }
@@ -345,8 +346,8 @@ body.dragging .drop-hint { display: flex; }
 .w-side { display: flex; flex-direction: column; gap: 8px; padding: 26px 20px 18px; background: var(--chrome); border-right: 1px solid var(--line); min-height: 0; }
 .w-brand { display: flex; flex-direction: column; padding: 0 6px 14px; }
 .w-brand .logo { width: 48px; height: 48px; margin-bottom: 8px; }
-.w-brand .km { font-family: "Khmer OS Muol Light", "Moul", "Khmer OS Siemreap", serif; color: var(--accent); font-size: 26px; line-height: 1.5; }
-.w-brand b { font-size: 17px; font-weight: 600; letter-spacing: .2px; }
+.w-name { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
+.w-name .km { padding-left: 10px; font-size: 17px; }
 .w-brand .muted { margin-top: 2px; }
 .w-action, .w-recent { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 1px solid transparent; border-radius: 8px; background: transparent; cursor: pointer; }
 .w-action { padding: 11px 12px; }

@@ -12,12 +12,14 @@ run(async (t, check) => {
     return {
       accent: cs.getPropertyValue('--accent').trim(), soft: cs.getPropertyValue('--accent-soft').trim(),
       toolColor: getComputedStyle(document.querySelector('[data-tool="select"].on')).color,
-      brand: getComputedStyle(document.querySelector('.brand .km')).color
+      brand: (() => { const b = document.querySelector('#titlebar .brand');
+        return { parts: [...b.children].map(e => e.tagName === 'IMG' ? 'logo' : e.textContent), logo: b.querySelector('img').naturalWidth > 0, line: getComputedStyle(b.querySelector('.km')).borderLeftWidth }; })(),
+      kmColor: getComputedStyle(document.querySelector('#titlebar .brand .km')).color
     };
   })()`);
   check('Accent colour is jade green', c.accent === '#1f7a4c' && c.soft === '#e6f2eb', c);
   check('The chosen tool is green', c.toolColor === 'rgb(31, 122, 76)', c);
-  check('Khmer logo text is green', c.brand === 'rgb(31, 122, 76)', c);
+  check('App name as in Sastra PDF: logo, Bohpum, then the Khmer name in grey after a thin line', c.brand.parts.join('|') === 'logo|Bohpum|បោះពុម្ព' && c.brand.logo && c.brand.line === '1px' && c.kmColor === 'rgb(139, 132, 120)', c);
 
   const files = ['src/tokens.css', 'src/app.css', 'src/app.js', 'src/print.js', 'src/index.html', 'src/task.html', 'main.js'];
   const found = [];
