@@ -213,9 +213,18 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 #props { border-left: 1px solid var(--line); background: var(--chrome); overflow: auto; min-height: 0; }
 #props input[type=range] { accent-color: var(--accent); }
 .psec { border-bottom: 1px solid var(--line); padding: 16px 18px 18px; }
-/* headings with an icon in front, as in Sastra PDF's Tools panel */
-.psec h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); font-weight: 600; }
-.psec h4 svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
+/* headings with an icon in front; each folds its section, as in Sastra PDF's Tools panel: icon + name on the left,
+   chevron on the right (up = open) */
+.psec h4 { margin: 0 0 12px; }
+.psec-head { display: flex; align-items: center; gap: 8px; width: calc(100% + 16px); margin: -6px -8px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-2); font: inherit; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; text-align: left; cursor: pointer; }
+.psec-head:hover { background: var(--chrome-2); }
+.psec-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.psec-head svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
+.psec-head svg.chev { margin-left: auto; width: 14px; height: 14px; color: var(--ink-3); transition: transform .15s; }
+.psec.folded { padding-bottom: 16px; }
+.psec.folded > :not(h4) { display: none; }
+.psec.folded h4 { margin-bottom: 0; }
+.psec.folded .chev { transform: rotate(180deg); }
 .psec > .muted { margin-top: 8px; font-size: 11.5px; line-height: 1.4; }
 .cap { color: var(--ink-2); font-size: 11.5px; margin: -2px 0 8px; }
 .prow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -310,7 +319,7 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .credits span { color: var(--ink-2); overflow-wrap: anywhere; }
 .credits .cn { white-space: nowrap; }
 .credits .cv { font-family: var(--mono-font); font-size: 11px; }
-@media (prefers-reduced-motion: reduce) { .about .links a { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .about .links a, .psec-head svg.chev { transition: none; } }
 
 /* What's new (openNotes in app.js): title + date on top, the list scrolls, Close stays at the bottom (as in Sastra PDF) */
 .modal.notes { width: min(900px, calc(100vw - 32px)); }

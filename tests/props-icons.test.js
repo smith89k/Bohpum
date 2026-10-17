@@ -6,8 +6,8 @@ run(async (t, check) => {
   await t.ready();
   const heads = () => t.js(`(() => { const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim();
     const rgb = (c) => { const d = document.createElement('i'); d.style.color = c; document.body.append(d); const v = getComputedStyle(d).color; d.remove(); return v; };
-    return [...document.querySelectorAll('#props .psec h4')].map(h => { const s = h.firstElementChild, cs = s && getComputedStyle(s);
-      return { title: h.textContent.trim(), icon: !!s && s.tagName === 'svg' && s.innerHTML.length > 20, size: s && s.getBoundingClientRect().width, green: !!cs && cs.color === rgb(accent), gap: getComputedStyle(h).columnGap }; }); })()`);
+    return [...document.querySelectorAll('#props .psec h4')].map(h => { const b = h.querySelector('.psec-head'), s = b && b.firstElementChild, cs = s && getComputedStyle(s);
+      return { title: h.textContent.trim(), icon: !!s && s.tagName === 'svg' && s.innerHTML.length > 20, size: s && s.getBoundingClientRect().width, green: !!cs && cs.color === rgb(accent), gap: b && getComputedStyle(b).columnGap }; }); })()`);
   const ok = (hs) => hs.length && hs.every(h => h.icon && Math.round(h.size) === 15 && h.green && h.gap === '8px');
 
   const page = await heads();

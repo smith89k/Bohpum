@@ -51,6 +51,7 @@ const ICONS = {
   portrait: 'M7 3h10v18H7z', landscape: 'M3 7h18v10H3z',
   lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5z', unlock: 'M7 11V8a5 5 0 0 1 9.6-2M5 11h14v10H5z',
   minus: 'M5 12h14',
+  chevUp: 'M6 15l6-6 6 6', // a right panel heading's fold arrow (up = open)
   fit: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
   print: 'M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z',
   al: 'M4 6h16M4 10h10M4 14h16M4 18h10', ac: 'M4 6h16M7 10h10M4 14h16M7 18h10',
@@ -1093,7 +1094,7 @@ function renderProps() {
   const bb = bbox(sel);
 
   // position & size
-  const pos = section(P, single ? labelOf(single) : `${sel.length} objects selected`, single ? iconOf(single) : 'group');
+  const pos = section(P, single ? labelOf(single) : `${sel.length} objects selected`, single ? iconOf(single) : 'group', 'object');
   const locked = sel.some(o => o.locked);
   const lockBtn = btn(locked ? 'Locked' : 'Lock', () => cmd('lock'), 'cell-btn' + (locked ? ' on' : ''));
   lockBtn.insertAdjacentHTML('afterbegin', icon(locked ? 'lock' : 'unlock'));
@@ -1118,7 +1119,7 @@ function renderProps() {
     if (sel.some(o => o.groupId)) ab.append(btn('Ungroup', () => cmd('ungroup')));
   }
 
-  const ar = section(P, 'Arrange', 'front');
+  const ar = section(P, 'Arrange', 'front', 'arrange');
   ar.append(row('Order', seg(
     iconBtn('ordFront', 'Bring to front (Ctrl+Shift+])', () => cmd('front')), iconBtn('ordFwd', 'Bring forward (Ctrl+])', () => cmd('forward')),
     iconBtn('ordBwd', 'Send backward (Ctrl+[)', () => cmd('backward')), iconBtn('ordBack', 'Send to back (Ctrl+Shift+[)', () => cmd('back')))));
@@ -1136,7 +1137,7 @@ function renderProps() {
   if (types.size === 1 && types.has('box')) boxProps(P, sel);
   if (types.size === 1 && types.has('image')) imageProps(P, sel);
   if (types.size === 1 && types.has('line')) lineProps(P, sel);
-  const op = section(P, 'Transparency', 'opacity');
+  const op = section(P, 'Transparency', 'opacity', 'opacity');
   const rr = document.createElement('div'); rr.className = 'range-row';
   const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = 100; r.value = Math.round((1 - (sel[0].opacity ?? 1)) * 100);
   const rv = document.createElement('span'); rv.textContent = r.value + ' %';
@@ -1162,7 +1163,7 @@ function labelOf(o) {
 
 function boxProps(P, sel) {
   const o = sel[0];
-  const f = section(P, 'Fill & line', 'fill');
+  const f = section(P, 'Fill & line', 'fill', 'fill');
   f.append(row('Fill', colorField(o.fill, v => setProp(x => { x.fill = v; if (v === 'none') { x.fill2 = null; x.gradKind = null; } }), 'No Fill')));
   const gr = document.createElement('label'); gr.className = 'chk under-field';
   gr.innerHTML = `<input type="checkbox" ${o.gradKind ? 'checked' : ''}> Gradient`;
@@ -1177,10 +1178,10 @@ function boxProps(P, sel) {
   f.append(row('Weight', numInput(ptOf(o.strokeW), v => setProp(x => x.strokeW = mmOfPt(Math.max(0, v))), 0.25, 'pt')));
   f.append(row('Dash', select([['solid', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted'], ['dashdot', 'Dash-dot']], o.dash || 'solid', v => setProp(x => x.dash = v))));
   if (hasLine(o)) f.append(alignLineRow(o, 'line'));
-  const s = section(P, 'Shape', 'shapes');
+  const s = section(P, 'Shape', 'shapes', 'shape');
   s.append(row('Type', select([['none', 'Frame'], ['rect', 'Rectangle'], ['roundrect', 'Rounded'], ['ellipse', 'Ellipse'], ...(o.shape === 'path' ? [['path', 'Custom']] : [])], o.shape, v => setProp(x => { x.shape = v; if (v === 'roundrect' && !x.radius) x.radius = round2(Math.min(x.w, x.h) * 0.15); }))));
   if (o.shape === 'roundrect' || o.shape === 'rect') s.append(row('Corner', numInput(o.radius || 0, v => setProp(x => x.radius = Math.max(0, v)), 0.5, 'mm')));
-  const t = section(P, 'Text box', 'text');
+  const t = section(P, 'Text box', 'text', 'textbox');
   caption(t, 'Inner margins (mm)');
   const g = grid(t);
   const pad = o.pad || { t: 0, r: 0, b: 0, l: 0 };
@@ -1211,7 +1212,7 @@ function alignLineRow(o, what) {
 
 function imageProps(P, sel) {
   const o = sel[0];
-  const s = section(P, 'Picture', 'image');
+  const s = section(P, 'Picture', 'image', 'picture');
   s.append(row('Fit', select([['fill', 'Stretch'], ['contain', 'Fit inside'], ['cover', 'Fill & crop']], o.fit, v => setProp(x => x.fit = v))));
   s.append(row('Border', colorField(o.stroke, v => setProp(x => { x.stroke = v; if (v !== 'none' && !x.strokeW) x.strokeW = 0.3528; }), 'No Line')));
   s.append(row('Weight', numInput(ptOf(o.strokeW || 0), v => setProp(x => x.strokeW = mmOfPt(Math.max(0, v))), 0.25, 'pt')));
@@ -1223,7 +1224,7 @@ function imageProps(P, sel) {
 
 function lineProps(P, sel) {
   const o = sel[0];
-  const s = section(P, 'Line', 'line');
+  const s = section(P, 'Line', 'line', 'line');
   s.append(row('Colour', colorField(o.stroke, v => setProp(x => x.stroke = v))));
   s.append(row('Weight', numInput(ptOf(o.strokeW), v => setProp(x => x.strokeW = mmOfPt(Math.max(0.05, v))), 0.25, 'pt')));
   s.append(row('Dash', select([['solid', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted'], ['dashdot', 'Dash-dot']], o.dash || 'solid', v => setProp(x => x.dash = v))));
@@ -1238,13 +1239,13 @@ function renderPageProps(P) {
   const d = S.doc;
   const note = (el, text) => el.append(Object.assign(document.createElement('div'), { className: 'muted', textContent: text }));
   if (S.master) {
-    const ms = section(P, 'Master page', 'pages');
+    const ms = section(P, 'Master page', 'pages', 'master');
     note(ms, 'Items on the master page appear on every page.');
     const mb = btns(ms); mb.style.marginTop = '6px';
     mb.append(btn('Back to pages', () => setMaster(false)));
   }
   // Size, margins and guides belong to the whole publication, so this isn't labelled "Page 1"
-  const s = section(P, 'Page size', d.pageW > d.pageH ? 'landscape' : 'portrait');
+  const s = section(P, 'Page size', d.pageW > d.pageH ? 'landscape' : 'portrait', 'pagesize');
   const cur = PAGE_PRESETS.findIndex(p => p.w === d.pageW && p.h === d.pageH);
   const presets = select([['', cur < 0 ? 'Custom size' : 'Choose a size…'], ...PAGE_PRESETS.map((p, i) => [String(i), p.name])], cur < 0 ? '' : String(cur),
     v => { if (v !== '') { const p = PAGE_PRESETS[+v]; setPageSize(p.w, p.h); } });
@@ -1258,7 +1259,7 @@ function renderPageProps(P) {
   orient.classList.add('full');
   s.append(orient);
   note(s, 'Every page uses this size.');
-  const m = section(P, 'Margin guides', 'margins');
+  const m = section(P, 'Margin guides', 'margins', 'margins');
   caption(m, 'Distance from the page edge (mm)');
   const g2 = grid(m);
   const mg = d.margins || { t: 0, r: 0, b: 0, l: 0 };
@@ -1272,7 +1273,7 @@ function renderPageProps(P) {
   note(m, 'Drag from a ruler to add a guide; drag it back to remove it.');
   if (!S.master) {
     // Background and master visibility are set per page, so name the page when there is more than one
-    const bg = section(P, d.pages.length > 1 ? `Background · page ${S.page + 1}` : 'Background', 'bg');
+    const bg = section(P, d.pages.length > 1 ? `Background · page ${S.page + 1}` : 'Background', 'bg', 'background');
     const page = d.pages[S.page];
     bg.append(row('Colour', colorField(page.bg || 'none', v => setDoc(() => { if (v === 'none') delete page.bg; else page.bg = v; }), 'No Colour')));
     const c = document.createElement('label'); c.className = 'chk';
@@ -1285,8 +1286,25 @@ function renderPageProps(P) {
 }
 
 // ---- panel widgets
-// a right panel section; its heading has an icon in front, as in Sastra PDF
-function section(P, title, ic) { const s = document.createElement('div'); s.className = 'psec'; s.innerHTML = `<h4>${ic ? icon(ic) : ''}${title}</h4>`; P.append(s); return s; }
+// a right panel section; its heading has an icon in front and folds the section, as in Sastra PDF's Tools panel.
+// `key` names the kind of section, so a folded "Fill & line" stays folded for every shape (settings.propsFolded).
+function section(P, title, ic, key) {
+  const s = document.createElement('div'); s.className = 'psec'; s.dataset.sec = key;
+  const folded = (S.settings.propsFolded || []).includes(key);
+  if (folded) s.classList.add('folded');
+  s.innerHTML = `<h4><button type="button" class="psec-head" aria-expanded="${!folded}">${ic ? icon(ic) : ''}<span>${title}</span>${icon('chevUp').replace('<svg', '<svg class="chev"')}</button></h4>`;
+  s.querySelector('.psec-head').onclick = () => foldSection(s);
+  P.append(s); return s;
+}
+// only the class changes (no rebuild), so the focus stays on the heading
+function foldSection(s) {
+  const folded = s.classList.toggle('folded');
+  s.querySelector('.psec-head').setAttribute('aria-expanded', String(!folded));
+  const list = (S.settings.propsFolded || []).filter(k => k !== s.dataset.sec);
+  if (folded) list.push(s.dataset.sec);
+  S.settings.propsFolded = list;
+  api.setSettings({ propsFolded: list }).then((r) => { if (r) S.settings = r; }, () => {});
+}
 function grid(parent) { const g = document.createElement('div'); g.className = 'grid2'; parent.append(g); return g; }
 function btns(parent) { const b = document.createElement('div'); b.className = 'pbtns'; parent.append(b); return b; }
 function btn(label, fn, cls = '') { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label; b.onclick = fn; return b; }
