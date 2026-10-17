@@ -39,6 +39,8 @@ credit LibreOffice on the About page.
 - `.pub` (Publisher 98–2019+), plus `.odg`, `.vsd/.vsdx`, `.cdr`, `.p65/.pmd`, `.qxd` through the bundled LibreOffice
 - Its own format, `.bpum` (older `.kbach` files still open). Saving an imported `.pub` creates a `.bpum` file; the original `.pub` is never changed.
 - Drag a file onto the window to open it. Drag a picture in to insert it.
+- After installing, double-clicking a `.bpum` file opens it in Bohpum (it has its own file icon). For `.pub` files
+  Bohpum is added to "Open with"; Microsoft Publisher stays the default if it is installed.
 - The welcome screen lists recently opened and saved files (files that were moved or deleted drop off the list).
 
 **Edit**
@@ -47,7 +49,9 @@ credit LibreOffice on the About page.
 - The font box lists every font installed in Windows, Khmer fonts first, each name in its own lettering;
   typing jumps to the matching font. The chosen text stays highlighted while you pick a font, size or colour
 - Rectangles, rounded rectangles, ellipses, lines with arrows, pictures (stretch / fit / crop)
-- Fill colour or gradient, line colour, weight (pt) and dash
+- Fill colour or gradient, line colour, weight (pt) and dash. Every colour button opens a list like Publisher 2010 and
+  later: Theme Colours with five lighter / darker shades each, Standard Colours, Recent Colours, More Colours…,
+  Sample Colour (pick any colour on the screen)
 - Move, resize, rotate (Shift = 15° steps), snap to page, margins, guides and other objects (hold Alt to turn off snapping)
 - Ctrl+drag to copy, group / ungroup, lock, align, distribute, bring to front / send to back
 - Multiple pages, a master page (items appear on every page), margin guides and ruler guides
@@ -58,7 +62,7 @@ credit LibreOffice on the About page.
   (printer, pages, layout, paper, orientation) with the preview beside it
   - Pick the printer; **Print** sends straight to it (**Printer Properties** opens the printer's own settings). The last printer is remembered.
   - *One per sheet, at a position*: drag the card on the A4 preview, type Left/Top in mm, or click the 3×3 pad
-  - *Multiple copies per sheet*: margins, gaps, centred block, the same page or different pages
+  - *Multiple copies per sheet*: margins, gaps, centred block; two tiles choose the same page on every sheet or different pages in sequence
   - *Page size = paper size*
   - Crop marks, page range, copies
   - *Printer adjustment*: if your printer is a little off, enter X/Y in mm once and it is remembered
