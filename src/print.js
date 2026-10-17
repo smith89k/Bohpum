@@ -288,15 +288,28 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     return layout(doc, o, pages);
   }
 
+  // Zoom, like Publisher's print preview: 'fit' shows the whole sheet; a number is the size against real size
+  // (1 = 100 %). It stays while settings change, so a new gap can be checked at the same spot.
+  let zoom = 'fit', fitScale = 1, space = false;
+  const ZMIN = 0.1, ZMAX = 8, MMPX = 3.7795;
+  const scaleNow = () => zoom === 'fit' ? fitScale : zoom;
+  const scroller = () => prev.querySelector('.pv-scroll');
+
   function renderPreview() {
     const lay = currentLayout();
     const [sw, sh] = [lay.sw, lay.sh];
+    // zoomed in: keep the spot in the middle of the view
+    const old = scroller(), mid = old && zoom !== 'fit' && old.scrollWidth
+      ? { x: (old.scrollLeft + old.clientWidth / 2) / old.scrollWidth, y: (old.scrollTop + old.clientHeight / 2) / old.scrollHeight } : null;
     prev.innerHTML = '';
-    const maxW = prev.clientWidth - 40 || 600, maxH = (prev.clientHeight || 520) - 50;
-    const scale = Math.min(maxW / (sw * 3.7795), maxH / (sh * 3.7795));
+    const scroll = document.createElement('div'); scroll.className = 'pv-scroll';
+    prev.append(scroll);
+    const maxW = (prev.clientWidth || 640) - 42, maxH = (prev.clientHeight || 580) - 82; // inside .pv-scroll (padding, the strip below)
+    fitScale = Math.min(maxW / (sw * MMPX), maxH / (sh * MMPX));
+    const scale = scaleNow();
     const sheet = document.createElement('div');
     sheet.className = 'sheet';
-    sheet.style.width = sw + 'mm'; sheet.style.height = sh + 'mm'; sheet.style.zoom = scale;
+    sheet.style.width = sw + 'mm'; sheet.style.height = sh + 'mm'; sheet.style.zoom = scale; sheet.style.setProperty('--z', scale);
     if (o.mode !== 'actual') {
       const np = document.createElement('div'); np.className = 'nopr';
       np.style.boxShadow = `inset 0 0 0 ${NONPRINT}mm rgba(217,70,184,.07)`;
@@ -314,7 +327,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       if (o.crop && o.mode !== 'actual') cropMarks(sheet, p.x, p.y, doc.pageW, doc.pageH);
       if (o.mode === 'single') slot.addEventListener('pointerdown', (e) => startDrag(e, sheet, sw, sh));
     }
-    prev.append(sheet);
+    scroll.append(sheet);
     fixLineHeights(sheet);
     if (lay.sheets.length > 1) {
       const nav = document.createElement('div'); nav.className = 'prev-nav';
@@ -322,6 +335,60 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       nav.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { sheetNo = Math.max(0, Math.min(lay.sheets.length - 1, sheetNo + +b.dataset.d)); renderPreview(); });
       prev.append(nav);
     }
+    prev.append(zoomBar());
+    if (mid) { scroll.scrollLeft = mid.x * scroll.scrollWidth - scroll.clientWidth / 2; scroll.scrollTop = mid.y * scroll.scrollHeight - scroll.clientHeight / 2; }
+    // Ctrl + wheel zooms on the spot under the mouse; the wheel alone scrolls
+    scroll.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setZoom(scaleNow() * (e.deltaY < 0 ? 1.2 : 1 / 1.2), { x: e.clientX, y: e.clientY });
+    }, { passive: false });
+    // Space + drag or the middle mouse button moves the view (before the card's own drag)
+    scroll.addEventListener('pointerdown', (e) => {
+      if (!(e.button === 1 || (e.button === 0 && space))) return;
+      e.preventDefault(); e.stopPropagation();
+      const sx = e.clientX, sy = e.clientY, l = scroll.scrollLeft, t = scroll.scrollTop;
+      scroll.classList.add('panning'); scroll.setPointerCapture(e.pointerId);
+      const move = (ev) => { scroll.scrollLeft = l - (ev.clientX - sx); scroll.scrollTop = t - (ev.clientY - sy); };
+      const up = () => { scroll.classList.remove('panning'); scroll.removeEventListener('pointermove', move); scroll.removeEventListener('pointerup', up); };
+      scroll.addEventListener('pointermove', move); scroll.addEventListener('pointerup', up);
+    }, true);
+  }
+
+  // − slider + 250 % Fit sheet, at the bottom right (the slider goes from 10 % to 800 %, evenly per doubling)
+  const toSlider = (z) => Math.round((Math.log(z) - Math.log(ZMIN)) / (Math.log(ZMAX) - Math.log(ZMIN)) * 1000);
+  const fromSlider = (v) => Math.exp(Math.log(ZMIN) + v / 1000 * (Math.log(ZMAX) - Math.log(ZMIN)));
+  function zoomBar() {
+    const bar = document.createElement('div'); bar.className = 'pv-zoom'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Zoom');
+    bar.innerHTML = `<button class="btn" data-z="out" title="Zoom out (Ctrl+−)" aria-label="Zoom out">−</button>
+      <input type="range" min="0" max="1000" step="1" aria-label="Zoom" value="${toSlider(scaleNow())}">
+      <button class="btn" data-z="in" title="Zoom in (Ctrl++)" aria-label="Zoom in">+</button>
+      <span class="pct">${Math.round(scaleNow() * 100)}%</span>
+      <button class="btn${zoom === 'fit' ? ' on' : ''}" data-z="fit" title="Fit the whole sheet (Ctrl+0)">Fit sheet</button>`;
+    bar.querySelector('[data-z="out"]').onclick = () => setZoom(scaleNow() / 1.25);
+    bar.querySelector('[data-z="in"]').onclick = () => setZoom(scaleNow() * 1.25);
+    bar.querySelector('[data-z="fit"]').onclick = () => setZoom('fit');
+    bar.querySelector('input').oninput = (e) => setZoom(fromSlider(+e.target.value));
+    return bar;
+  }
+  function showZoom() {
+    const bar = prev.querySelector('.pv-zoom'); if (!bar) return;
+    bar.querySelector('.pct').textContent = Math.round(scaleNow() * 100) + '%';
+    const r = bar.querySelector('input'); if (document.activeElement !== r) r.value = toSlider(scaleNow());
+    bar.querySelector('[data-z="fit"]').classList.toggle('on', zoom === 'fit');
+  }
+  // z: a scale or 'fit'; at: the screen point that stays still (the mouse), else the middle of the view
+  function setZoom(z, at) {
+    const scroll = scroller(), sheet = scroll && scroll.querySelector('.sheet'); if (!sheet) return;
+    const before = scaleNow();
+    zoom = z === 'fit' ? 'fit' : Math.max(ZMIN, Math.min(ZMAX, z));
+    const after = scaleNow(), r = scroll.getBoundingClientRect(), s0 = sheet.getBoundingClientRect();
+    const ax = at ? at.x : r.left + r.width / 2, ay = at ? at.y : r.top + r.height / 2;
+    const px = (ax - s0.left) / before, py = (ay - s0.top) / before; // that point on the sheet, at 100 %
+    sheet.style.zoom = after; sheet.style.setProperty('--z', after);
+    const s1 = sheet.getBoundingClientRect();
+    scroll.scrollLeft += s1.left + px * after - ax; scroll.scrollTop += s1.top + py * after - ay;
+    showZoom();
   }
 
   function startDrag(e, sheet, sw, sh) {
@@ -360,10 +427,23 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   // Nothing is written when nothing changed, so just looking at the dialog leaves the publication unchanged.
   let opened = null, resizeT = 0;
   const onResize = () => { clearTimeout(resizeT); resizeT = setTimeout(renderPreview, 100); }; // re-fit the preview
-  const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); window.removeEventListener('resize', onResize); clearTimeout(resizeT); };
+  const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); document.removeEventListener('keyup', onKeyUp, true); window.removeEventListener('resize', onResize); clearTimeout(resizeT); };
   const keepAndClose = () => { if (JSON.stringify([o, nudge]) !== opened) persist(); close(); };
-  const onKey = (e) => { if (e.key === 'Escape' && !pickerOpen(e)) { e.stopPropagation(); if (!sending) keepAndClose(); } };
+  // Zoom keys as in the editor: Ctrl+0 fits the sheet, Ctrl++ / Ctrl+− zoom; Space + drag over the preview moves it
+  let overPrev = false;
+  prev.addEventListener('pointerenter', () => { overPrev = true; });
+  prev.addEventListener('pointerleave', () => { overPrev = false; });
+  const setSpace = (on) => { space = on; const s = scroller(); if (s) s.classList.toggle('grab', on); };
+  const onKey = (e) => {
+    if (e.key === 'Escape' && !pickerOpen(e)) { e.stopPropagation(); if (!sending) keepAndClose(); return; }
+    const z = (e.ctrlKey || e.metaKey) && !e.altKey && { '0': 'fit', '=': 'in', '+': 'in', '-': 'out' }[e.key];
+    if (z) { e.preventDefault(); e.stopPropagation(); setZoom(z === 'fit' ? 'fit' : scaleNow() * (z === 'in' ? 1.25 : 0.8)); return; }
+    const typing = e.target.matches && e.target.matches('input[type=number], input[type=text], input:not([type]), textarea, select');
+    if (e.key === ' ' && overPrev && !typing) { e.preventDefault(); e.stopPropagation(); setSpace(true); }
+  };
+  const onKeyUp = (e) => { if (e.key === ' ') setSpace(false); };
   document.addEventListener('keydown', onKey, true);
+  document.addEventListener('keyup', onKeyUp, true);
   window.addEventListener('resize', onResize);
 
   back.querySelector('[data-a="close"]').onclick = keepAndClose;

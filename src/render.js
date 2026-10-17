@@ -64,6 +64,36 @@ function shapeGeometry(o, w, h) {
   const r = shape === 'roundrect' ? Math.min(o.radius || Math.min(w, h) * 0.1, w / 2, h / 2) : (o.radius || 0);
   return svgEl('rect', { x: 0, y: 0, width: w, height: h, rx: r || null, ry: r || null });
 }
+// The shape as ONE element (a clipPath or mask can't hold a <g>): a custom path carries its own transform
+function shapeOutline(o, w, h) {
+  const g = shapeGeometry(o, w, h);
+  if (!g._path) return g;
+  g._path.setAttribute('transform', g.getAttribute('transform'));
+  return g._path;
+}
+
+// Align line (as in InDesign / Illustrator): 'center' on the shape's edge (the default), 'inside' or 'outside' it.
+// Inside / outside draw the line twice as wide and keep only the half inside (clip) or outside (mask) the shape,
+// so it works for every shape, rounded corners and custom paths included.
+function alignedLine(svg, o, w, h, sw, sc) {
+  const id = 'kl' + (++gradSeq) + '_' + o.id, defs = svgEl('defs');
+  const line = shapeGeometry(o, w, h), t = line._path || line;
+  t.setAttribute('fill', 'none'); t.setAttribute('stroke', o.stroke);
+  t.setAttribute('stroke-width', 2 * sw / sc); t.setAttribute('stroke-linejoin', 'round');
+  const da = dashArray(o.dash, sw / sc); if (da) t.setAttribute('stroke-dasharray', da);
+  const wrap = svgEl('g');
+  if (o.lineAlign === 'inside') {
+    const cp = svgEl('clipPath', { id }); cp.append(shapeOutline(o, w, h)); defs.append(cp);
+    wrap.setAttribute('clip-path', `url(#${id})`);
+  } else {
+    const pad = 2 * sw + 1, m = svgEl('mask', { id, maskUnits: 'userSpaceOnUse', x: -pad, y: -pad, width: w + 2 * pad, height: h + 2 * pad });
+    const hole = shapeOutline(o, w, h); hole.setAttribute('fill', '#000');
+    m.append(svgEl('rect', { x: -pad, y: -pad, width: w + 2 * pad, height: h + 2 * pad, fill: '#fff' }), hole); defs.append(m);
+    wrap.setAttribute('mask', `url(#${id})`);
+  }
+  wrap.append(line);
+  svg.append(defs, wrap);
+}
 
 function renderBox(o, el) {
   const w = Math.max(o.w, 0.01), h = Math.max(o.h, 0.01);
@@ -77,17 +107,19 @@ function renderBox(o, el) {
     if (o.fillImage) {
       const id = 'kc' + (++gradSeq) + '_' + o.id;
       const defs = svgEl('defs'); const cp = svgEl('clipPath', { id });
-      cp.append(shapeGeometry(o, w, h)); defs.append(cp); svg.append(defs);
+      cp.append(shapeOutline(o, w, h)); defs.append(cp); svg.append(defs);
       svg.append(svgEl('image', { href: o.fillImage, x: 0, y: 0, width: w, height: h, preserveAspectRatio: 'xMidYMid slice', 'clip-path': `url(#${id})` }));
       target.setAttribute('fill', 'none');
     } else target.setAttribute('fill', fill);
-    if (hasPaint(o.stroke) && o.strokeW > 0) {
+    const aligned = o.lineAlign === 'inside' || o.lineAlign === 'outside';
+    if (hasPaint(o.stroke) && o.strokeW > 0 && !aligned) {
       target.setAttribute('stroke', o.stroke);
       target.setAttribute('stroke-width', o.strokeW / sc);
       const da = dashArray(o.dash, o.strokeW / sc); if (da) target.setAttribute('stroke-dasharray', da);
       target.setAttribute('stroke-linejoin', 'round');
     } else target.setAttribute('stroke', 'none');
     svg.append(geo);
+    if (hasPaint(o.stroke) && o.strokeW > 0 && aligned) alignedLine(svg, o, w, h, o.strokeW, sc);
     el.append(svg);
   }
   const t = document.createElement('div');
@@ -116,7 +148,9 @@ function renderImage(o, el) {
   }
   if (hasPaint(o.stroke) && o.strokeW > 0) {
     const svg = svgEl('svg', { class: 'kshape', viewBox: `0 0 ${o.w} ${o.h}`, preserveAspectRatio: 'none' });
-    svg.append(svgEl('rect', { x: 0, y: 0, width: o.w, height: o.h, fill: 'none', stroke: o.stroke, 'stroke-width': o.strokeW }));
+    // Align border: centred on the picture's edge, inside it or outside it
+    const k = o.lineAlign === 'inside' ? 0.5 : o.lineAlign === 'outside' ? -0.5 : 0, d = o.strokeW * k;
+    svg.append(svgEl('rect', { x: d, y: d, width: Math.max(0.01, o.w - 2 * d), height: Math.max(0.01, o.h - 2 * d), fill: 'none', stroke: o.stroke, 'stroke-width': o.strokeW }));
     el.append(svg);
   }
 }

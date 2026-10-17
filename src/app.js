@@ -1053,6 +1053,7 @@ function boxProps(P, sel) {
   f.append(row('Line', colorField(o.stroke, v => setProp(x => { x.stroke = v; if (v !== 'none' && !x.strokeW) x.strokeW = 0.3528; }), 'No Line')));
   f.append(row('Weight', numInput(ptOf(o.strokeW), v => setProp(x => x.strokeW = mmOfPt(Math.max(0, v))), 0.25, 'pt')));
   f.append(row('Dash', select([['solid', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted'], ['dashdot', 'Dash-dot']], o.dash || 'solid', v => setProp(x => x.dash = v))));
+  if (hasLine(o)) f.append(alignLineRow(o, 'line'));
   const s = section(P, 'Shape');
   s.append(row('Type', select([['none', 'Frame'], ['rect', 'Rectangle'], ['roundrect', 'Rounded'], ['ellipse', 'Ellipse'], ...(o.shape === 'path' ? [['path', 'Custom']] : [])], o.shape, v => setProp(x => { x.shape = v; if (v === 'roundrect' && !x.radius) x.radius = round2(Math.min(x.w, x.h) * 0.15); }))));
   if (o.shape === 'roundrect' || o.shape === 'rect') s.append(row('Corner', numInput(o.radius || 0, v => setProp(x => x.radius = Math.max(0, v)), 0.5, 'mm')));
@@ -1066,12 +1067,32 @@ function boxProps(P, sel) {
   b.append(btn('Fit height to text', () => fitHeight()), btn('Edit text', () => startEditing(o.id)));
 }
 
+// Align line (the InDesign / Illustrator name): Center = on the edge (the default), Inside, Outside. Each picture
+// shows the line (grey band) against the shape's edge (dashed).
+const hasLine = (o) => !!o.stroke && o.stroke !== 'none' && o.strokeW > 0;
+const ALIGN_BAND = { center: 3, inside: 4.25, outside: 1.75 };
+function alignLineRow(o, what) {
+  const cur = o.lineAlign || 'center';
+  const b = (k, label) => {
+    const x = btn('', () => setProp(t => { if (k === 'center') delete t.lineAlign; else t.lineAlign = k; }), cur === k ? 'on' : '');
+    const p = ALIGN_BAND[k], s = 16 - 2 * p;
+    x.title = `Align ${what} to ${k}`; x.setAttribute('aria-label', x.title); x.dataset.align = k;
+    x.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="${p}" y="${p}" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2.5" opacity=".45"/>`
+      + `<rect x="3" y="3" width="10" height="10" fill="none" stroke="currentColor" stroke-width=".9" stroke-dasharray="1.6 1.1"/></svg><span>${label}</span>`;
+    return x;
+  };
+  const g = seg(b('center', 'Center'), b('inside', 'Inside'), b('outside', 'Outside'));
+  g.classList.add('align-line');
+  return row('Align', g);
+}
+
 function imageProps(P, sel) {
   const o = sel[0];
   const s = section(P, 'Picture');
   s.append(row('Fit', select([['fill', 'Stretch'], ['contain', 'Fit inside'], ['cover', 'Fill & crop']], o.fit, v => setProp(x => x.fit = v))));
   s.append(row('Border', colorField(o.stroke, v => setProp(x => { x.stroke = v; if (v !== 'none' && !x.strokeW) x.strokeW = 0.3528; }), 'No Line')));
   s.append(row('Weight', numInput(ptOf(o.strokeW || 0), v => setProp(x => x.strokeW = mmOfPt(Math.max(0, v))), 0.25, 'pt')));
+  if (hasLine(o)) s.append(alignLineRow(o, 'border'));
   const b = btns(s); b.style.marginTop = '6px';
   b.append(btn('Replace…', () => replaceImage(o)), btn('Original ratio', () => resetRatio(o)));
   if (o.note && !o.src) s.append(Object.assign(document.createElement('div'), { className: 'warn', textContent: o.note }));
