@@ -309,6 +309,7 @@ function buildMenu() {
       { role: 'toggleDevTools' }
     ]},
     { label: 'Help', submenu: [
+      { label: "What's New", click: () => send('whats-new') }, // the page's What's new window (src/notes.js)
       { label: 'About ' + APP_NAME, click: () => send('about') } // the page shows its own About page
     ]}
   ];

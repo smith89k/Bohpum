@@ -1847,6 +1847,42 @@ function openAbout() {
   api.appInfo().then(i => { body.querySelector('.about-ver').textContent = 'Version ' + i.version; body.querySelector('.cv').textContent = i.electron; }, () => {});
 }
 
+// ---------------------------------------------------------------- What's new (Help > What's New), as in Sastra PDF
+// Once per version by itself, over the welcome screen; the notes are in notes.js (window.BohpumNotes)
+const NOTES = window.BohpumNotes;
+const KIND_WORDS = { new: 'New', improved: 'Improved', fixed: 'Fixed', removed: 'Removed' };
+function notesList(notes) {
+  const K = NOTES.KINDS, sorted = notes.map((n, i) => [n, i]).sort((a, b) => K.indexOf(a[0].kind) - K.indexOf(b[0].kind) || a[1] - b[1]);
+  return `<ul class="notes-list">${sorted.map(([n]) => `<li><span class="notes-kind notes-kind-${n.kind}">${KIND_WORDS[n.kind]}</span><span>${escHtml(n.text)}</span></li>`).join('')}</ul>`;
+}
+// Closing it in any way counts as seen. A version with no entry (a hand-made build) shows every known one.
+function openNotes(version) {
+  const cur = NOTES.noteFor(version), past = NOTES.earlierNotes(version);
+  const body = document.createElement('div'); body.className = 'notes-body';
+  body.innerHTML = (cur ? notesList(cur.notes) : '')
+    + (cur && past.length ? '<button class="btn notes-more" data-earlier data-enter-self>See earlier versions ›</button>' : '')
+    + (past.length ? `<div class="notes-earlier"${cur ? ' hidden' : ''}>${past.map(e => `<section class="notes-past"><h3>${escHtml(e.version)}<span>${escHtml(e.date)}</span></h3>${notesList(e.notes)}</section>`).join('')}</div>` : '');
+  const m = modal(cur ? `What's new in ${escHtml(version)}<span class="notes-date">${escHtml(cur.date)}</span>` : "What's new", body, [['Close', null, true]], 'notes');
+  const close = body.closest('.modal').querySelector('.modal-f .btn.primary'), more = body.querySelector('[data-earlier]');
+  if (more) more.onclick = () => { more.hidden = true; const list = body.querySelector('.notes-earlier'); list.hidden = false; list.scrollIntoView({ block: 'start' }); close.focus({ preventScroll: true }); };
+  close.focus();
+  m.done.then(() => api.setSettings({ notesSeen: version }).then((s) => { if (s) S.settings = s; }, () => {}));
+}
+function whatsNew() {
+  if ($('modal-root').children.length) return; // not over another box (the menus are greyed out then anyway)
+  api.appInfo().then((i) => openNotes(i.version), () => {});
+}
+// At start-up, over the welcome screen: the first start of a version this profile hasn't shown (an update or a new
+// install). <html data-notes> = shown | none once decided (tests wait on it).
+async function notesAtStart() {
+  let shown = false;
+  try {
+    const { version } = await api.appInfo();
+    if (NOTES.shouldShow(version, S.settings.notesSeen)) { openNotes(version); shown = true; }
+  } catch (err) { console.warn(err); }
+  document.documentElement.dataset.notes = shown ? 'shown' : 'none';
+}
+
 // ---------------------------------------------------------------- commands
 function setTool(t) { S.tool = t; updateTools(); }
 function updateTools() {
@@ -1861,6 +1897,7 @@ function cmd(c) {
     case 'save-as': return save(true);
     case 'close-request': return askClose();
     case 'about': return openAbout();
+    case 'whats-new': return whatsNew();
     case 'export-png': return exportPng();
     case 'print': return printDialog();
     case 'page-setup': return pageSetup();
@@ -2116,5 +2153,6 @@ async function init() {
   if (+S.settings.pagesW) setPagesWidth(+S.settings.pagesW);
   loadDoc(newDoc(210, 297), null);
   if (!window.__noWelcome) newDialog(true);
+  notesAtStart();
 }
 init();

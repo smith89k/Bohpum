@@ -12,6 +12,9 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function run(test, { setup, timeout = 90000 } = {}) {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'bohpum-test-'));
   app.setPath('userData', userData); // never touches the user's real settings
+  // started as `electron tests/x.test.js` the app would report Electron's version; `npm start` reports package.json's
+  const version = require(path.join(ROOT, 'package.json')).version;
+  app.getVersion = () => version;
   const ctx = { userData, tmp: fs.mkdtempSync(path.join(os.tmpdir(), 'bohpum-out-')) };
   const results = [];
   const check = (name, pass, detail) => { results.push({ name, pass: !!pass, detail }); };
@@ -73,7 +76,9 @@ function driver(win, ctx) {
   // Closes the welcome screen and opens samples/<sample> (or only closes it when sample is null)
   const ready = async (sample = 'test-shapes.fodg') => {
     win.focus(); wc.focus();
-    await waitFor('!!window.__bohpumApp && !!document.querySelector(".modal-back")');
+    await waitFor('!!window.__bohpumApp && !!document.querySelector(".modal-back") && !!document.documentElement.dataset.notes');
+    // a fresh profile sees What's new once, over the welcome screen (whats-new.test.js checks it)
+    if (await js('!!document.querySelector(".modal.notes")')) { await key('Escape'); await waitFor('!document.querySelector(".modal.notes")'); }
     await key('Escape');
     await waitFor('!document.querySelector(".modal-back")');
     if (!sample) return;
