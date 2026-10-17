@@ -126,6 +126,11 @@ const svg = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const bigOptions = (items, value) => '<button><selectedcontent></selectedcontent></button>' + items.map(it =>
   `<option value="${esc(it.v)}"${it.v === value ? ' selected' : ''}><span class="ic">${svg(it.icon)}</span><span class="t"><b>${esc(it.title)}</b><small>${esc(it.sub)}</small></span></option>`).join('');
 const bigSelect = (attrs, items, value) => `<select class="big" ${attrs}>${bigOptions(items, value)}</select>`;
+// Multiple copies per sheet: the page order as two tiles side by side, each with a sheet of numbered cards
+const ORDER = [['repeat', 'Fill each sheet with one page', '1111'], ['sequence', 'Different pages in sequence', '1234']];
+const orderPic = (nums) => `<svg viewBox="0 0 44 56" aria-hidden="true"><rect class="sheet" x="1" y="1" width="42" height="54" rx="2"/>${
+  [...nums].map((d, i) => { const x = 6 + (i % 2) * 17, y = 7 + Math.floor(i / 2) * 22;
+    return `<rect class="card" x="${x}" y="${y}" width="15" height="19" rx="1.5"/><text x="${x + 7.5}" y="${y + 13.5}">${d}</text>`; }).join('')}</svg>`;
 // The 3×3 position pad: snap points 10 mm from the paper edges, or centred
 const PAD = [['tl', 'Top left'], ['tc', 'Top centre'], ['tr', 'Top right'], ['ml', 'Middle left'], ['mc', 'Centre'], ['mr', 'Middle right'], ['bl', 'Bottom left'], ['bc', 'Bottom centre'], ['br', 'Bottom right']];
 
@@ -213,7 +218,8 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
         <div class="pos-pad" id="pd-pos" role="group" aria-label="Snap to">${PAD.map(([k, t]) => `<button data-pos="${k}" title="${t}" aria-label="${t}"></button>`).join('')}</div></div>` : ''}
       ${o.mode === 'grid' ? `<div class="pr-box">
         <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
-        <select class="field" data-k="order" aria-label="Page order" style="width:100%"><option value="repeat" ${o.order === 'repeat' ? 'selected' : ''}>Fill each sheet with one page</option><option value="sequence" ${o.order === 'sequence' ? 'selected' : ''}>Different pages in sequence</option></select>
+        <div class="pr-order" role="radiogroup" aria-label="Page order">${ORDER.map(([v, label, nums]) => `<label class="tile${o.order === v ? ' on' : ''}">
+          <input type="radio" name="pd-order" data-k="order" value="${v}" ${o.order === v ? 'checked' : ''}>${orderPic(nums)}<span>${label}</span></label>`).join('')}</div>
         <div class="grid2">${field('marginT', 'Top')}${field('marginL', 'Left')}${field('marginB', 'Bottom')}${field('marginR', 'Right')}${field('gapX', 'Gap ↔')}${field('gapY', 'Gap ↕')}</div>
       </div>` : ''}
       ${bigSelect(`data-k="sheet" aria-label="Paper"${actual ? ' disabled' : ''}`,
@@ -228,7 +234,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       <div class="muted">If your printer prints a little off, enter the correction in mm. It is remembered for next time.</div>
       <div id="pd-warn"></div>`;
     side.querySelectorAll('[data-k]').forEach(inp => {
-      const ev = inp.type === 'number' || inp.tagName === 'INPUT' && inp.type !== 'checkbox' ? 'input' : 'change';
+      const ev = inp.type === 'number' || inp.tagName === 'INPUT' && inp.type !== 'checkbox' && inp.type !== 'radio' ? 'input' : 'change';
       inp.addEventListener(ev, () => {
         const target = inp.dataset.o === 'n' ? nudge : o;
         const k = inp.dataset.k;
@@ -237,7 +243,8 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
         else target[k] = inp.value;
         if (k === 'sheet' || k === 'orient') { o.left = null; o.top = null; }
         if (k === 'mode') sheetNo = 0;
-        if (inp.tagName === 'SELECT' || inp.type === 'checkbox') update(); else { renderPreview(); renderWarn(); markPad(); }
+        if (inp.tagName === 'SELECT' || inp.type === 'checkbox' || inp.type === 'radio') update(); else { renderPreview(); renderWarn(); markPad(); }
+        if (inp.type === 'radio') side.querySelector(`input[name="${inp.name}"]:checked`).focus(); // arrows keep moving between the tiles
       });
     });
     side.querySelectorAll('#pd-pos [data-pos]').forEach(b => b.onclick = () => { Object.assign(o, padPos(b.dataset.pos)); update(); });

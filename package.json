@@ -58,13 +58,10 @@
     "fileAssociations": [
       {
         "ext": "bpum",
-        "name": "Bohpum Document",
-        "role": "Editor"
-      },
-      {
-        "ext": "pub",
-        "name": "Publisher File",
-        "role": "Viewer"
+        "name": "Bohpum.Document",
+        "description": "Bohpum publication",
+        "role": "Editor",
+        "icon": "build/bpum.ico"
       }
     ]
   }

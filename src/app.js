@@ -27,6 +27,7 @@ const ICONS = {
   sys: 'M5 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8 20h8M12 16v4',
   sun: 'M16 12a4 4 0 1 1-8 0a4 4 0 1 1 8 0zM12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4',
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
+  eyedropper: 'M14.5 4.5l5 5M17 2.5a2.1 2.1 0 0 1 3 3L17.5 8 16 6.5zM15.5 8.5l-9 9L4 20l2.5-2.5M6.5 17.5L4.5 19.5M12.5 5.5l6 6',
   undo: 'M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11',
   redo: 'M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13',
   select: 'M6 3l12 9-5.5 1.2L15 19l-2.4 1.2-2.6-5.9L6 18z',
@@ -1173,12 +1174,34 @@ function select(opts, value, onChange) {
 // none: label of the "no colour" item ('No Fill', 'No Line', …), or null where a colour is required
 function colorField(value, onChange, none = null) { return colorButton(value, onChange, { none }); }
 
-// ---------------------------------------------------------------- colour list (like Publisher 2003)
-const PALETTE = ['#000000', '#993300', '#333300', '#003300', '#003366', '#000080', '#333399', '#333333',
-  '#800000', '#ff6600', '#808000', '#008000', '#008080', '#0000ff', '#666699', '#808080',
-  '#ff0000', '#ff9900', '#99cc00', '#339966', '#33cccc', '#3366ff', '#800080', '#969696',
-  '#ff00ff', '#ffcc00', '#ffff00', '#00ff00', '#00ffff', '#00ccff', '#993366', '#c0c0c0',
-  '#ff99cc', '#ffcc99', '#ffff99', '#ccffcc', '#ccffff', '#99ccff', '#cc99ff', '#ffffff'];
+// ---------------------------------------------------------------- colour list (like Publisher 2010 and later)
+// Theme colours (Office's) with five lighter / darker shades under each, Standard colours, Recent colours,
+// More colours… (Windows' colour window) and Sample colour (pick any colour on the screen)
+const THEME_COLORS = [['#ffffff', 'White, Background 1'], ['#000000', 'Black, Text 1'], ['#e7e6e6', 'Grey, Background 2'], ['#44546a', 'Blue-Grey, Text 2'],
+  ['#4472c4', 'Blue, Accent 1'], ['#ed7d31', 'Orange, Accent 2'], ['#a5a5a5', 'Grey, Accent 3'], ['#ffc000', 'Gold, Accent 4'],
+  ['#5b9bd5', 'Blue, Accent 5'], ['#70ad47', 'Green, Accent 6']];
+const STANDARD_COLORS = [['#c00000', 'Dark Red'], ['#ff0000', 'Red'], ['#ffc000', 'Orange'], ['#ffff00', 'Yellow'], ['#92d050', 'Light Green'],
+  ['#00b050', 'Green'], ['#00b0f0', 'Light Blue'], ['#0070c0', 'Blue'], ['#002060', 'Dark Blue'], ['#7030a0', 'Purple']];
+function hexToHsl(hex) {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+function hslToHex(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + [r, g, b].map(v => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('');
+}
+// Office's shade rows: black gets lighter steps only, white and very light colours darker steps only
+function shadesOf(hex) {
+  const [h, s, l] = hexToHsl(hex);
+  const steps = l === 0 ? [.5, .35, .25, .15, .05] : l === 1 ? [-.05, -.15, -.25, -.35, -.5]
+    : l < .2 ? [.9, .75, .5, .25, .1] : l > .8 ? [-.1, -.25, -.5, -.75, -.9] : [.8, .6, .4, -.25, -.5];
+  return steps.map(k => [hslToHex(h, s, k > 0 ? l + (1 - l) * k : l * (1 + k)), k > 0 ? `Lighter ${Math.round(k * 100)}%` : `Darker ${Math.round(-k * 100)}%`]);
+}
 let colorPop = null; // { el, btn } while a colour list is open
 // A swatch button that opens the colour list; b.setColor(v) shows a new colour without calling onChange
 function colorButton(value, onChange, { none = null, title = '' } = {}) {
@@ -1200,14 +1223,20 @@ function colorButton(value, onChange, { none = null, title = '' } = {}) {
 }
 function openColorPop(btn, pick, noneLabel, byKeyboard) {
   closeColorPop(); closeCtx();
-  const cur = btn.dataset.color, recent = (S.settings.recentColors || []).slice(0, 8);
-  const sw = (c) => `<button type="button" class="sw${c === cur ? ' on' : ''}" data-c="${c}" style="background:${c}" title="${c}" aria-label="${c}"></button>`;
+  const cur = btn.dataset.color, recent = (S.settings.recentColors || []).slice(0, 10);
+  const sw = (c, name, cls = '') => `<button type="button" class="sw${cls}${c === cur ? ' on' : ''}" data-c="${c}" style="background:${c}" title="${escHtml(name)}" aria-label="${escHtml(name)}"></button>`;
+  // the theme grid row by row (so the arrow keys move by 10): the colours, then their five shades
+  const theme = THEME_COLORS.map(([c, n]) => sw(c, n, ' base')).join('')
+    + [0, 1, 2, 3, 4].map(row => THEME_COLORS.map(([c, n]) => { const [v, step] = shadesOf(c)[row]; return sw(v, `${n}, ${step}`, ' sh' + (row === 0 ? ' first' : row === 4 ? ' last' : '')); }).join('')).join('');
   const el = document.createElement('div');
   el.id = 'colorpop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Colours');
   el.innerHTML = (noneLabel ? `<button type="button" class="ci" data-c="none"><i class="none"></i>${noneLabel}</button>` : '')
-    + `<div class="cgrid">${PALETTE.map(sw).join('')}</div>`
-    + (recent.length ? `<div class="ccap">Recent colours</div><div class="cgrid">${recent.map(sw).join('')}</div>` : '')
-    + '<hr><button type="button" class="ci" data-more><i class="more"></i>More colours…</button><input type="color" tabindex="-1" aria-hidden="true">';
+    + `<div class="ccap">Theme Colours</div><div class="cgrid theme">${theme}</div>`
+    + `<div class="ccap">Standard Colours</div><div class="cgrid std">${STANDARD_COLORS.map(([c, n]) => sw(c, n)).join('')}</div>`
+    + (recent.length ? `<div class="ccap">Recent Colours</div><div class="cgrid recent">${recent.map(c => sw(c, c)).join('')}</div>` : '')
+    + '<hr><button type="button" class="ci" data-more><i class="more"></i>More Colours…</button>'
+    + (window.EyeDropper ? `<button type="button" class="ci" data-sample><i class="eye">${icon('eyedropper')}</i>Sample Colour</button>` : '')
+    + '<input type="color" tabindex="-1" aria-hidden="true">';
   document.body.append(el);
   // under the button, or above it when there is no room below; always inside the window
   const r = btn.getBoundingClientRect(), p = el.getBoundingClientRect();
@@ -1220,6 +1249,9 @@ function openColorPop(btn, pick, noneLabel, byKeyboard) {
   more.value = /^#[0-9a-f]{6}$/.test(cur) ? cur : '#000000';
   more.addEventListener('change', () => done(more.value.toLowerCase()));
   el.querySelector('[data-more]').onclick = () => { try { more.showPicker(); } catch { more.click(); } }; // Windows' colour window
+  // Publisher's "Sample Fill Colour": the list closes and the pointer picks a colour anywhere on the screen (Esc: nothing)
+  const sample = el.querySelector('[data-sample]');
+  if (sample) sample.onclick = () => { closeColorPop(); new EyeDropper().open().then((res) => done(res.sRGBHex.toLowerCase()), () => {}); };
   el.addEventListener('keydown', onColorKey);
   colorPop = { el, btn };
   btn.classList.add('open');
@@ -1229,16 +1261,16 @@ function closeColorPop() {
   if (!colorPop) return;
   colorPop.el.remove(); colorPop.btn.classList.remove('open'); colorPop = null;
 }
-// Keys inside the list stay in the list: arrows move between colours, Esc closes, Enter / Space pick
+// Keys inside the list stay in the list: arrows move between colours (10 to a row), Esc closes, Enter / Space pick
 function onColorKey(e) {
   const sws = [...colorPop.el.querySelectorAll('.sw')], i = sws.indexOf(document.activeElement);
   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const b = colorPop.btn; closeColorPop(); b.focus(); return; }
-  const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -8, ArrowDown: 8 }[e.key];
+  const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -10, ArrowDown: 10 }[e.key];
   if (step) { e.preventDefault(); e.stopPropagation(); sws[i < 0 ? 0 : Math.max(0, Math.min(sws.length - 1, i + step))].focus(); }
   else if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); // the focused button's own click picks it
 }
 function rememberColor(c) {
-  const list = [c, ...(S.settings.recentColors || []).filter(x => x !== c)].slice(0, 8);
+  const list = [c, ...(S.settings.recentColors || []).filter(x => x !== c)].slice(0, 10);
   S.settings.recentColors = list;
   api.setSettings({ recentColors: list }).then((s) => { if (s) S.settings = s; }, () => {});
 }
@@ -1496,6 +1528,7 @@ async function rememberRecent(p, keep = true) {
   try { S.settings = await api.setSettings({ recent: keep ? [p, ...rest].slice(0, 6) : rest }); } catch {}
 }
 
+let welcome = null; // the welcome screen while it is open (first = true)
 function newDialog(first = false) {
   finishEditing();
   let chosen = PAGE_PRESETS[0];
@@ -1542,6 +1575,7 @@ function newDialog(first = false) {
   body.querySelectorAll('.preset').forEach(el => el.ondblclick = () => m.resolve('create'));
   // Typing a custom size means no preset tile is chosen any more
   [wIn, hIn].forEach(inp => inp.oninput = () => body.querySelectorAll('.preset').forEach(x => x.classList.remove('on')));
+  if (first) { welcome = m; m.done.then(() => { welcome = null; }); }
   const op = body.querySelector('[data-open]'); if (op) op.onclick = () => { m.close(); openFile(); };
   const bl = body.querySelector('[data-blank]'); if (bl) bl.onclick = () => { m.close(); loadDoc(newDoc(210, 297), null); };
   body.querySelectorAll('[data-path]').forEach(el => el.onclick = () => { m.close(); openFile(el.dataset.path); });
@@ -1860,7 +1894,8 @@ function wire() {
   });
   window.addEventListener('resize', () => drawRulers());
   api.onMenu(cmd);
-  api.onOpenPath((p) => openFile(p));
+  // a file double-clicked in Explorer (or "Open with"): it replaces the welcome screen
+  api.onOpenPath((p) => { if (welcome) welcome.close(); openFile(p); });
   setupTextbar();
 }
 

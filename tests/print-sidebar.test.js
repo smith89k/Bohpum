@@ -79,6 +79,22 @@ run(async (t, check) => {
   const b2 = await boxOf(['[data-k="center"]', '[data-k="order"]', '[data-k="marginT"]', '[data-k="marginR"]', '[data-k="gapX"]', '[data-k="gapY"]']);
   check('Multiple: Center, order, margins and gaps are boxed together', b2.same && b2.border === '1px', b2);
 
+  // Page order: two tiles side by side (not a dropdown)
+  const tiles = () => t.js(`(() => { const ts = [...document.querySelectorAll('.pr-order .tile')], r = ts.map(x => x.getBoundingClientRect());
+    return { n: ts.length, texts: ts.map(x => x.querySelector('span').textContent), on: ts.filter(x => x.classList.contains('on')).map(x => x.querySelector('span').textContent),
+      sideBySide: r.length === 2 && Math.abs(r[0].top - r[1].top) < 1 && r[0].right <= r[1].left && Math.abs(r[0].width - r[1].width) < 1,
+      pics: ts.every(x => !!x.querySelector('svg')), select: !!document.querySelector('select[data-k="order"]'),
+      focus: document.activeElement && document.activeElement.name === 'pd-order' ? document.activeElement.value : null }; })()`);
+  const o1 = await tiles();
+  check('Page order is two tiles side by side, each with a picture; Fill each sheet is chosen',
+    o1.n === 2 && o1.sideBySide && o1.pics && !o1.select && o1.texts.join('|') === 'Fill each sheet with one page|Different pages in sequence' && o1.on.join() === 'Fill each sheet with one page', o1);
+  await t.click('.pr-order .tile:nth-child(2)');
+  const o2 = await tiles();
+  check('Clicking the second tile chooses Different pages in sequence', o2.on.join() === 'Different pages in sequence', o2);
+  await t.key('Left');
+  const o3 = await tiles();
+  check('Arrow keys move between the tiles and keep the focus there', o3.on.join() === 'Fill each sheet with one page' && o3.focus === 'repeat', o3);
+
   await t.click('select[data-k="mode"]');
   await t.click('select[data-k="mode"] option[value="actual"]');
   const s4 = await side();
