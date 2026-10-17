@@ -10,7 +10,8 @@
     "start": "electron .",
     "test": "node tests/run.js",
     "bundle-libreoffice": "node scripts/bundle-libreoffice.js",
-    "dist": "node scripts/bundle-libreoffice.js && electron-builder --win nsis"
+    "dist": "node scripts/bundle-libreoffice.js && node scripts/build-explorer-menu.js && electron-builder --win nsis",
+    "build:menu": "node scripts/build-explorer-menu.js"
   },
   "devDependencies": {
     "electron": "^44.8.0",
@@ -22,20 +23,49 @@
   "build": {
     "appId": "kh.bohpum.app",
     "productName": "Bohpum",
-    "files": ["main.js", "preload.js", "src/**/*"],
+    "files": [
+      "main.js",
+      "preload.js",
+      "explorer-menu.js",
+      "src/**/*",
+      "build/icon.png"
+    ],
     "extraResources": [
-      { "from": "vendor/libreoffice", "to": "libreoffice" }
+      {
+        "from": "vendor/libreoffice",
+        "to": "libreoffice"
+      },
+      {
+        "from": "explorer-menu/out",
+        "to": "explorer-menu",
+        "filter": [
+          "BohpumMenu.dll",
+          "Bohpum.ExplorerMenu.msix"
+        ]
+      }
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "include": "build/installer.nsh"
     },
     "fileAssociations": [
-      { "ext": "bpum", "name": "Bohpum Document", "role": "Editor" },
-      { "ext": "pub", "name": "Publisher File", "role": "Viewer" }
+      {
+        "ext": "bpum",
+        "name": "Bohpum Document",
+        "role": "Editor"
+      },
+      {
+        "ext": "pub",
+        "name": "Publisher File",
+        "role": "Viewer"
+      }
     ]
   }
 }

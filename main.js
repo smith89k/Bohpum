@@ -8,6 +8,7 @@ const { pathToFileURL } = require('url');
 const menu = require('./explorer-menu');
 
 const APP_NAME = 'Bohpum';
+const ICON = path.join(__dirname, 'build', 'icon.png'); // the exe, installer and Explorer menu use build/icon.ico
 let win = null;
 let dirty = false;
 let pendingOpenPath = null;
@@ -107,7 +108,7 @@ function applyTheme(t) {
 function createWindow() {
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
-    title: APP_NAME,
+    title: APP_NAME, icon: ICON,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1d1b' : '#e9e7e2',
     // Own title row (src/index.html #titlebar): Windows only draws ─ □ ✕ over its right end, in the row's
     // colours (--chrome / --ink in src/tokens.css — keep in sync). 36 = the row without its 1 px bottom line.
@@ -163,7 +164,7 @@ function openTaskWindow() {
   taskWin = new BrowserWindow({
     // no Windows title bar: it looks like Bohpum's own boxes (drag it anywhere; Cancel / Close / Esc close it)
     frame: false, width: TASK_W, height: 140, useContentSize: true, resizable: false, maximizable: false, fullscreenable: false,
-    title: APP_NAME, backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1d1b' : '#f7f5f1', show: false,
+    title: APP_NAME, icon: ICON, backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1d1b' : '#f7f5f1', show: false,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false }
   });
   taskWin.setMenu(null);

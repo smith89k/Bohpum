@@ -7,3 +7,6 @@ vendor/libreoffice/
 vendor/libreoffice.stamp
 *.bak
 .superpowers/
+
+# Built by npm run build:menu (scripts/build-explorer-menu.js)
+explorer-menu/out/
