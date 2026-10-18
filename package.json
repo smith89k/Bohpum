@@ -11,7 +11,7 @@
     "start": "electron .",
     "test": "node tests/run.js",
     "bundle-libreoffice": "node scripts/bundle-libreoffice.js",
-    "dist": "node scripts/check-notes.js && node scripts/bundle-libreoffice.js && node scripts/build-explorer-menu.js && electron-builder --win nsis",
+    "dist": "node scripts/check-notes.js && node scripts/build-explorer-menu.js && electron-builder --win nsis --publish never",
     "build:menu": "node scripts/build-explorer-menu.js",
     "icons": "electron scripts/make-icons.js"
   },
@@ -26,14 +26,14 @@
       "main.js",
       "preload.js",
       "explorer-menu.js",
+      "updater.js",
+      "reader.js",
+      "update-config.json",
+      "reader-pack.json",
       "src/**/*",
       "build/icon.png"
     ],
     "extraResources": [
-      {
-        "from": "vendor/libreoffice",
-        "to": "libreoffice"
-      },
       {
         "from": "explorer-menu/out",
         "to": "explorer-menu",
@@ -47,12 +47,17 @@
       "target": "nsis",
       "icon": "build/icon.ico"
     },
+    "publish": {
+      "provider": "generic",
+      "url": "https://bohpum-update.smith89k.com/"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "include": "build/installer.nsh"
+      "include": "build/installer.nsh",
+      "artifactName": "Bohpum-Setup-${version}.${ext}"
     },
     "fileAssociations": [
       {
@@ -63,5 +68,8 @@
         "icon": "build/bpum.ico"
       }
     ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
   }
 }

@@ -29,5 +29,11 @@
     DeleteRegKey SHELL_CONTEXT "Software\Classes\Bohpum.PubFile"
     DeleteRegValue SHELL_CONTEXT "Software\Classes\.pub\OpenWithProgids" "Bohpum.PubFile"
     DeleteRegKey SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}"
+    ; the Publisher reader, downloaded once into the user's local folder (an update keeps it)
+    Push $0
+    ExpandEnvStrings $0 "%LOCALAPPDATA%"
+    RMDir /r "$0\Bohpum\reader"
+    RMDir "$0\Bohpum"
+    Pop $0
   ${endif}
 !macroend

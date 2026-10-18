@@ -3,10 +3,21 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   __native: true,
   openDialog: () => ipcRenderer.invoke('open-dialog'),
-  readDocument: (p) => ipcRenderer.invoke('read-document', p),
+  // opts.oldReader: Not now to a newer Publisher reader; → the document, or { needReader: 'download'|'newer' }
+  readDocument: (p, opts) => ipcRenderer.invoke('read-document', p, opts),
   // the editor's progress box while LibreOffice reads a file: 'waiting' | 'reading', and its Cancel
   onReadStep: (fn) => ipcRenderer.on('read-step', (_e, s) => fn(s)),
   cancelRead: () => ipcRenderer.send('cancel-read'),
+  // the Publisher reader (reader.js): { need, size, canDownload, why }, the download ({ ok } | { error } | { cancelled }),
+  // its Cancel, and its progress { phase: 'download'|'unpack', got, total }
+  readerStatus: () => ipcRenderer.invoke('reader-status'),
+  getReader: () => ipcRenderer.invoke('reader-get'),
+  cancelReader: () => ipcRenderer.send('reader-cancel'),
+  onReaderProgress: (fn) => ipcRenderer.on('reader-progress', (_e, p) => fn(p)),
+  // automatic updates (updater.js)
+  checkUpdates: () => ipcRenderer.invoke('check-updates'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdateReady: (fn) => ipcRenderer.on('update-ready', (_e, v) => fn(String(v))),
   saveDialog: (opts) => ipcRenderer.invoke('save-dialog', opts),
   writeFile: (opts) => ipcRenderer.invoke('write-file', opts),
   pickImages: () => ipcRenderer.invoke('pick-images'),
