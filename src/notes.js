@@ -10,6 +10,11 @@ const KINDS = Object.freeze(['new', 'improved', 'fixed', 'removed']); // the win
 const N = (version, date, notes) => Object.freeze({ version, date, notes: Object.freeze(notes.map(([kind, text]) => Object.freeze({ kind, text }))) });
 
 const NOTES = Object.freeze([
+  N('0.2.1', '2026-10-18', [
+    ['improved', 'The panel on the right is tidier: Position & size at the top, then Arrange, Shape and Text. An object\'s name is no longer shown twice.'],
+    ['improved', 'Shape offers only choices that look different: Rectangle and Ellipse (a text box also shows Text box). Round the corners with Corner.'],
+    ['fixed', 'Rounded shapes from Publisher files can be made square again: Corner now shows how round they are.']
+  ]),
   N('0.2.0', '2026-10-18', [
     ['new', 'Bohpum now updates itself. When a new version is ready it asks to restart, or installs it when you close Bohpum. Check by hand from Help › Check for Updates.'],
     ['improved', 'The installer is much smaller. The Publisher reader downloads once, the first time you open a Publisher file.']

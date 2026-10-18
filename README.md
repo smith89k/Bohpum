@@ -143,7 +143,9 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
   New, Improved, Fixed or Removed; See earlier versions for older ones). **Help > What's New** shows it again
 - **Right panel**: each section (Page size, Fill & line, Arrange …) folds and opens from its heading; Bohpum remembers
   which are folded, for every object of that kind and after a restart. **Arrange** holds Bring to front / Send to back
-  and **Group / Ungroup** (greyed out when they would do nothing); they are no longer in the toolbar
+  and **Group / Ungroup** (greyed out when they would do nothing); they are no longer in the toolbar. For an object the
+  panel starts with Position & size (its icon shows what kind of object it is), then Arrange, then **Shape** (Rectangle /
+  Ellipse, and Text box for a text box; Corner rounds the corners) and **Text** (inner margins, Fit height, Edit text)
 
 ## Shortcuts
 
