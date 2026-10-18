@@ -1,13 +1,15 @@
 // Bohpum — the small window for the File Explorer menu's "Convert to Bohpum". main.js sends one batch per menu
-// click ({ task: 'convert', paths }); batches run one after another. Per click: ONE Replace / Keep both / Cancel
-// question for names already there, then each .pub is read (LibreOffice, in main.js) and saved as a .bpum next to
-// it — through docfile.js, exactly as the editor's Open + Save would.
+// click ({ task: 'convert', paths }); batches run one after another. Per click: ONE question for the Publisher reader
+// when it isn't here yet (as the editor's), ONE Replace / Keep both / Cancel question for names already there, then
+// each .pub is read (LibreOffice, in main.js) and saved as a .bpum next to it — through docfile.js, exactly as the
+// editor's Open + Save would.
 import { docFromFodg, bpumText } from './docfile.js';
 
 const api = window.api;
 const $ = (s) => document.querySelector(s);
 const queue = [];
 let running = false, cancelled = false, saved = 0, problems = 0, notes = 0, closeTimer = null;
+let readerDownloading = false, oldReaderOk = false; // oldReaderOk: Not now to a newer reader (this run)
 
 const dirOf = (p) => p.replace(/[\\/][^\\/]*$/, '');
 const fileOf = (p) => p.split(/[\\/]/).pop();
@@ -24,21 +26,30 @@ const note = (text) => { notes++; line(text, 'note'); };
 // the window is as tall as this content: report every change (problems, "N more waiting", the question)
 new ResizeObserver(() => api.taskSize($('.task').getBoundingClientRect().height)).observe($('.task'));
 api.onTaskBatch((b) => { clearTimeout(closeTimer); queue.push(b); showWaiting(); if (!running) run(); });
-$('#bCancel').onclick = () => { cancelled = true; queue.length = 0; showWaiting(); $('#bCancel').disabled = true; $('#step').textContent = 'Stopping…'; };
+$('#bCancel').onclick = () => { cancelled = true; if (readerDownloading) api.cancelReader(); queue.length = 0; showWaiting(); $('#bCancel').disabled = true; $('#step').textContent = 'Stopping…'; };
 $('#bClose').onclick = () => window.close();
 
-// "Already there": asked inside this window, like Bohpum's own boxes → 'replace' | 'keep' | null
+// Questions asked inside this window, like Bohpum's own boxes. "Already there" → 'replace' | 'keep' | null;
+// the Publisher reader → 'download' | null (Not now)
 let answer = null;
-const ASK = ['#bNo', '#bReplace', '#bKeep'];
-function ask(message, detail) {
+function askWith(ids, focus, message, detail) {
   return new Promise((res) => {
     $('#askMsg').textContent = message; $('#askDetail').textContent = detail; $('#ask').hidden = false;
-    $('#bCancel').hidden = true; for (const id of ASK) $(id).hidden = false;
-    answer = (v) => { answer = null; $('#ask').hidden = true; for (const id of ASK) $(id).hidden = true; $('#bCancel').hidden = false; res(v); };
-    api.taskFocus(); $('#bKeep').focus();
+    $('#bCancel').hidden = true; for (const id of ids) $(id).hidden = false;
+    answer = (v) => { answer = null; $('#ask').hidden = true; for (const id of ids) $(id).hidden = true; $('#bCancel').hidden = false; res(v); };
+    api.taskFocus(); $(focus).focus();
   });
 }
+const ask = (message, detail) => askWith(['#bNo', '#bReplace', '#bKeep'], '#bKeep', message, detail);
+const askReader = (message, detail) => askWith(['#bLater', '#bDownload'], '#bDownload', message, detail);
 $('#bNo').onclick = () => answer?.(null); $('#bReplace').onclick = () => answer?.('replace'); $('#bKeep').onclick = () => answer?.('keep');
+$('#bLater').onclick = () => answer?.(null); $('#bDownload').onclick = () => answer?.('download');
+const mbOf = (bytes) => Math.max(1, Math.round(bytes / 1048576));
+api.onReaderProgress(({ phase, got = 0, total = 0 }) => {
+  if (!readerDownloading) return;
+  if (phase === 'download') { const of = mbOf(total); show('Downloading the Publisher reader', `${Math.min(of, Math.floor(got / 1048576))} of ${of} MB`, total ? got / total : 0); }
+  else if (phase === 'unpack') show('Setting up the Publisher reader', '', 1);
+});
 // no title bar, so Esc: answers Cancel, stops the job, or closes the finished window
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
@@ -63,8 +74,35 @@ function finish() {
   $('#bClose').focus();
 }
 
+// The Publisher reader, once per click (before "already there"). → the readDocument options, or null: Not now / a
+// problem (listed once for the click's files) / cancelled
+async function readerFor(jobs) {
+  const st = await api.readerStatus();
+  if (!st.need || (st.need === 'newer' && oldReaderOk)) return { oldReader: oldReaderOk };
+  const which = jobs.length === 1 ? jobs[0].name : plural(jobs.length, 'file');
+  if (!st.canDownload && st.need === 'download') { problem(st.why); return null; }
+  const mb = mbOf(st.size || 0), newer = st.need === 'newer';
+  show(`Converting ${which}`, '', 0);
+  const r = newer
+    ? await askReader('A newer Publisher reader is ready', `It's a download of about ${mb} MB. Not now opens the file with the reader you have.`)
+    : await askReader('Bohpum needs the Publisher reader', `It's a one-time download of about ${mb} MB. Bohpum's own files open without it.`);
+  if (!r) {
+    if (newer) { oldReaderOk = true; return { oldReader: true }; }
+    problem(`Not converted: ${which}: Bohpum needs the Publisher reader`); return null;
+  }
+  readerDownloading = true;
+  show('Downloading the Publisher reader', `0 of ${mb} MB`, 0);
+  const got = await api.getReader();
+  readerDownloading = false;
+  if (got.cancelled || cancelled) return null;
+  if (got.error) { problem(`Not converted: ${which}: ${got.error}`); return null; }
+  return {};
+}
+
 async function batch({ paths }) {
   const jobs = paths.map((p) => ({ path: p, name: fileOf(p), dir: dirOf(p), out: baseOf(fileOf(p)) + '.bpum' }));
+  const opts = await readerFor(jobs);
+  if (!opts) return;
   const groups = jobs.map((j) => ({ dir: j.dir, names: [j.out] }));
   const q = await api.nameClashes(groups);
   let choice = null;
@@ -77,12 +115,13 @@ async function batch({ paths }) {
   for (const [k, j] of jobs.entries()) {
     if (cancelled) return;
     show(`Converting ${j.name}`, jobs.length > 1 ? `File ${k + 1} of ${jobs.length}` : '', k / jobs.length);
-    await convertOne(j, join(j.dir, final[k][0]));
+    await convertOne(j, join(j.dir, final[k][0]), opts);
   }
 }
 
-async function convertOne(j, out) {
-  const r = await api.readDocument(j.path);
+async function convertOne(j, out, opts) {
+  const r = await api.readDocument(j.path, opts);
+  if (r.needReader) return problem(`Not converted: ${j.name}: Bohpum needs the Publisher reader`);
   if (r.error) return problem(`${j.name}: ${r.error}`);
   let res;
   try { res = docFromFodg(r.text, baseOf(j.name)); }

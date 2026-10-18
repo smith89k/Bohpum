@@ -1,5 +1,7 @@
 // A copy without the key (`pnpm start`, a local build) can't download the Publisher reader: opening a .pub says so in
-// the app's own box, with OK, and nothing is downloaded.
+// the app's own box, with OK, and the convert window says so as its problem line, without a question. Nothing is
+// downloaded.
+const { app, BrowserWindow } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -24,6 +26,21 @@ run(async (t, check) => {
   check('OK closes it; nothing was downloaded and the publication on screen stays',
     await js(`!document.querySelector('#modal-root').children.length`) && server.hits() === 0 && await js('window.__bohpumApp.state.doc.name') === 'test-shapes',
     { hits: server.hits() });
+
+  // ---- the convert window
+  const list = path.join(os.tmpdir(), 'Bohpum', `menu-test-${process.pid}-nokey.txt`);
+  fs.mkdirSync(path.dirname(list), { recursive: true }); fs.writeFileSync(list, card, 'utf8');
+  app.emit('second-instance', {}, ['Bohpum.exe', '--bohpum-task=convert', '--bohpum-list=' + list], process.cwd());
+  const taskWin = () => BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.webContents.getURL().endsWith('task.html'));
+  const t0 = Date.now(); let st = null;
+  while (Date.now() - t0 < 20000) {
+    try { st = taskWin() && await taskWin().webContents.executeJavaScript(`({ done: document.body.dataset.done, asking: !document.getElementById('ask').hidden,
+      lines: [...document.querySelectorAll('#lines li')].map(li => li.className + ': ' + li.textContent) })`); } catch {}
+    if (st && st.done === '1') break; await sleep(150);
+  }
+  check("The convert window: no question, the problem line says why this copy can't download the reader",
+    st && st.done === '1' && !st.asking && JSON.stringify(st.lines) === JSON.stringify(['problem: ' + READER_TEXT['no-key']]) && server.hits() === 0, st);
+  if (taskWin()) taskWin().destroy();
   fs.rmSync(W, { recursive: true, force: true });
 }, {
   setup: async () => {
