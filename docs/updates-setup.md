@@ -33,8 +33,12 @@ can upload or delete.
 `LibreOffice-26.8.1-pack1` (165 MB) from The Document Foundation's MSI, uploaded it and the installer, and found the
 address locked (403 without the key) and open with it. The installer from the GitHub release, installed on the
 developer's PC, downloaded the reader from R2 on the first `.pub` (about 11 s) and opened the file; its update check
-read `latest.yml` through the lock. **Not seen yet on the real address:** an installed copy updating itself — the
-first real update (0.2.1) is that proof (it was seen against a local copy of the bucket: 0.2.0 → 0.2.1 → 0.2.2).
+read `latest.yml` through the lock.
+
+**0.2.1 released on 2026-10-18** (the right panel tidied): the run reused the reader pack, removed the 0.2.0 installer
+from the bucket (its blockmap stays) and found the lock in place. The installed 0.2.0 updated itself on the real
+address: it found 0.2.1 about 10 s after starting, downloaded only the changed parts (1.6 MB of 110 MB, using the
+blockmaps), showed "Bohpum 0.2.1 is ready to install", and Restart now installed it and started 0.2.1, the reader kept.
 
 Nothing here is shared with Sastra PDF or AI Hub: Bohpum has its own bucket, tokens and Access application.
 
