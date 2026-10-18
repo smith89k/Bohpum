@@ -1644,7 +1644,9 @@ async function confirmDiscard() {
 // While LibreOffice reads a .pub (or another outside format), a box with the look of the Explorer menu's convert
 // window (task.html) covers the editor: the file, what it's doing, a moving bar, Cancel (also Esc). It closes by
 // itself when the file is in; a problem stays in it, with Close. main.js says when it waits for other files.
-let reading = null; // that box while the file is being read
+// The same box shows the Publisher reader's download first (progress: a real bar, "12 of 160 MB"; Cancel stops it).
+let reading = null; // that box while the file is being read (or { name } while the reader question is up)
+const mbOf = (bytes) => Math.max(1, Math.round(bytes / 1048576));
 function readingBox(name) {
   const back = document.createElement('div'); back.className = 'modal-back';
   back.innerHTML = `<div class="modal progress" role="dialog">
@@ -1653,10 +1655,22 @@ function readingBox(name) {
     <div class="p-foot"><button class="btn">Cancel</button></div></div>`;
   const q = (s) => back.querySelector(s), btn = q('.p-foot .btn');
   const steps = { waiting: 'Waiting for the other files to finish…', reading: /\.pub$/i.test(name) ? 'Reading the Publisher file…' : 'Reading the file…' };
-  const box = { name, cancelled: false };
+  const box = { name, cancelled: false, downloading: false };
   const close = () => { back.remove(); document.removeEventListener('keydown', key, true); if (reading === box) reading = null; };
   const key = (e) => { if (back === $('modal-root').lastElementChild && e.key === 'Escape') { e.stopPropagation(); btn.click(); } };
-  box.step = (s) => { if (steps[s]) q('.p-step').textContent = steps[s]; };
+  const bar = (frac) => { q('.modal').classList.toggle('determinate', frac != null); if (frac != null) q('.modal').style.setProperty('--frac', String(frac)); };
+  box.step = (s) => { if (steps[s] && !box.downloading) q('.p-step').textContent = steps[s]; };
+  // the reader download: { phase: 'download', got, total } | { phase: 'unpack' }
+  box.progress = ({ phase, got = 0, total = 0 }) => {
+    if (!box.downloading) return;
+    if (phase === 'download') {
+      const of = mbOf(total);
+      q('.p-step').textContent = `Downloading the Publisher reader… ${Math.min(of, Math.floor(got / 1048576))} of ${of} MB`;
+      bar(total ? Math.min(1, got / total) : 0);
+    } else if (phase === 'unpack') { q('.p-step').textContent = 'Setting up the Publisher reader…'; bar(null); }
+  };
+  box.download = () => { box.downloading = true; box.progress({ phase: 'download', got: 0, total: 0 }); };
+  box.reading = () => { box.downloading = false; bar(null); q('.p-step').textContent = steps.reading; };
   box.done = close;
   box.fail = (why) => {
     if (reading === box) reading = null;
@@ -1665,11 +1679,36 @@ function readingBox(name) {
     const li = document.createElement('li'); li.textContent = why; q('.p-lines').append(li); q('.p-lines').hidden = false;
     btn.textContent = 'Close'; btn.classList.add('primary'); btn.onclick = close; btn.focus();
   };
-  btn.onclick = () => { box.cancelled = true; api.cancelRead(); close(); };
+  btn.onclick = () => { box.cancelled = true; if (box.downloading) api.cancelReader(); else api.cancelRead(); close(); };
   q('.p-what').textContent = `Opening ${name}`;
   document.addEventListener('keydown', key, true);
   $('modal-root').append(back);
   return reading = box;
+}
+// Before an outside format is read: the Publisher reader (a trimmed LibreOffice, reader.js) is downloaded once, after
+// asking in the app's own box. → null (Not now, or a problem already shown) or { opts, box }: the options for
+// readDocument, and the reading box when the download already opened it.
+let oldReaderOk = false; // Not now to a newer reader: this run reads with the one already here
+async function readerReady(name) {
+  const hold = reading = { name }; // from the question on, another file only gets "Please wait"
+  try {
+    const st = await api.readerStatus();
+    if (!st.need || (st.need === 'newer' && oldReaderOk)) return { opts: { oldReader: oldReaderOk }, box: null };
+    if (!st.canDownload && st.need === 'download') { await choiceBox('Bohpum needs the Publisher reader', st.why, ['OK']); return null; }
+    const mb = mbOf(st.size || 0), newer = st.need === 'newer';
+    const r = newer
+      ? await choiceBox('A newer Publisher reader is ready', `It's a download of about ${mb} MB. Not now opens the file with the reader you have.`, ['Download', 'Not now'])
+      : await choiceBox('Bohpum needs the Publisher reader', `It's a one-time download of about ${mb} MB. Bohpum's own files open without it.`, ['Download', 'Not now']);
+    if (r !== 0) { if (!newer) return null; oldReaderOk = true; return { opts: { oldReader: true }, box: null }; }
+    const box = readingBox(name);
+    box.download();
+    const got = await api.getReader();
+    if (box.cancelled) return null;
+    if (got.error) { box.fail(got.error); return null; }
+    if (!got.ok) { box.done(); return null; }
+    box.reading();
+    return { opts: {}, box };
+  } finally { if (reading === hold) reading = null; }
 }
 async function openFile(p) {
   if (reading) return toast(`Please wait: ${reading.name} is still opening.`);
@@ -1678,9 +1717,15 @@ async function openFile(p) {
   if (!p) p = await api.openDialog();
   if (!p) return;
   const isForeign = !/\.(bpum|kbach|json|fodg)$/i.test(p);
-  const box = isForeign ? readingBox(p.split(/[\\/]/).pop()) : null;
-  const r = await api.readDocument(p);
+  let box = null, opts = {};
+  if (isForeign) {
+    const name = p.split(/[\\/]/).pop(), ready = await readerReady(name);
+    if (!ready) return;
+    opts = ready.opts; box = ready.box || readingBox(name);
+  }
+  const r = await api.readDocument(p, opts);
   if (box && box.cancelled) return; // Cancel: the publication on screen stays as it was
+  if (r.needReader) return box.fail('Bohpum needs the Publisher reader. Open the file again to download it.');
   if (r.error) {
     if (r.missing) rememberRecent(p, false);
     return box ? box.fail(r.error) : toast('Could not open the file: ' + r.error, 6000);
@@ -2195,7 +2240,8 @@ function wire() {
   });
   window.addEventListener('resize', () => drawRulers());
   api.onMenu(cmd);
-  api.onReadStep((s) => { if (reading) reading.step(s); });
+  api.onReadStep((s) => { if (reading && reading.step) reading.step(s); });
+  api.onReaderProgress((p) => { if (reading && reading.progress) reading.progress(p); });
   // a file double-clicked in Explorer (or "Open with"): it replaces the welcome screen
   api.onOpenPath((p) => { if (welcome) welcome.close(); openFile(p); });
   setupTextbar();

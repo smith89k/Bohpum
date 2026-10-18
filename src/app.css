@@ -295,6 +295,8 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 /* LibreOffice can't say how far it is: a stretch of green slides across. A problem fills the bar, as the window's end */
 .progress .p-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 35%; border-radius: 3px; background: var(--accent); animation: p-slide 1.4s ease-in-out infinite; }
 .progress.failed .p-fill { width: 100%; animation: none; }
+/* the Publisher reader's download: a real bar (--frac = 0…1) */
+.progress.determinate .p-fill { width: calc(var(--frac, 0) * 100%); animation: none; transition: width .15s linear; }
 @keyframes p-slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
 .progress .p-lines { max-height: 216px; overflow: auto; margin: 0; padding: 8px 10px 8px 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; color: var(--err); font-size: 13px; user-select: text; }
 .progress .p-foot { display: flex; justify-content: flex-end; gap: 8px; }
