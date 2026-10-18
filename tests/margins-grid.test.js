@@ -18,6 +18,6 @@ run(async (t, check) => {
 
   await t.js(`(() => { const S = window.__bohpumApp.state; const box = S.doc.pages[0].objects.find(o => o.type === 'box' && o.html); window.__bohpumApp.startEditing(box.id); window.__bohpumApp.finishEditing(); })()`);
   await t.sleep(300);
-  const text = await layout('text box');
+  const text = await layout('text');   // the Text section (inner margins of a box's text)
   check('Text box inner margins: 2 rows of 2 (T B / L R)', text && text.rows.join(' | ') === 'T B | L R' && text.overflow <= 0, text);
 });

@@ -1093,8 +1093,9 @@ function renderProps() {
   const single = sel.length === 1 ? sel[0] : null;
   const bb = bbox(sel);
 
-  // position & size
-  const pos = section(P, single ? labelOf(single) : `${sel.length} objects selected`, single ? iconOf(single) : 'group', 'object');
+  // position & size: the icon tells what kind of object it is; its name is said once, by its own section below
+  // (Shape's type, Picture, Line, Text box), not here as well
+  const pos = section(P, single ? 'Position & size' : `${sel.length} objects selected`, single ? iconOf(single) : 'group', 'object');
   const locked = sel.some(o => o.locked);
   const lockBtn = btn(locked ? 'Locked' : 'Lock', () => cmd('lock'), 'cell-btn' + (locked ? ' on' : ''));
   lockBtn.insertAdjacentHTML('afterbegin', icon(locked ? 'lock' : 'unlock'));
@@ -1116,6 +1117,7 @@ function renderProps() {
     const ab = btns(pos);
     ab.append(lockBtn);
   }
+  const types = new Set(sel.map(o => o.type));
 
   const ar = section(P, 'Arrange', 'front', 'arrange');
   ar.append(row('Order', seg(
@@ -1138,7 +1140,9 @@ function renderProps() {
   const gs = seg(gb, ub); gs.classList.add('words');
   ar.append(row('Group', gs));
 
-  const types = new Set(sel.map(o => o.type));
+  // the box itself: its outline, then the words inside it
+  if (types.size === 1 && types.has('box')) { shapeProps(P, sel[0]); textProps(P, sel[0]); }
+
   if (types.size === 1 && types.has('box')) boxProps(P, sel);
   if (types.size === 1 && types.has('image')) imageProps(P, sel);
   if (types.size === 1 && types.has('line')) lineProps(P, sel);
@@ -1166,6 +1170,24 @@ function labelOf(o) {
   return 'Rectangle';
 }
 
+// Shape: only choices that look different. "Text box" (a plain frame) is listed only for a text box, so its list says
+// what it is; a rectangle can't become one (it would look the same). Rounded corners come only from Corner: an older
+// rounded shape ('roundrect', from Publisher files) is shown as a Rectangle with the corner it is drawn with
+// (render.js: 10 % of the shorter side when it has none), and editing its corner makes it a plain rectangle.
+const cornerOf = (o) => o.shape === 'roundrect' ? round2(Math.min(o.radius || Math.min(o.w, o.h) * 0.1, o.w / 2, o.h / 2)) : (o.radius || 0);
+function shapeProps(P, o) {
+  const s = section(P, 'Shape', 'shapes', 'shape');
+  const opts = [...(o.shape === 'none' ? [['none', 'Text box']] : []), ['rect', 'Rectangle'], ['ellipse', 'Ellipse'], ...(o.shape === 'path' ? [['path', 'Custom']] : [])];
+  s.append(row('Type', select(opts, o.shape === 'roundrect' ? 'rect' : o.shape, v => setProp(x => {
+    const r = cornerOf(x);
+    x.shape = v;
+    if (v === 'rect') x.radius = r; // a rounded shape keeps the corner it had
+  }))));
+  if (o.shape !== 'ellipse' && o.shape !== 'path') {
+    s.append(row('Corner', numInput(cornerOf(o), v => setProp(x => { if (x.shape === 'roundrect') x.shape = 'rect'; x.radius = Math.max(0, v); }), 0.5, 'mm')));
+  }
+}
+
 function boxProps(P, sel) {
   const o = sel[0];
   const f = section(P, 'Fill & line', 'fill', 'fill');
@@ -1183,10 +1205,11 @@ function boxProps(P, sel) {
   f.append(row('Weight', numInput(ptOf(o.strokeW), v => setProp(x => x.strokeW = mmOfPt(Math.max(0, v))), 0.25, 'pt')));
   f.append(row('Dash', select([['solid', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted'], ['dashdot', 'Dash-dot']], o.dash || 'solid', v => setProp(x => x.dash = v))));
   if (hasLine(o)) f.append(alignLineRow(o, 'line'));
-  const s = section(P, 'Shape', 'shapes', 'shape');
-  s.append(row('Type', select([['none', 'Frame'], ['rect', 'Rectangle'], ['roundrect', 'Rounded'], ['ellipse', 'Ellipse'], ...(o.shape === 'path' ? [['path', 'Custom']] : [])], o.shape, v => setProp(x => { x.shape = v; if (v === 'roundrect' && !x.radius) x.radius = round2(Math.min(x.w, x.h) * 0.15); }))));
-  if (o.shape === 'roundrect' || o.shape === 'rect') s.append(row('Corner', numInput(o.radius || 0, v => setProp(x => x.radius = Math.max(0, v)), 0.5, 'mm')));
-  const t = section(P, 'Text box', 'text', 'textbox');
+}
+// Text: the words inside a box (any box holds text: a text box, a rectangle, an ellipse). Key 'textbox' as before,
+// so a section folded earlier stays folded.
+function textProps(P, o) {
+  const t = section(P, 'Text', 'text', 'textbox');
   caption(t, 'Inner margins (mm)');
   const g = grid(t);
   const pad = o.pad || { t: 0, r: 0, b: 0, l: 0 };
