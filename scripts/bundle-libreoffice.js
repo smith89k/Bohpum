@@ -16,7 +16,12 @@ const SKIP = [
   /^share\/config\/images_(?!colibre\.zip$)/,                              // keep one icon theme
   /^program\/(python|pyuno)/i, /^program\/[^/]+\.pyi?$/,                   // Python scripting
   /^program\/services\/(pyuno|scriptproviderforpython)\.rdb$/,
-  /\.dmp$/i                                                                // crash dumps
+  /\.dmp$/i,                                                               // crash dumps
+  // The Document Foundation's MSI, unpacked (msiexec /a), also holds: the menus in every language (never shown here;
+  // English is built in) and what an install puts into Windows itself (fonts, the Visual C++ runtime, the msi)
+  /^program\/resource$/,
+  /^share\/registry\/res\/(?!.*_en-US\.xcd$)/, /^share\/registry\/Langpack-(?!en-US\.xcd$)/,
+  /^(Fonts|System|System64)$/, /^[^/]+\.msi$/i
 ];
 // LibreOffice's own installer puts the Visual C++ runtime into Windows, so ship a private copy
 const VC_RUNTIME = ['msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];

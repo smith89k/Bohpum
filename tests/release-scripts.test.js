@@ -24,7 +24,11 @@ run(async (t, check) => {
   const { makePack } = require(path.join(ROOT, 'scripts', 'reader-pack.js'));
   const src = path.join(t.ctx.tmp, 'LibreOffice'), out = path.join(t.ctx.tmp, 'dist-reader');
   const put = (rel, text = 'x') => { const p = path.join(src, rel); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, text); };
-  ['program/soffice.exe', 'program/version.ini', 'help/x.html', 'share/gallery/x', 'share/config/images_colibre.zip', 'share/config/images_sifr.zip', 'LICENSE.html'].forEach(f => put(f));
+  ['program/soffice.exe', 'program/version.ini', 'help/x.html', 'share/gallery/x', 'share/config/images_colibre.zip', 'share/config/images_sifr.zip', 'LICENSE.html',
+    // what The Document Foundation's MSI unpacks besides (msiexec /a): menus in 123 languages, the files Windows gets
+    'program/resource/km/LC_MESSAGES/sw.mo', 'share/registry/res/registry_km.xcd', 'share/registry/res/fcfg_langpack_km.xcd', 'share/registry/res/fcfg_langpack_en-US.xcd',
+    'share/registry/Langpack-km.xcd', 'share/registry/Langpack-en-US.xcd', 'share/registry/ctl_km.xcd', 'share/registry/main.xcd', 'Fonts/Alef-Bold.ttf',
+    'System64/msvcp140.dll', 'System/msvcp140.dll', 'lo.msi'].forEach(f => put(f));
   const p = await makePack(src, out);
   const zipBytes = fs.readFileSync(p.zip), info = JSON.parse(fs.readFileSync(path.join(out, p.name + '.json'), 'utf8'));
   check('The pack is named after libreoffice.json', p.name === reader.packName(lo) && path.basename(p.zip) === p.name + '.zip', p);
@@ -37,6 +41,10 @@ run(async (t, check) => {
     has('program/soffice.exe') && has('share/config/images_colibre.zip') && has('LICENSE.html') && !has('help') && !has('share/gallery') && !has('share/config/images_sifr.zip'),
     fs.readdirSync(un));
   check('The Visual C++ runtime is copied in', has('program/vcruntime140.dll') && has('program/msvcp140.dll'));
+  check('From the MSI: no menu translations, no other languages\' settings, no Windows fonts, runtime folders or msi; English and the Khmer text settings stay',
+    !has('program/resource') && !has('share/registry/res/registry_km.xcd') && !has('share/registry/res/fcfg_langpack_km.xcd') && !has('share/registry/Langpack-km.xcd')
+      && !has('Fonts') && !has('System64') && !has('System') && !has('lo.msi')
+      && has('share/registry/res/fcfg_langpack_en-US.xcd') && has('share/registry/Langpack-en-US.xcd') && has('share/registry/ctl_km.xcd') && has('share/registry/main.xcd'));
   const cli = asNode('reader-pack.js', [src, path.join(t.ctx.tmp, 'cli')]);
   check('node scripts/reader-pack.js <LibreOffice> <out> prints the pack info', cli.code === 0 && !!reader.parsePackInfo(cli.out.trim()), cli);
 
