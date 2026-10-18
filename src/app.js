@@ -1669,7 +1669,7 @@ function readingBox(name) {
       bar(total ? Math.min(1, got / total) : 0);
     } else if (phase === 'unpack') { q('.p-step').textContent = 'Setting up the Publisher reader…'; bar(null); }
   };
-  box.download = () => { box.downloading = true; box.progress({ phase: 'download', got: 0, total: 0 }); };
+  box.download = (total) => { box.downloading = true; box.progress({ phase: 'download', got: 0, total }); };
   box.reading = () => { box.downloading = false; bar(null); q('.p-step').textContent = steps.reading; };
   box.done = close;
   box.fail = (why) => {
@@ -1701,7 +1701,7 @@ async function readerReady(name) {
       : await choiceBox('Bohpum needs the Publisher reader', `It's a one-time download of about ${mb} MB. Bohpum's own files open without it.`, ['Download', 'Not now']);
     if (r !== 0) { if (!newer) return null; oldReaderOk = true; return { opts: { oldReader: true }, box: null }; }
     const box = readingBox(name);
-    box.download();
+    box.download(st.size || 0);
     const got = await api.getReader();
     if (box.cancelled) return null;
     if (got.error) { box.fail(got.error); return null; }

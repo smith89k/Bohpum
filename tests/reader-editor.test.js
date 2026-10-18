@@ -56,8 +56,8 @@ run(async (t, check) => {
   // ---- the question, then Not now
   await open(card); await waitQuestion('Bohpum needs the Publisher reader');
   const q1 = await question();
-  check('The first .pub asks first: "Bohpum needs the Publisher reader", about 1 MB, Download (primary) / Not now; no reading box yet',
-    q1 && q1.text === "It's a one-time download of about 1 MB. Bohpum's own files open without it." && JSON.stringify(q1.buttons) === '["Download*","Not now"]' && !(await box()), q1);
+  check('The first .pub asks first: "Bohpum needs the Publisher reader", about 3 MB, Download (primary) / Not now; no reading box yet',
+    q1 && q1.text === "It's a one-time download of about 3 MB. Bohpum's own files open without it." && JSON.stringify(q1.buttons) === '["Download*","Not now"]' && !(await box()), q1);
   await press('Not now'); await sleep(300);
   check('Not now: no box, the publication on screen stays, nothing downloaded', await noBox() && await doc() === 'test-shapes' && server.hits() === 0, { doc: await doc(), hits: server.hits() });
 
@@ -68,10 +68,14 @@ run(async (t, check) => {
 
   // ---- Download
   server.setMode('slow');
+  await js(`window.__steps = []; new MutationObserver(() => { const s = document.querySelector('.modal.progress .p-step'); if (s && s.textContent !== window.__steps.at(-1)) window.__steps.push(s.textContent); })
+    .observe(document.getElementById('modal-root'), { childList: true, subtree: true, characterData: true }); 0`);
   await press('Download');
-  await waitFor(`/^Downloading the Publisher reader… \\d+ of 1 MB$/.test(document.querySelector('.modal.progress .p-step')?.textContent || '')`);
+  await waitFor(`/^Downloading the Publisher reader… \\d+ of 3 MB$/.test(document.querySelector('.modal.progress .p-step')?.textContent || '')`);
+  const first = await js('window.__steps[0]');
+  check('Before the first progress report the box already shows the pack\'s size: "… 0 of 3 MB"', first === 'Downloading the Publisher reader… 0 of 3 MB', first);
   const b1 = await box();
-  check('Download: the reading box shows "Downloading the Publisher reader… <got> of 1 MB" with a real bar and Cancel',
+  check('Download: the reading box shows "Downloading the Publisher reader… <got> of 3 MB" with a real bar and Cancel',
     b1 && b1.what === 'Opening card.pub' && b1.determinate && b1.frac >= 0 && b1.frac <= 1 && b1.button === 'Cancel', b1);
   await open(other); await sleep(200);
   check('Another .pub during the download: "Please wait", no question', /^Please wait/.test(await toastText()) && !(await question()), { toast: await toastText(), q: await question() });
@@ -113,7 +117,7 @@ run(async (t, check) => {
   await open(card); await waitQuestion('A newer Publisher reader is ready');
   const q2 = await question();
   check('Only an older reader here: "A newer Publisher reader is ready", Download / Not now',
-    q2.text === "It's a download of about 1 MB. Not now opens the file with the reader you have." && JSON.stringify(q2.buttons) === '["Download*","Not now"]', q2);
+    q2.text === "It's a download of about 3 MB. Not now opens the file with the reader you have." && JSON.stringify(q2.buttons) === '["Download*","Not now"]', q2);
   await press('Not now');
   await waitFor(`window.__bohpumApp.state.doc.name === 'card'`);
   check('Not now reads the file with the older reader', runs.at(-1).file === path.join(old, 'soffice.exe'), runs.at(-1));
@@ -135,7 +139,8 @@ run(async (t, check) => {
   setup: async () => {
     const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'bohpum-reader-env-'));
     process.env.LOCALAPPDATA = tmp(); process.env.ProgramFiles = tmp(); process.env['ProgramFiles(x86)'] = tmp();
-    const made = await makeFakePack(tmp()); pack = made.pack;
+    // over 1 MB, so the size shown is the pack's and not a default
+    const made = await makeFakePack(tmp(), { mib: 3 }); pack = made.pack;
     server = await startServer({ zip: made.zip, pack, key: KEY });
     process.env.BOHPUM_READER_TEST = JSON.stringify({ base: server.base, pack, key: KEY });
   }

@@ -8,14 +8,14 @@ const { ROOT } = require('./harness');
 
 const NAME = 'LibreOffice-25.8.2-pack1';
 
-// <dir>\pack-src (program\soffice.exe + 1 MiB of random bytes) zipped like the release job does → { pack, zip }
-async function makeFakePack(dir) {
+// <dir>\pack-src (program\soffice.exe + <mib> MiB of random bytes) zipped like the release job does → { pack, zip }
+async function makeFakePack(dir, { mib = 1 } = {}) {
   const reader = require(path.join(ROOT, 'reader.js'));
   const src = path.join(dir, 'pack-src');
   fs.mkdirSync(path.join(src, 'program'), { recursive: true });
   fs.mkdirSync(path.join(src, 'share'), { recursive: true });
   fs.writeFileSync(path.join(src, 'program', 'soffice.exe'), 'x');
-  fs.writeFileSync(path.join(src, 'share', 'big.bin'), crypto.randomBytes(1 << 20));
+  fs.writeFileSync(path.join(src, 'share', 'big.bin'), crypto.randomBytes(mib << 20));
   const zip = path.join(dir, NAME + '.zip');
   await reader.tarZip(src, zip);
   const bytes = fs.readFileSync(zip);
