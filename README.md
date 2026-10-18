@@ -43,7 +43,8 @@ Installed copies check when they start and every 6 hours, download a new version
 3. Commit and push main.
 4. GitHub → **Actions** → **Release** → **Run workflow** → type the version (or `gh workflow run release.yml -f version=0.3.0`).
 
-Give people the installer from the GitHub release page; their copy updates itself from then on. The one-time
+0.2.0 (2026-10-18) is the first release made this way; private updates and the Publisher reader download are in
+place. Give people the installer from the GitHub release page; their copy updates itself from then on. The one-time
 Cloudflare and GitHub setup, and what each step of the job does: [docs/updates-setup.md](docs/updates-setup.md).
 
 **Privacy.** Bohpum goes online by itself only to check for updates, and downloads the Publisher reader only when you

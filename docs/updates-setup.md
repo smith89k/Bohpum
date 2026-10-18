@@ -29,6 +29,13 @@ can upload or delete.
 - The six GitHub secrets on smith89k/Bohpum. Checked: `curl -I https://bohpum-update.smith89k.com/latest.yml` → 403,
   and the same for `reader/…`. That the update key opens it is checked by every release before anything is built.
 
+**0.2.0 released on 2026-10-18** (the first release made this way): the run built the Publisher reader pack
+`LibreOffice-26.8.1-pack1` (165 MB) from The Document Foundation's MSI, uploaded it and the installer, and found the
+address locked (403 without the key) and open with it. The installer from the GitHub release, installed on the
+developer's PC, downloaded the reader from R2 on the first `.pub` (about 11 s) and opened the file; its update check
+read `latest.yml` through the lock. **Not seen yet on the real address:** an installed copy updating itself — the
+first real update (0.2.1) is that proof (it was seen against a local copy of the bucket: 0.2.0 → 0.2.1 → 0.2.2).
+
 Nothing here is shared with Sastra PDF or AI Hub: Bohpum has its own bucket, tokens and Access application.
 
 ## 1. The bucket (Cloudflare R2) — once
