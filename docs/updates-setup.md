@@ -83,11 +83,18 @@ address is locked, and opens with the key").
 4. GitHub → **Actions** → **Release** → **Run workflow** → type `0.3.0` → Run
    (or `gh workflow run release.yml -R smith89k/Bohpum -f version=0.3.0`).
 
-The job checks the version and the six secrets; reuses the Publisher reader pack if it is already in the bucket, or
-builds it (section 7); puts the update key and the pack's name, size and SHA-256 into the app; builds the installer
-(with the right-click menu); uploads it to the bucket (installer first, `latest.yml` last); checks the address is
-locked and opens with the key; removes the older installers there (their small `.blockmap` files and every reader pack
-stay); and makes the GitHub release `v0.3.0` with the notes and the installer to hand out.
+The run has three jobs, each on its own fresh machine, so the upload key never shares a machine with other people's
+code:
+- **check** (has the keys, installs nothing): the version and the six secrets, nothing left in the bucket by a stopped
+  run, and whether the Publisher reader pack is already there. Only a real "not found" counts as absent; any other
+  answer from R2 stops the run instead of guessing (a guess could overwrite a pack installed copies already trust).
+- **build** (no upload key, no GitHub token): installs the tools, builds the reader pack if the bucket hasn't got it
+  (section 7), puts the update key and the pack's name, size and SHA-256 into the app, builds the installer (with the
+  right-click menu).
+- **publish** (has the keys, installs nothing; only the built files and this repository's own scripts): uploads the
+  pack if it is new, then the installer (installer first, `latest.yml` last); checks the address is locked and opens
+  with the key; removes the older installers there (their small `.blockmap` files and every reader pack stay); and
+  makes the GitHub release `v0.3.0` with the notes and the installer to hand out.
 It stops with a plain message if the version doesn't match package.json, is already released, or a secret is missing.
 If a run stops half-way after uploading (the installer is in the bucket but there's no GitHub release), the next run of
 the same version refuses: bump the version and release again.
