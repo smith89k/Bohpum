@@ -53,4 +53,7 @@ run(async (t, check) => {
   check('Prune goes through scripts/r2-prune.js', /node scripts\/r2-prune\.js "\$EXE"/.test(prune.run), prune.run);
   check('scripts/r2-put.sh has the put() that checks the stored size', /put\(\)\s*\{[\s\S]*head-object[\s\S]*ContentLength/.test(
     fs.existsSync(path.join(ROOT, 'scripts', 'r2-put.sh')) ? fs.readFileSync(path.join(ROOT, 'scripts', 'r2-put.sh'), 'utf8') : ''));
+  // the Windows runner checks out with core.autocrlf: a CRLF .sh breaks bash's `source`
+  const attrs = fs.existsSync(path.join(ROOT, '.gitattributes')) ? fs.readFileSync(path.join(ROOT, '.gitattributes'), 'utf8') : '';
+  check('Shell scripts are checked out with LF line ends', /^\*\.sh\s+text\s+eol=lf\s*$/m.test(attrs), attrs);
 });
