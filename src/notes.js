@@ -10,6 +10,9 @@ const KINDS = Object.freeze(['new', 'improved', 'fixed', 'removed']); // the win
 const N = (version, date, notes) => Object.freeze({ version, date, notes: Object.freeze(notes.map(([kind, text]) => Object.freeze({ kind, text }))) });
 
 const NOTES = Object.freeze([
+  N('0.2.2', '2026-10-18', [
+    ['improved', 'Publisher (.pub) files you open with Bohpum show the Bohpum file icon. To open every .pub with Bohpum: right-click one › Open with › Choose another app › Bohpum › Always.']
+  ]),
   N('0.2.1', '2026-10-18', [
     ['improved', 'The panel on the right is tidier: Position & size at the top, then Arrange, Shape and Text. An object\'s name is no longer shown twice.'],
     ['improved', 'Shape offers only choices that look different: Rectangle and Ellipse (a text box also shows Text box). Round the corners with Corner.'],
