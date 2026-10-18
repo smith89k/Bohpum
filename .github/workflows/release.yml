@@ -1,0 +1,243 @@
+# Builds the Windows installer and releases it: into the private Cloudflare R2 bucket behind
+# https://bohpum-update.smith89k.com/ (locked with Cloudflare Access: only installed copies, which carry the update key,
+# get in), and as a GitHub release with the notes from What's new (src/notes.js) — the installer to hand out.
+# The installer has no LibreOffice in it: the Publisher reader (a trimmed LibreOffice, the one pinned in
+# libreoffice.json) is a pack in the same bucket, built here from The Document Foundation's MSI only when it isn't
+# there yet, and downloaded once by the app the first time a Publisher file is opened.
+# Runs only by hand: Actions > Release > Run workflow, type the version (= package.json), or
+#   gh workflow run release.yml -f version=0.2.0
+# Pushing code or tags never releases. Setup (bucket, domain, lock, the six secrets): docs/updates-setup.md.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, the same as package.json (e.g. 0.2.0)
+        required: true
+
+permissions:
+  contents: write   # create the tag and the GitHub release
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    # The R2 key can put an update on every installed copy, so it and the GitHub token are given only to the steps
+    # that need them (never to install, unpack or build steps, which run other people's code).
+    env:
+      VERSION: ${{ inputs.version }}
+      EXE: Bohpum-Setup-${{ inputs.version }}.exe
+      AWS_DEFAULT_REGION: auto
+      # R2 doesn't take the checksums newer AWS CLIs add by default
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6   # the pnpm version comes from package.json "packageManager"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: The version matches package.json, is not released yet, and the R2 secrets are set
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          if [ "$v" != "$VERSION" ]; then
+            echo "::error::You typed $VERSION, but package.json says $v. Bump package.json, push main, then run again."; exit 1
+          fi
+          if gh release view "v$VERSION" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::v$VERSION is already released. Bump the version for a new release."; exit 1
+          fi
+          for s in R2_ACCOUNT_ID R2_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY CF_ACCESS_CLIENT_ID CF_ACCESS_CLIENT_SECRET; do
+            if [ -z "${!s}" ]; then echo "::error::A GitHub secret is missing ($s): see docs/updates-setup.md"; exit 1; fi
+          done
+          # An earlier run stopped after uploading but before the GitHub release: building again would put different
+          # bytes under the same name (Cloudflare may still serve the old ones), and updates would fail their checksum.
+          if aws s3api head-object --bucket "$R2_BUCKET" --key "$EXE" --endpoint-url "$R2_ENDPOINT" >/dev/null 2>&1; then
+            echo "::error::$EXE is already in R2 from an earlier run that stopped before the GitHub release. Bump the version and run again."; exit 1
+          fi
+
+      - name: Install (fetches Electron)
+        run: pnpm install --frozen-lockfile
+
+      - name: Check What's new has notes for this version (src/notes.js)
+        run: node scripts/check-notes.js
+
+      # The pack's info file (reader/<pack>.json) is uploaded after its zip, so when it is there the zip is too. Reused
+      # packs keep their bytes: installed copies already carry their checksum.
+      - name: Is the reader pack in R2?
+        id: pack
+        env:
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          name="$(node -p "require('./reader').packName(require('./libreoffice.json'))")"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "lo=$(node -p "require('./libreoffice.json').version")" >> "$GITHUB_OUTPUT"
+          if aws s3api head-object --bucket "$R2_BUCKET" --key "reader/$name.json" --endpoint-url "$R2_ENDPOINT" >/dev/null 2>&1; then
+            aws s3 cp "s3://$R2_BUCKET/reader/$name.json" reader-pack.json --endpoint-url "$R2_ENDPOINT" --only-show-errors
+            echo "have=true" >> "$GITHUB_OUTPUT"
+            echo "The reader pack $name is in R2: reusing it"
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "The reader pack $name is not in R2 yet: building it from The Document Foundation's MSI"
+          fi
+
+      - name: "Build the reader pack: download LibreOffice from The Document Foundation and check its SHA-256"
+        if: steps.pack.outputs.have != 'true'
+        run: |
+          url="$(node -p "require('./libreoffice.json').msi")"
+          want="$(node -p "require('./libreoffice.json').sha256")"
+          curl -fL --retry 3 -o lo.msi "$url"
+          got="$(sha256sum lo.msi | cut -d' ' -f1)"
+          if [ "$got" != "$want" ]; then echo "::error::The LibreOffice MSI's SHA-256 is $got, libreoffice.json says $want"; exit 1; fi
+          echo "lo.msi: $(stat -c %s lo.msi) bytes, SHA-256 matches libreoffice.json"
+
+      # An administrative install only unpacks the MSI's files into a folder: nothing is installed on the runner.
+      - name: "Build the reader pack: unpack the MSI"
+        if: steps.pack.outputs.have != 'true'
+        shell: pwsh
+        run: |
+          $p = Start-Process msiexec -ArgumentList '/a', "$pwd\lo.msi", '/qn', "TARGETDIR=$pwd\lo-admin" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Output "::error::msiexec /a ended with $($p.ExitCode)"; exit 1 }
+
+      - name: "Build the reader pack: trim and zip it, and check it opens a Publisher file"
+        if: steps.pack.outputs.have != 'true'
+        run: |
+          soffice="$(find lo-admin -type f -iname soffice.exe -path '*program*' | head -1)"
+          if [ -z "$soffice" ]; then echo "::error::The unpacked MSI has no program/soffice.exe"; find lo-admin -maxdepth 3; exit 1; fi
+          node scripts/reader-pack.js "$(dirname "$(dirname "$soffice")")" dist-reader
+          node scripts/reader-check.js dist-reader/LibreOffice/program/soffice.exe samples/card-original.pub
+          cp "dist-reader/${{ steps.pack.outputs.name }}.json" reader-pack.json
+
+      # The zip first, its info file last: a later run reuses the pack only once both are there.
+      - name: Upload the reader pack to R2
+        if: steps.pack.outputs.have != 'true'
+        env:
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          source scripts/r2-put.sh
+          name="${{ steps.pack.outputs.name }}"
+          put "dist-reader/$name.zip" "reader/$name.zip" --content-type application/zip
+          put "dist-reader/$name.json" "reader/$name.json" --content-type application/json
+
+      # The app is built with the pack's name, size and SHA-256 (never read from the server, so nothing there can swap it).
+      - name: The app knows its reader pack (reader-pack.json)
+        run: |
+          node -e "const r = require('./reader'), p = r.readPackInfo('reader-pack.json'), want = r.packName(require('./libreoffice.json'));
+            if (!p || p.name !== want) { console.error('::error::reader-pack.json is not the pack info for ' + want); process.exit(1); }
+            console.log(p.name + ': ' + Math.round(p.size / 1048576) + ' MB, ' + p.sha256);"
+
+      # The update address only lets this key in; it goes inside the app, so every copy installed from this release can
+      # update and download the reader. Never committed (.gitignore). A build without it doesn't check for updates.
+      - name: Put the update key into the app (update-config.json)
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: node -e "require('fs').writeFileSync('update-config.json', JSON.stringify({ clientId:process.env.CF_ACCESS_CLIENT_ID, clientSecret:process.env.CF_ACCESS_CLIENT_SECRET }))"
+
+      - name: Build the File Explorer menu (C++ DLL + package; needs the runner's Visual Studio + Windows SDK)
+        run: node scripts/build-explorer-menu.js
+
+      - name: Build the installer
+        run: pnpm exec electron-builder --win nsis --publish never
+
+      - name: The build has the installer, its blockmap and latest.yml naming it
+        run: |
+          for f in "dist/$EXE" "dist/$EXE.blockmap" dist/latest.yml; do
+            if [ ! -f "$f" ]; then echo "::error::The build made no $f"; ls dist; exit 1; fi
+          done
+          if ! grep -q "url: $EXE\$" dist/latest.yml; then echo "::error::latest.yml does not name $EXE"; cat dist/latest.yml; exit 1; fi
+
+      # Kept a few days on the run's page, in case R2 misbehaves.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installer
+          path: dist/*.exe
+          retention-days: 5
+          compression-level: 0
+
+      # Installer first, latest.yml last: an installed copy never reads a latest.yml whose installer isn't there yet.
+      - name: Upload to R2
+        env:
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          source scripts/r2-put.sh
+          put "dist/$EXE" "$EXE"
+          put "dist/$EXE.blockmap" "$EXE.blockmap"
+          put dist/latest.yml latest.yml --cache-control no-cache --content-type text/yaml
+
+      # Without the key the address must refuse (no public downloads, of updates or of the reader); with it, installed
+      # copies must get this version and the reader pack.
+      - name: The update address is locked, and opens with the key
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          key=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
+          url=https://bohpum-update.smith89k.com/latest.yml
+          without="$(curl -s -o /dev/null -w '%{http_code}' "$url")"
+          if [ "$without" = "200" ]; then
+            echo "::error::The update address is NOT locked: anyone can download. Check the Cloudflare Access application for bohpum-update.smith89k.com."; exit 1
+          fi
+          if ! body="$(curl -sf "${key[@]}" "$url")"; then
+            echo "::error::The update key doesn't open the update address. Check the Access policy and the CF_ACCESS_* secrets."; exit 1
+          fi
+          if ! grep -q "^version: $VERSION" <<< "$body"; then echo "::error::latest.yml at the address is not $VERSION:"; echo "$body"; exit 1; fi
+          zip="https://bohpum-update.smith89k.com/reader/${{ steps.pack.outputs.name }}.zip"
+          zipWithout="$(curl -sI -o /dev/null -w '%{http_code}' "$zip")"
+          if [ "$zipWithout" = "200" ]; then echo "::error::The reader pack is NOT locked: anyone can download it ($zip)."; exit 1; fi
+          zipWith="$(curl -sI -o /dev/null -w '%{http_code}' "${key[@]}" "$zip")"
+          if [ "$zipWith" != "200" ]; then echo "::error::The update key doesn't open the reader pack (HTTP $zipWith): $zip"; exit 1; fi
+          echo "Locked (without the key: HTTP $without, reader pack HTTP $zipWithout); with the key: version $VERSION and the reader pack"
+
+      - name: Remove older installers from R2 (every .blockmap and the reader packs stay)
+        env:
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          aws s3api list-objects-v2 --bucket "$R2_BUCKET" --endpoint-url "$R2_ENDPOINT" --query 'Contents[].[Key]' --output text > r2-keys.txt
+          node scripts/r2-prune.js "$EXE" < r2-keys.txt > r2-old.txt
+          while IFS= read -r key; do
+            echo "Removing $key"
+            aws s3 rm "s3://$R2_BUCKET/$key" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+          done < r2-old.txt
+
+      - name: GitHub release (notes from What's new)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/release-notes.js "$VERSION" > notes.md
+          printf '\nThe Publisher reader (LibreOffice %s) downloads once, the first time a Publisher file is opened.\n' "${{ steps.pack.outputs.lo }}" >> notes.md
+          printf '\nGive the installer below to the people who should have Bohpum: copies installed from it update themselves.\n\nSHA-256 of the installer: `%s`\n' \
+            "$(sha256sum "dist/$EXE" | cut -d' ' -f1)" >> notes.md
+          gh release create "v$VERSION" "dist/$EXE" --target "$GITHUB_SHA" --title "Bohpum $VERSION" --notes-file notes.md
