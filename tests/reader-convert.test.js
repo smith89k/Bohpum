@@ -38,6 +38,8 @@ run(async (t, check) => {
   const jsT = (code) => taskWin().webContents.executeJavaScript(code, true);
   const waitT = async (code, ms = 20000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { if (taskWin() && await jsT(code)) return true; } catch {} await sleep(100); } throw new Error('timed out: ' + code); };
   const clickT = async (sel) => {
+    // the window grows to fit a question a moment after it shows: click only once the button is inside it
+    await waitT(`(() => { const b = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return b.height > 0 && b.bottom <= innerHeight; })()`, 5000);
     const wc = taskWin().webContents, c = await jsT(`(() => { const b = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }; })()`);
     wc.sendInputEvent({ type: 'mouseMove', x: c.x, y: c.y });
     wc.sendInputEvent({ type: 'mouseDown', x: c.x, y: c.y, button: 'left', clickCount: 1 });
