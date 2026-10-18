@@ -5,7 +5,8 @@
 ;    (.bpum is registered by electron-builder from package.json fileAssociations: Bohpum opens it, own icon.)
 !macro customInstall
   WriteRegStr SHELL_CONTEXT "Software\Classes\Bohpum.PubFile" "" "Microsoft Publisher file"
-  WriteRegStr SHELL_CONTEXT "Software\Classes\Bohpum.PubFile\DefaultIcon" "" "$appExe,0"
+  ; the Bohpum file icon (as .bpum; electron-builder puts it in resources), seen when someone chooses Bohpum for .pub
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Bohpum.PubFile\DefaultIcon" "" "$INSTDIR\resources\bpum.ico"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Bohpum.PubFile\shell\open" "" "Open with Bohpum"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Bohpum.PubFile\shell\open\command" "" '"$appExe" "%1"'
   WriteRegStr SHELL_CONTEXT "Software\Classes\.pub\OpenWithProgids" "Bohpum.PubFile" ""

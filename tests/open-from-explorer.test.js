@@ -36,6 +36,10 @@ run(async (t, check) => {
   check('Installer: .pub only gets Bohpum in "Open with" (Publisher stays the default), removed on uninstall',
     !fa.some(f => f.ext === 'pub') && /Software\\Classes\\\.pub\\OpenWithProgids" "Bohpum\.PubFile"/.test(nsh) &&
     !/WriteRegStr SHELL_CONTEXT "Software\\Classes\\\.pub" ""/.test(nsh) && /DeleteRegValue SHELL_CONTEXT "Software\\Classes\\\.pub\\OpenWithProgids" "Bohpum\.PubFile"/.test(nsh));
+  // electron-builder copies the .bpum icon to resources\bpum.ico (the .bpum file type points there)
+  check('Installer: a .pub opened with Bohpum shows the Bohpum file icon (as .bpum), not the app logo',
+    /WriteRegStr SHELL_CONTEXT "Software\\Classes\\Bohpum\.PubFile\\DefaultIcon" "" "\$INSTDIR\\resources\\bpum\.ico"/.test(nsh)
+      && !/Bohpum\.PubFile\\DefaultIcon" "" "\$appExe,0"/.test(nsh), (/Bohpum\.PubFile\\DefaultIcon.*$/m.exec(nsh) || [])[0]);
 
   fs.rmSync(W, { recursive: true, force: true });
 }, { setup: () => { process.argv.push(first); } });
