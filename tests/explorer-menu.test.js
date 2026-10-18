@@ -57,6 +57,18 @@ run(async (t, check) => {
   check('The saved state reads back, and clears', st.mode === 'package' && st.location === 'C:\\Program Files\\Bohpum' &&
     st.version === '1.0.0.0' && st.declined === '' && !Object.keys(menu.readState(stateKey)).length, st);
 
+  menu.writeState({ asked: '0.2.0' }, stateKey);
+  const asked = menu.readState(stateKey).asked;
+  menu.clearState(stateKey);
+  check('"Not now" to the repair is saved for that version', asked === '0.2.0', asked);
+
+  // ---- after a silent update: offer to set the menu up again (as Sastra PDF)
+  const need = (o) => menu.repairNeeded({ build: 22631, msixExists: true, state: { mode: 'classic', declined: '', asked: '0.1.0' }, version: '0.2.0', ...o });
+  check('Windows 11 fell back to the classic menu after an update: offer to set it up again', need({}) === true);
+  check('…but not on Windows 10, without the package, with the new menu, after "No" to Windows, or after Not now for this version',
+    !need({ build: 19045 }) && !need({ msixExists: false }) && !need({ state: { mode: 'package' } }) && !need({ state: { mode: 'classic', declined: '1' } })
+      && !need({ state: { mode: 'classic', declined: '', asked: '0.2.0' } }));
+
   check('Names match the package', menu.PKG === 'Bohpum.ExplorerMenu' && menu.CLSID === '{1e11f0a8-6fc0-4a9c-9031-6924b71a4d77}');
 
   reg('delete', TEST_KEY, '/f');

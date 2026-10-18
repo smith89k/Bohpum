@@ -69,7 +69,8 @@ function unregisterClassic(classes = CLASSES) { reg('delete', verbKey(classes), 
 function classicRegistered(classes = CLASSES) { return reg('query', verbKey(classes), '/v', 'ExplorerCommandHandler').status === 0; }
 
 /* ---------- what was set up last time (so updates don't ask for admin again) ---------- */
-const FIELDS = { Mode: 'mode', Location: 'location', Version: 'version', Declined: 'declined' };
+// Asked: the app version whose "set the menu up again?" was answered Not now (repairNeeded).
+const FIELDS = { Mode: 'mode', Location: 'location', Version: 'version', Declined: 'declined', Asked: 'asked' };
 function readState(key = STATE_KEY) {
   const out = {}, r = reg('query', key);
   if (r.status !== 0) return out;
@@ -152,6 +153,12 @@ function install(o) {
   writeState({ mode: 'classic', location: o.installDir, version: PKG_VERSION, declined: st.declined || '' });
   log('install: classic menu'); return 0;
 }
+// An automatic update installs silently, and a silent install can't show UAC: if Windows stopped starting the package, it
+// fell back to the classic menu ("Show more options"). The app then offers, once per version, to add the package again
+// (as Sastra PDF).
+function repairNeeded({ build, msixExists, state, version }) {
+  return build >= 22000 && !!msixExists && state.mode === 'classic' && state.declined !== '1' && state.asked !== version;
+}
 function uninstall(o) { removePackage(); unregisterClassic(); clearState(); release(o); log('uninstall: done'); return 0; }
 
 function runCommand(cmd, o) {
@@ -166,5 +173,5 @@ function runCommand(cmd, o) {
 
 module.exports = {
   CLSID, PKG, PKG_VERSION, TASKS, LIST_DIR, parseTaskArgs, readTaskList, registerClassic, unregisterClassic, classicRegistered,
-  readState, writeState, clearState, windowsBuild, oldDir, cleanOld, release, runCommand, packageWorks
+  readState, writeState, clearState, windowsBuild, oldDir, cleanOld, release, runCommand, packageWorks, repairNeeded
 };

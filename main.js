@@ -447,6 +447,24 @@ ipcMain.handle('install-update', () => {
   dirty = was;     // it didn't start: closing must ask about unsaved changes again
   return { ok: false, reason: 'failed' };
 });
+// After a silent update the right-click menu may have fallen back to "Show more options" (explorer-menu.js
+// repairNeeded): 'check' → { needed }, 'later' → not again for this version, 'fix' → the installer's own setup step,
+// run as a separate process so the window doesn't freeze while Windows asks for permission.
+ipcMain.handle('menu-repair', async (_e, action) => {
+  if (action === 'check') {
+    return { needed: app.isPackaged && menu.repairNeeded({
+      build: menu.windowsBuild(), msixExists: fs.existsSync(path.join(process.resourcesPath, 'explorer-menu', menu.PKG + '.msix')),
+      state: menu.readState(), version: app.getVersion()
+    }) };
+  }
+  if (action === 'later') { menu.writeState({ asked: app.getVersion() }); return {}; }
+  if (action === 'fix') {
+    await new Promise(res => execFile(process.execPath, ['--explorer-menu=install'], { windowsHide: true }, () => res()));
+    const st = menu.readState();
+    return { result: st.mode === 'package' ? 'ok' : st.declined === '1' ? 'declined' : 'failed' };
+  }
+  return {};
+});
 
 ipcMain.handle('save-dialog', async (_e, { defaultName, filters }) => {
   const r = await dialog.showSaveDialog(win, { defaultPath: startIn('lastDir', defaultName), filters });

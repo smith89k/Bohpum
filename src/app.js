@@ -1905,6 +1905,75 @@ async function askClose() {
   if (ok) api.closeNow();
 }
 
+// ---------------------------------------------------------------- automatic updates (main.js, updater.js), as in Sastra PDF
+// Boxes that come by themselves (an update is ready, the right-click menu needs setting up) wait their turn: never over
+// another box (the print screen and the reading box are boxes too) or a file being read, and one at a time.
+const screenFree = () => !$('modal-root').children.length && !reading;
+function whenFree() {
+  return new Promise((res) => {
+    if (screenFree()) return res();
+    const done = () => { if (!screenFree()) return; mo.disconnect(); clearInterval(tick); res(); };
+    const mo = new MutationObserver(done);
+    mo.observe($('modal-root'), { childList: true });
+    const tick = setInterval(done, 500); // a file read ends without a box change when its question was answered Not now
+  });
+}
+let boxTurn = Promise.resolve();
+const inTurn = (open) => (boxTurn = boxTurn.then(whenFree).then(open).catch((e) => console.warn(e)));
+
+async function readyBox(v) {
+  offered.add(v);
+  const r = await choiceBox(`Bohpum ${v} is ready to install`, 'Restart now to use it, or it installs the next time you close Bohpum.', ['Restart now', 'Later']);
+  if (r === 0) await restartForUpdate();
+}
+const offered = new Set(); // asked once per downloaded version while Bohpum runs; Later = it installs on closing
+function updateReady(v) { if (offered.has(v)) return; offered.add(v); inTurn(() => readyBox(v)); }
+// The installer starts at once and closes Bohpum by force, so the unsaved question comes first.
+const RESTART_REFUSED = {
+  task: ["Bohpum can't restart while files are being converted", 'Wait for the small convert window to finish, then use Help › Check for Updates. Or close Bohpum later: the update installs then.'],
+  reader: ["Bohpum can't restart while the Publisher reader is downloading", 'Wait for the download to finish, then use Help › Check for Updates. Or close Bohpum later: the update installs then.'],
+  failed: ["The update couldn't be started", 'Your publication is still open. Bohpum downloads the update again and offers it next time.']
+};
+async function restartForUpdate() {
+  finishEditing();
+  if (S.dirty) {
+    const r = await choiceBox('Save changes first?', 'Your publication has unsaved changes. Save them before restarting?', ['Save', "Don't save", 'Cancel']);
+    if (r === 2 || (r === 0 && !(await save()))) return;
+  }
+  const res = await api.installUpdate();
+  const why = res && !res.ok && RESTART_REFUSED[res.reason];
+  if (why) await choiceBox(why[0], why[1], ['OK']);
+}
+// Help › Check for Updates: "Checking for updates…" (Cancel or Esc drops the answer), then the answer.
+async function checkUpdatesCmd() {
+  if (!screenFree()) return;
+  const m = modal('Checking for updates…', document.createElement('div'), [['Cancel', null]], 'checking');
+  let open = true; m.done.then(() => { open = false; });
+  let a; try { a = await api.checkUpdates(); } catch { a = { kind: 'failed' }; }
+  if (!open) return;
+  m.close();
+  if (a.kind === 'ready') return readyBox(a.version);
+  const [title, text] = {
+    current: ['You have the latest version', `Bohpum ${a.version} is the newest version.`],
+    downloading: [`Version ${a.version} is downloading`, "You'll be asked to restart when it's ready."],
+    dev: ["This copy doesn't update itself", 'Copies installed from a Bohpum release do.'] // pnpm start, or built without the update key
+  }[a.kind] || ["Couldn't check for updates", 'Check the internet connection and try again.'];
+  await choiceBox(title, text, ['OK']);
+}
+// After an update installed silently, the right-click menu may sit under "Show more options" (main.js menu-repair):
+// offer once per version to put it back; Windows then asks for permission. Not now (or Esc) = not again this version.
+async function menuRepairAtStart() {
+  try {
+    if (!(await api.menuRepair('check')).needed) return;
+    await inTurn(async () => {
+      const r = await choiceBox('The right-click menu needs to be set up again', 'Windows will ask for permission once. Without it, Bohpum\'s items stay under "Show more options".', ['Set up', 'Not now']);
+      if (r !== 0) { await api.menuRepair('later'); return; }
+      const { result } = await api.menuRepair('fix');
+      toast(result === 'ok' ? 'The right-click menu is back' : result === 'declined' ? 'The right-click menu stays under "Show more options"' : "Couldn't set up the right-click menu");
+    });
+  } catch (e) { console.warn(e); }
+}
+
 // ---------------------------------------------------------------- About (Help > About), as in Sastra PDF
 const AUTHOR = {
   name: 'Sunnguon Taing', handle: 'smith89k', role: 'Full-stack & DevOps developer · Cambodia', photo: 'img/author.jpg',
@@ -1999,6 +2068,7 @@ function cmd(c) {
     case 'close-request': return askClose();
     case 'about': return openAbout();
     case 'whats-new': return whatsNew();
+    case 'check-updates': return checkUpdatesCmd();
     case 'export-png': return exportPng();
     case 'print': return printDialog();
     case 'page-setup': return pageSetup();
@@ -2242,12 +2312,14 @@ function wire() {
   api.onMenu(cmd);
   api.onReadStep((s) => { if (reading && reading.step) reading.step(s); });
   api.onReaderProgress((p) => { if (reading && reading.progress) reading.progress(p); });
+  api.onUpdateReady(updateReady);
   // a file double-clicked in Explorer (or "Open with"): it replaces the welcome screen
   api.onOpenPath((p) => { if (welcome) welcome.close(); openFile(p); });
   setupTextbar();
 }
 
-window.__bohpumApp = { cmd: (c) => cmd(c), openFile: (p) => openFile(p), startEditing: (id) => startEditing(id), finishEditing: () => finishEditing(), state: S };
+window.__bohpumApp = { cmd: (c) => cmd(c), openFile: (p) => openFile(p), startEditing: (id) => startEditing(id), finishEditing: () => finishEditing(), state: S,
+  updateReady: (v) => updateReady(v), menuRepairAtStart: () => menuRepairAtStart() };
 
 async function init() {
   wire();
@@ -2256,6 +2328,6 @@ async function init() {
   if (+S.settings.pagesW) setPagesWidth(+S.settings.pagesW);
   loadDoc(newDoc(210, 297), null);
   if (!window.__noWelcome) newDialog(true);
-  notesAtStart();
+  notesAtStart().then(menuRepairAtStart); // after What's new; the repair box waits its turn behind the open boxes
 }
 init();

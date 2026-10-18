@@ -47,12 +47,14 @@ run(async (t, check) => {
   check('Next start: it does not open again', s3.flag === 'none' && s3.boxes.join('|') === 'welcome-modal', s3);
 
   const help = Menu.getApplicationMenu().items.find(i => i.label.replace('&', '') === 'Help').submenu.items;
-  check('Help: What\'s New sits just above About', help[0].label === "What's New" && /About/.test(help[1].label), help.map(i => i.label));
-  help[0].click(); await t.sleep(400);
+  const at = help.findIndex(i => i.label === "What's New"), whatsNew = help[at];
+  check('Help: What\'s New sits just above About (Check for Updates… above it)',
+    at > 0 && help[at - 1].label === 'Check for Updates…' && /About/.test(help[at + 1].label), help.map(i => i.label));
+  whatsNew.click(); await t.sleep(400);
   check('While another box is open it does nothing', (await state()).boxes.join('|') === 'welcome-modal', await state());
   t.win.focus(); t.wc.focus();
   await t.key('Escape'); await t.waitFor('!document.querySelector(".modal-back")');
-  help[0].click(); await t.waitFor('!!document.querySelector(".modal.notes")');
+  whatsNew.click(); await t.waitFor('!!document.querySelector(".modal.notes")');
   const s4 = await state();
   check('Help > What\'s New opens it', s4.topIsNotes && s4.title === `What's new in ${version}`, s4);
 

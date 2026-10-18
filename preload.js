@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
   checkUpdates: () => ipcRenderer.invoke('check-updates'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   onUpdateReady: (fn) => ipcRenderer.on('update-ready', (_e, v) => fn(String(v))),
+  // after an update: is the right-click menu under "Show more options"? 'check' | 'later' | 'fix'
+  menuRepair: (action) => ipcRenderer.invoke('menu-repair', action),
   saveDialog: (opts) => ipcRenderer.invoke('save-dialog', opts),
   writeFile: (opts) => ipcRenderer.invoke('write-file', opts),
   pickImages: () => ipcRenderer.invoke('pick-images'),
