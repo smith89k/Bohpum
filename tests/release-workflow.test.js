@@ -62,7 +62,11 @@ run(async (t, check) => {
   // ---- order
   const idx = (job, start) => J[job].steps.findIndex(s => s.name.startsWith(start));
   const inOrder = (job, names) => { const at = names.map(n => idx(job, n)); return at.every(i => i >= 0) && at.every((v, i) => !i || v > at[i - 1]); };
-  check('check: the version and secrets first, then whether the reader pack is in R2', inOrder('check', ['The version matches package.json', 'Is the reader pack in R2?']));
+  check('check: the version and secrets first, then the lock, then whether the reader pack is in R2',
+    inOrder('check', ['The version matches package.json', 'Before anything is built: the update address is locked', 'Is the reader pack in R2?']));
+  const early = J.check.steps[idx('check', 'Before anything is built: the update address is locked')] || { run: '', env: '' };
+  check('…the early lock check: refused without the key, let in with it (a wrong key stops the run before any upload)',
+    /bohpum-update\.smith89k\.com/.test(early.run) && /CF-Access-Client-Id/.test(early.run) && /CF_ACCESS_CLIENT_SECRET/.test(early.env) && !/R2_|AWS_/.test(early.env), early);
   check('build: install, the reader pack (only when R2 hasn\'t got it), the update key, the installer',
     inOrder('build', ['Install', 'Build the reader pack', 'Put the update key', 'Build the installer']) && /if: needs\.check\.outputs\.have != 'true'/.test(J.build.steps[idx('build', 'Build the reader pack')].text));
   check('publish: the reader pack, then the installer files, the lock check, prune, the GitHub release',

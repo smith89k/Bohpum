@@ -19,8 +19,15 @@ can upload or delete.
 > **Never change the address** after the first release: every installed copy has it built in (package.json
 > `build.publish.url`), and copies would stop updating.
 
-> **Not set up yet.** Sections 1–4 are done once; then this note becomes a "Set up on <date>" list of the names
-> (never the secrets).
+**Set up on 2026-10-18**:
+- R2 bucket `bohpum-updates` (Asia-Pacific, Standard, r2.dev off), custom domain `bohpum-update.smith89k.com`
+  (CNAME added by Cloudflare).
+- R2 Account API token `bohpum-release` (Object Read & Write, `bohpum-updates` only, no expiry) — the upload key.
+- Zero Trust service token `bohpum-updater` (non-expiring) — the update key inside the app.
+- Zero Trust Access application `bohpum-update` (self-hosted, `bohpum-update.smith89k.com`) with one policy
+  **Bohpum app only**: action **Service Auth**, include **Service Token = bohpum-updater**.
+- The six GitHub secrets on smith89k/Bohpum. Checked: `curl -I https://bohpum-update.smith89k.com/latest.yml` → 403,
+  and the same for `reader/…`. That the update key opens it is checked by every release before anything is built.
 
 Nothing here is shared with Sastra PDF or AI Hub: Bohpum has its own bucket, tokens and Access application.
 
@@ -43,8 +50,11 @@ Nothing here is shared with Sastra PDF or AI Hub: Bohpum has its own bucket, tok
 
 1. **Zero Trust** → **Access controls** → **Service credentials** → **Create Service Token** → name `bohpum-updater`,
    duration **Non-expiring** (the default, 1 year, would stop every installed copy from updating a year later) →
-   Generate token. Copy the **Client ID** and **Client Secret** straight into GitHub (section 4); the secret is shown
-   once, and Cloudflare closes that box when you switch tabs — copy both first.
+   Generate token. Put the **Client Secret** into GitHub first (section 4, `CF_ACCESS_CLIENT_SECRET`): it is shown
+   only once, and the box can close when you switch tabs. The **Client ID** (it ends in `.access`) stays visible on the
+   token's page afterwards. (On 2026-10-18 the secret went from the copy button straight into GitHub with
+   `gh secret set CF_ACCESS_CLIENT_SECRET -R smith89k/Bohpum --body (Get-Clipboard -Raw).Trim()` in PowerShell, so the
+   tab never had to change.)
 2. **Access controls** → **Applications** → **Create new application** → **Self-hosted and private** → Continue.
    Name `bohpum-update`. Destination: subdomain `bohpum-update`, domain `smith89k.com` (the whole domain, no path).
    **Create new policy**: name `Bohpum app only`, action **Service Auth**, Include → **Service Token** →

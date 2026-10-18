@@ -85,6 +85,25 @@ jobs:
             echo "::error::$EXE is already in R2 from an earlier run that stopped before the GitHub release. Bump the version and run again."; exit 1
           fi
 
+      # Before anything is built or uploaded: the address must refuse requests without the key and let this key in
+      # (latest.yml may not be there yet, so "let in" means R2's own answer: 200 or 404). A wrong CF_ACCESS_* secret
+      # stops the run here, not after the installer is in the bucket (which would use up the version number).
+      - name: "Before anything is built: the update address is locked, and the update key opens it"
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          url=https://bohpum-update.smith89k.com/latest.yml
+          without="$(curl -s -o /dev/null -w '%{http_code}' "$url")"
+          with="$(curl -s -o /dev/null -w '%{http_code}' -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" "$url")"
+          if [ "$without" = "200" ] || [ "$without" = "404" ]; then
+            echo "::error::The update address is NOT locked (HTTP $without without the key). Check the Cloudflare Access application for bohpum-update.smith89k.com."; exit 1
+          fi
+          case "$with" in
+            200|404) echo "Locked (HTTP $without without the key); the update key opens it (HTTP $with)" ;;
+            *) echo "::error::The update key doesn't open the update address (HTTP $with). Check the Access policy and the CF_ACCESS_* secrets."; exit 1 ;;
+          esac
+
       # The pack's info file (reader/<pack>.json) is uploaded after its zip, so when it is there the zip is too. Reused
       # packs keep their bytes: installed copies already carry their checksum.
       - name: Is the reader pack in R2?
