@@ -10,6 +10,10 @@ const KINDS = Object.freeze(['new', 'improved', 'fixed', 'removed']); // the win
 const N = (version, date, notes) => Object.freeze({ version, date, notes: Object.freeze(notes.map(([kind, text]) => Object.freeze({ kind, text }))) });
 
 const NOTES = Object.freeze([
+  N('0.2.0', '2026-10-18', [
+    ['new', 'Bohpum now updates itself. When a new version is ready it asks to restart, or installs it when you close Bohpum. Check by hand from Help › Check for Updates.'],
+    ['improved', 'The installer is much smaller. The Publisher reader downloads once, the first time you open a Publisher file.']
+  ]),
   N('0.1.0', '2026-10-17', [
     ['new', 'Open Microsoft Publisher (.pub) files, edit them and print them. Save them as Bohpum files (.bpum); the .pub is never changed.'],
     ['new', 'Text boxes with Khmer and English text, shapes, lines and pictures, on many pages with a master page.'],

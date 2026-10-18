@@ -14,7 +14,7 @@ run(async (t, check) => {
     return { name: q('.about-name').firstChild.textContent, km: q('.about-name .km').textContent, ver: q('.about-ver').textContent,
       logo: !!q('.about-head img[src$="logo.png"]'), author: q('.author b').firstChild.textContent, photo: !!q('.author img[src$="author.jpg"]'),
       links: [...m.querySelectorAll('.links a')].map(a => a.href), credits: [...m.querySelectorAll('.credits li')].map(li => li.textContent),
-      heads: [...m.querySelectorAll('h3')].map(h => h.textContent), foot: q('.modal-f').textContent }; })()`);
+      heads: [...m.querySelectorAll('h3')].map(h => h.textContent), foot: q('.modal-f').textContent, note: [...m.querySelectorAll('.note')].map(p => p.textContent).join(' ') }; })()`);
   check('Help > About opens the app\'s own About page, not a Windows box', !!about && native.length === 0, { about, native });
   check('Logo, Bohpum and បោះពុម្ព, and the version', about && about.logo && about.name === 'Bohpum' && about.km === 'បោះពុម្ព' && about.ver === 'Version ' + app.getVersion(), about);
   check('Made by: the author, photo and three links', about && about.author === 'Sunnguon Taing' && about.photo
@@ -24,6 +24,9 @@ run(async (t, check) => {
     && about.credits.some(c => c.includes('Electron') && c.includes(process.versions.electron) && c.includes('MIT'))
     && about.credits.some(c => c.includes('LibreOffice') && c.includes('MPL-2.0'))
     && about.credits.some(c => c.includes('Noto Sans Khmer') && c.includes('SIL OFL 1.1')), about);
+  check('…and electron-updater (automatic updates), MIT', about && about.credits.some(c => c.includes('electron-updater') && c.includes('MIT')), about && about.credits);
+  check('The note says LibreOffice is downloaded once, and names electron-updater\'s helper libraries',
+    about && /LibreOffice[^.]*downloaded once, the first time a Publisher file is opened/.test(about.note) && /electron-updater \(automatic updates\) comes with/.test(about.note), about && about.note);
   check('Footer: © 2026 smith89k and Close', about && /© 2026 smith89k/.test(about.foot) && /Close/.test(about.foot), about);
 
   const windows = () => require('electron').BrowserWindow.getAllWindows().length;

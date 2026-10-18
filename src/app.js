@@ -1991,9 +1991,10 @@ const CREDITS = [
   ['Electron', 'Electron contributors, GitHub Inc.', 'MIT', 'https://www.electronjs.org/'],
   ['LibreOffice', 'The Document Foundation', 'MPL-2.0', 'https://www.libreoffice.org/'],
   ['IBM Plex Sans & Mono', 'IBM', 'SIL OFL 1.1', 'https://github.com/IBM/plex'],
-  ['Noto Sans Khmer', 'Google', 'SIL OFL 1.1', 'https://github.com/notofonts/khmer']
+  ['Noto Sans Khmer', 'Google', 'SIL OFL 1.1', 'https://github.com/notofonts/khmer'],
+  ['electron-updater', 'electron-builder contributors', 'MIT', 'https://github.com/electron-userland/electron-builder']
 ];
-const CREDITS_NOTE = 'LibreOffice reads Publisher and other files; its licence files are in the libreoffice folder inside the app. Electron includes Chromium, Node.js and FFmpeg; their licences are in LICENSES.chromium.html in the app folder. The installer is made with electron-builder (MIT) and NSIS (zlib). The font files are packaged by Fontsource (MIT).';
+const CREDITS_NOTE = 'LibreOffice reads Publisher and other files: it is downloaded once, the first time a Publisher file is opened; its licence files are in its folder. Electron includes Chromium, Node.js and FFmpeg; their licences are in LICENSES.chromium.html in the app folder. electron-updater (automatic updates) comes with builder-util-runtime, fs-extra, jsonfile, universalify, js-yaml, lazy-val, lodash.escaperegexp, lodash.isequal, tiny-typed-emitter, debug and ms (MIT), graceful-fs and semver (ISC), argparse (Python-2.0) and sax (Blue Oak 1.0.0). The installer is made with electron-builder (MIT) and NSIS (zlib). The font files are packaged by Fontsource (MIT).';
 function openAbout() {
   if (document.querySelector('#modal-root .modal.about')) return;
   const A = AUTHOR, out = 'target="_blank" rel="noopener"'; // links open in the normal browser (main.js)

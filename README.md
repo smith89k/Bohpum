@@ -5,36 +5,71 @@ lets you edit them, and prints them, including placing a small card anywhere on 
 
 ## Run it
 
-You need **Node.js** (LTS), **pnpm** and, on the build PC only, **LibreOffice**. The app ships its own trimmed copy of
-LibreOffice to read `.pub` files, so users install nothing extra and never see LibreOffice in the app.
+You need **Node.js** (LTS) and **pnpm**. No LibreOffice is needed on the build PC, and the installer doesn't carry it:
+installed copies download the **Publisher reader** (a trimmed LibreOffice) once, the first time a Publisher file is
+opened, after asking. Users never see LibreOffice in the app.
 
 ```
 cd E:\_httdocs\Bohpum
 pnpm install
-pnpm run bundle-libreoffice
 pnpm start
 ```
 
-To build an installer (`dist\Bohpum Setup <version>.exe`):
+`pnpm start` reads `.pub` files with a LibreOffice installed on the PC, or with `vendor\libreoffice` made by
+`pnpm run bundle-libreoffice` (it copies the installed LibreOffice, trimmed; `LIBREOFFICE_DIR` names another folder).
+With neither, opening a `.pub` says that this copy can't download the Publisher reader.
+
+To build an installer on your PC to try it out (`dist\Bohpum-Setup-<version>.exe`):
 
 ```
 pnpm run dist
 ```
 
-**Before each release**, after changing the version in `package.json`, write that version's notes at the top of
-`src/notes.js` (the What's new window). `pnpm run dist` stops with a plain message when the newest entry is not
-`package.json`'s version or an entry is broken (`scripts/check-notes.js`).
+It checks What's new (`scripts/check-notes.js`: the newest entry in `src/notes.js` must be `package.json`'s version),
+builds the File Explorer menu add-on (`pnpm run build:menu`), then the installer. The menu add-on needs **Visual Studio
+Build Tools** ("Desktop development with C++", x64) and the **Windows 10/11 SDK**. A local build has no update key: it
+doesn't update itself or download the Publisher reader. Only the release job's installers do.
 
-`pnpm run dist` then copies the LibreOffice installed on the build PC into `vendor\libreoffice`
-(skipped when that version is already bundled), builds the File Explorer menu add-on (`pnpm run build:menu`),
-then builds the installer. The menu add-on needs **Visual Studio Build Tools** ("Desktop development with C++",
-x64) and the **Windows 10/11 SDK** on the build PC.
+## Releasing
 
-**Keeping LibreOffice patched.** The bundled copy only changes when you ship a new Bohpum release.
-When LibreOffice publishes a security fix, update LibreOffice on the build PC, then run `pnpm run dist`
-and ship the new installer. To bundle a LibreOffice from another folder, set `LIBREOFFICE_DIR`.
+GitHub Actions builds each release and puts it in a private Cloudflare R2 bucket behind
+`https://bohpum-update.smith89k.com/`, locked so that only installed copies (which carry the update key) get in.
+Installed copies check when they start and every 6 hours, download a new version quietly, then ask **Restart now** /
+**Later** (Later = it installs when Bohpum is closed). **Help › Check for Updates** checks by hand.
 
-LibreOffice is licensed under MPL 2.0. Its `license.txt` and `LICENSE.html` ship inside the bundle;
+1. `pnpm version 0.3.0 --no-git-tag-version --no-git-checks` (only edits package.json).
+2. Write that version's notes at the top of `src/notes.js` (What's new) with today's date. They become the GitHub
+   release notes; the release stops without them.
+3. Commit and push main.
+4. GitHub → **Actions** → **Release** → **Run workflow** → type the version (or `gh workflow run release.yml -f version=0.3.0`).
+
+Give people the installer from the GitHub release page; their copy updates itself from then on. The one-time
+Cloudflare and GitHub setup, and what each step of the job does: [docs/updates-setup.md](docs/updates-setup.md).
+
+**Privacy.** Bohpum goes online by itself only to check for updates, and downloads the Publisher reader only when you
+say yes. Nothing about you or your files is sent.
+
+## The Publisher reader (LibreOffice)
+
+Bohpum reads `.pub` and the other outside formats with LibreOffice, in the background. It is not in the installer.
+The release job downloads the LibreOffice pinned in `libreoffice.json` from The Document Foundation (and checks its
+SHA-256), trims it as `scripts/bundle-libreoffice.js` does (no help, gallery, templates or Python; one icon theme; the
+Visual C++ runtime copied in), checks that the trimmed copy really opens a Publisher file, then zips it and stores it
+in the same private bucket as `reader/LibreOffice-<version>-pack<n>.zip`. It does this only when that pack isn't there
+yet. The pack's name, size and SHA-256 are built into the app, so nothing on the server can swap it.
+
+In the app, the first `.pub` asks "Bohpum needs the Publisher reader" (with its size); **Download** shows the download
+in the reading box (Cancel stops it), then opens the file. The reader is kept in `%LOCALAPPDATA%\Bohpum\reader`
+across updates; uninstalling removes it. A download that didn't finish is never used and is cleaned up. A LibreOffice
+installed normally on the PC is used instead, without asking.
+
+**Moving to a newer LibreOffice** (for example a security fix): put its version, its archive MSI address
+(`https://downloadarchive.documentfoundation.org/libreoffice/old/<x.y.z.w>/win/x86_64/LibreOffice_<x.y.z.w>_Win_x86-64.msi`)
+and that file's SHA-256 into `libreoffice.json`, then release. Bump `pack` only when the trim in
+`scripts/bundle-libreoffice.js` changes. Installed copies then offer "A newer Publisher reader is ready" the next time
+a Publisher file is opened (Not now keeps the one they have).
+
+LibreOffice is licensed under MPL 2.0. Its `license.txt` and `LICENSE.html` are inside the pack;
 credit LibreOffice on the About page.
 
 The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same files and `@font-face` rules, made from
@@ -45,7 +80,8 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
 ## What it does
 
 **Open**
-- `.pub` (Publisher 98–2019+), plus `.odg`, `.vsd/.vsdx`, `.cdr`, `.p65/.pmd`, `.qxd` through the bundled LibreOffice
+- `.pub` (Publisher 98–2019+), plus `.odg`, `.vsd/.vsdx`, `.cdr`, `.p65/.pmd`, `.qxd` through the Publisher reader
+  (LibreOffice, downloaded once: the first of these files asks first; see above)
 - Its own format, `.bpum` (older `.kbach` files still open). Saving an imported `.pub` creates a `.bpum` file; the original `.pub` is never changed.
 - While a `.pub` is read, a box with the look of the right-click convert window covers the editor: "Opening card.pub",
   a moving bar, **Cancel** (or Esc; the publication on screen stays as it was). It closes by itself when the file is in;
@@ -94,6 +130,8 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
 - Installing: on Windows 11 the installer asks Windows' "allow changes" question once. Yes → the item is in the
   first right-click menu; No, no admin rights or a silent install → it is under "Show more options". Windows 10: its
   normal menu. Updates keep it; uninstalling removes it. Log: `%TEMP%\Bohpum\explorer-menu.log`
+- If an automatic update left the item under "Show more options", Bohpum offers once to set it up again.
+- The first click without the Publisher reader asks the same Download / Not now question inside the small window.
 
 **Look** (as in Sastra PDF)
 - New, Open, Save and Print sit at the start of the toolbar (icon + word; on narrow windows only the icons)
@@ -133,8 +171,11 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
 ## Project layout
 
 ```
-main.js          Electron main process: windows, menus, files, LibreOffice import, print/PDF/PNG
+main.js          Electron main process: windows, menus, files, LibreOffice import, print/PDF/PNG, updates
 preload.js       Safe bridge between the window and main process
+updater.js       Automatic updates: when to check, what Check for Updates says, the update key (as Sastra PDF)
+reader.js        The Publisher reader: which LibreOffice to use, its download, checksum and unpack, one shared download
+libreoffice.json The one pinned LibreOffice the reader pack is made from (version, trim number, MSI, SHA-256)
 src/index.html   Editor window
 src/app.js       Editor: canvas, tools, panels, pages, undo, shortcuts
 src/odgImport.js .pub → (LibreOffice flat ODF) → Bohpum document
@@ -152,8 +193,13 @@ build/           logo.png and bpum-file.png: the logo and the .bpum file icon (s
                  makes icon.ico / icon.png, bpum.ico, the menu package logos and src/img from them. installer.nsh:
                  menu install / update / uninstall steps, .pub in "Open with"
 scripts/build-explorer-menu.js Builds BohpumMenu.dll and Bohpum.ExplorerMenu.msix into explorer-menu/out
-scripts/bundle-libreoffice.js  Copies a trimmed LibreOffice into vendor/libreoffice for the installer
+scripts/bundle-libreoffice.js  The trim (trimCopy); copies the installed LibreOffice into vendor/libreoffice for pnpm start
 scripts/check-notes.js         Stops pnpm run dist when src/notes.js has no notes for package.json's version
-vendor/libreoffice             The bundled LibreOffice (generated, not edited by hand)
+scripts/reader-pack.js         Makes the reader pack (trimmed LibreOffice zip + its name, size, SHA-256); reader-check.js
+                               checks it opens a Publisher file
+scripts/r2-prune.js, r2-put.sh, release-notes.js  The release job's helpers (which old installers go, uploads, notes)
+.github/workflows/release.yml  The Release button (by hand only): builds, uploads to R2, makes the GitHub release
+docs/updates-setup.md          The Cloudflare and GitHub setup, and how to release
+vendor/libreoffice             A trimmed LibreOffice for pnpm start only (generated, not edited by hand)
 tests/                         Electron tests: pnpm test (each tests/*.test.js runs the real app)
 ```
