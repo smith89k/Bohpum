@@ -3,9 +3,10 @@
 // R2 bucket as reader/<pack>.zip; Bohpum downloads it the first time it is needed, after asking, into
 // %LOCALAPPDATA%\Bohpum\reader\<pack>\ (updates don't touch it; a full uninstall removes it). The pack's name, size
 // and SHA-256 are built into the app (reader-pack.json), never read from the server.
-// Which LibreOffice is used, in this order: (1) the pack this Bohpum expects; (2) in `pnpm start` only, the developer's
-// vendor\libreoffice; (3) a LibreOffice installed on the PC; (4) an older downloaded pack (and a newer one is offered).
-// None of them → ask to download. No Electron here: main.js wires it, so the rules are plain-Node testable.
+// Which LibreOffice is used, in this order: (0) in the Microsoft Store copy, the one inside its package (store.js);
+// (1) the pack this Bohpum expects; (2) in `pnpm start` only, the developer's vendor\libreoffice; (3) a LibreOffice
+// installed on the PC; (4) an older downloaded pack (and a newer one is offered). None of them → ask to download.
+// No Electron here: main.js wires it, so the rules are plain-Node testable.
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), cp = require('child_process');
 
 const PACK_RE = /^LibreOffice-[0-9][\w.]*-pack\d+$/;
@@ -37,8 +38,10 @@ function completePacks(root) {
 }
 
 // → { soffice, need }: need 'download' (nothing to read with), 'newer' (an older pack works, the expected one isn't
-// here yet) or null. dev / installed are soffice paths main.js found, or null.
-function chooseReader({ root, pack, dev = null, installed = null }) {
+// here yet) or null. bundled / dev / installed are soffice paths main.js found, or null; bundled (the Store copy's own)
+// only counts when the file is there.
+function chooseReader({ root, pack, bundled = null, dev = null, installed = null }) {
+  if (bundled && isFile(bundled)) return { soffice: bundled, need: null };
   const done = completePacks(root);
   if (pack && done.includes(pack.name)) return { soffice: sofficeIn(path.join(root, pack.name)), need: null };
   if (dev) return { soffice: dev, need: null };

@@ -1,6 +1,7 @@
 // reader.js, part 1: the Publisher reader (a trimmed LibreOffice downloaded once) — its pack name and info, which
-// LibreOffice Bohpum uses (the expected pack, the developer's copy, an installed LibreOffice, then an older pack), and
-// what is left over to clean up. A folder that was never finished (.partial, or no soffice.exe) is never used.
+// LibreOffice Bohpum uses (the one inside the Store package, the expected pack, the developer's copy, an installed
+// LibreOffice, then an older pack), and what is left over to clean up. A folder that was never finished (.partial, or no
+// soffice.exe) is never used.
 const fs = require('fs');
 const path = require('path');
 const { run, ROOT } = require('./harness');
@@ -49,6 +50,11 @@ run(async (t, check) => {
   root = fresh(); mk(root, NAME + '.partial'); fs.mkdirSync(path.join(root, NAME, 'program'), { recursive: true });
   check('A .partial folder holding soffice.exe, and a pack folder without soffice.exe, are never used',
     same(reader.chooseReader({ root, pack }), { soffice: null, need: 'download' }) && same(reader.completePacks(root), []), reader.chooseReader({ root, pack }));
+  const B = path.join(fresh(), 'soffice.exe'); fs.writeFileSync(B, 'x');
+  root = fresh(); mk(root, NAME);
+  check('The reader inside the Store package wins over everything else',
+    same(reader.chooseReader({ root, pack, bundled: B, dev: 'D', installed: 'I' }), { soffice: B, need: null }));
+  check('…but only when it is there', same(reader.chooseReader({ root: fresh(), pack, bundled: path.join(fresh(), 'gone.exe'), installed: 'I' }), { soffice: 'I', need: null }));
 
   // ---- what to clean up
   root = fresh(); mk(root, NAME); mk(root, 'LibreOffice-7.0.0-pack1'); mk(root, 'x.partial'); fs.writeFileSync(path.join(root, 'x.download'), 'x');
