@@ -7,11 +7,12 @@ version downloads quietly; the app then asks **Restart now** or **Later** (Later
 The same address holds the **Publisher reader**: a trimmed LibreOffice that reads `.pub` files. It is not in the
 installer; Bohpum downloads it once, the first time a Publisher file is opened, after asking.
 
-The address is **private**, as Sastra PDF's: it is locked with Cloudflare Access, and only requests carrying Bohpum's
-own service token get in; anyone else — a browser too — gets **403**. The release job builds the token into the app
+The address is **locked**, as Sastra PDF's: Cloudflare Access lets in only requests carrying Bohpum's own service
+token; anyone else — a browser too — gets **403**. The release job builds the token into the app
 (`update-config.json`, never committed), so every copy installed from a release installer updates itself and can
-download the reader. There is no public download link: you give people the installer yourself (it is on the GitHub
-release page, which only you can see — the repository is private).
+download the reader. Since 2026-10-19 Bohpum is open source (GNU GPL 3.0) and the repository is public: anyone can
+download the installer from the GitHub release page, so the lock now keeps out only requests that don't come from an
+installed Bohpum. The source code never holds the key; only the release job's installers do.
 
 The files live in a Cloudflare R2 bucket. GitHub Actions builds each release and puts it there; only the release job
 can upload or delete.
@@ -116,6 +117,15 @@ code:
   pack if it is new, then the installer (installer first, `latest.yml` last); checks the address is locked and opens
   with the key; removes the older installers there (their small `.blockmap` files and every reader pack stay); and
   makes the GitHub release `v0.3.0` with the notes and the installer to hand out.
+Once SignPath is set up (section 8) there are two more jobs between build and publish:
+- **sign** (only the SignPath token, installs nothing): sends the installer to SignPath and waits — up to 6 hours —
+  until you approve the signing request there. SignPath gives back the signed installer.
+- **rehash** (no keys): the signature changes the installer's bytes, so the blockmap and `latest.yml`'s SHA-512 and
+  size are made again from the signed file (`scripts/rehash-installer.js`, with electron-builder's own blockmap code);
+  installed copies check both before they install an update.
+publish then uploads and releases the signed files. If signing is refused, fails or isn't approved in time, publish
+doesn't run: nothing is uploaded and nothing is released, and the same version can be released again.
+
 It stops with a plain message if the version doesn't match package.json, is already released, or a secret is missing.
 If a run stops half-way after uploading (the installer is in the bucket but there's no GitHub release), the next run of
 the same version refuses: bump the version and release again.
@@ -152,22 +162,50 @@ Release. Installed copies then say "A newer Publisher reader is ready" the next 
 In the app the reader lives in `%LOCALAPPDATA%\Bohpum\reader\<pack>\`. Updates don't touch it; a full uninstall
 removes it.
 
+## 8. Code signing (SignPath Foundation) — once
+
+Windows SmartScreen blocks new installers that carry no signature. SignPath Foundation signs open-source projects for
+free; the certificate is issued to SignPath Foundation, so Windows shows **SignPath Foundation** as the publisher.
+Their conditions (https://signpath.org/terms): an OSI license, the project already released, built on GitHub from the
+public code, the **Code signing policy** and **Privacy** sections in the README (done), every release approved by hand,
+and **two-step login (MFA) on GitHub and on SignPath** for everyone in the project.
+
+1. GitHub → Settings → Password and authentication → turn on **two-factor authentication** (if it is off).
+2. Release one version the normal way (section 6): SignPath wants a project that is already released.
+3. Apply at **https://signpath.org/apply** with the repository `https://github.com/smith89k/Bohpum`. They may ask about
+   the Visual C++ runtime files inside the Publisher reader pack: Microsoft's redistributable files, which LibreOffice
+   ships too.
+4. When they accept, in SignPath: the project is **`Bohpum`**, linked to the repository, with GitHub.com as its trusted
+   build system; the signing policy **`release-signing`** (approval by you); the artifact configuration signs the one
+   `.exe` in the artifact (`<zip-file><pe-file path="*.exe" /></zip-file>`). Make an API token for a CI user that may
+   submit to that policy.
+5. GitHub → **smith89k/Bohpum** → **Settings** → **Secrets and variables** → **Actions**:
+   - **Variables** tab → `SIGNPATH_ORGANIZATION_ID` = your SignPath organization ID
+   - **Secrets** tab → `SIGNPATH_API_TOKEN` = the API token (paste it straight from SignPath)
+6. Release the next version. The run stops at **sign** until you approve the request in SignPath (you get an email);
+   then the release has the signed installer. Check: right-click it → Properties → **Digital Signatures** shows
+   SignPath Foundation.
+
+Without the variable the job skips sign and rehash and releases unsigned, as before. To stop signing, delete the
+variable.
+
 ## Good to know
 
-- **Giving someone Bohpum:** download the installer from the GitHub release page and send them the file. Their copy
+- **Giving someone Bohpum:** send them the link to the GitHub releases page
+  (https://github.com/smith89k/Bohpum/releases), or download the installer there and send them the file. Their copy
   updates itself from then on.
 - **Copies without the key** — 0.1.0 (built by hand), anything built locally (`pnpm run dist`), `pnpm start` — never
   update and can't download the reader: install a release's installer once. A LibreOffice installed on the PC still
   reads Publisher files in them.
-- **Windows SmartScreen** warns about the installer because it isn't code-signed yet: **More info** → **Run anyway**.
+- **Windows SmartScreen** warns about the installer until it is code-signed (section 8): **More info** → **Run anyway**.
   Updates installed by the app don't show this.
 - **What the app sends:** only the requests for `latest.yml`, the installer and its blockmap, and — when you say
   Download — the reader pack, all with the update key. Nothing about the user or their files. Problems with a check or
   a download go to `%TEMP%\Bohpum\update.log` (a download you asked for also says what went wrong in its box).
-- **The update key is inside every installer**, so anyone you give the file to could pull it out and download later
-  versions too. That matches "only people I give the file to". If it leaks further: Zero Trust → Service credentials →
-  refresh or replace `bohpum-updater`, update the two `CF_ACCESS_*` secrets and release a new version — copies
-  holding the old key stop updating and must install the new version by hand.
+- **The update key is inside every installer**, and the installers are public, so anyone could pull it out and
+  download updates and the reader without installing Bohpum. Downloads from R2 cost nothing, so this is harmless. If it
+  is ever abused: Zero Trust → Service credentials → refresh or replace `bohpum-updater`, update the two `CF_ACCESS_*`
+  secrets and release a new version — copies holding the old key stop updating and must install the new version by hand.
 - **A leaked upload key:** delete the R2 token, make a new one (section 2), update `R2_ACCESS_KEY_ID` and
   `R2_SECRET_ACCESS_KEY`. Installed copies don't hold it, so they keep updating.
 - **Cost:** R2's free tier (10 GB stored, no charge for downloads) and Zero Trust's free plan cover this easily.

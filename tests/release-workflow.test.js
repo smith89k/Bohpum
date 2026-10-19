@@ -9,6 +9,8 @@ const fs = require('fs');
 const path = require('path');
 const { run, ROOT } = require('./harness');
 
+const otherPeoplesCodeRe = () => /pnpm install|pnpm exec|electron-builder|msiexec|reader-pack\.js\b|pnpm\/action-setup/;
+
 run(async (t, check) => {
   const file = path.join(ROOT, '.github', 'workflows', 'release.yml');
   const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n') : '';
@@ -41,15 +43,40 @@ run(async (t, check) => {
     });
   };
   const J = Object.fromEntries(Object.entries(jobs).map(([k, v]) => [k, { text: v.join('\n'), steps: stepsOf(v) }]));
-  check('Three jobs: check, build, publish', ['check', 'build', 'publish'].every(k => J[k]), Object.keys(J));
-  if (!['check', 'build', 'publish'].every(k => J[k])) return;
+  const ALL = ['check', 'build', 'sign', 'rehash', 'publish'];
+  check('Five jobs: check, build, sign and rehash (SignPath code signing), publish', ALL.every(k => J[k]), Object.keys(J));
+  if (!ALL.every(k => J[k])) return;
   const jobEnv = (j) => (/^ {4}env:\n((?: {6}.*\n)+)/m.exec(J[j].text + '\n') || [])[1] || '';
-  check('No job gives a secret to all its steps', ['check', 'build', 'publish'].every(j => !/secrets\./.test(jobEnv(j))));
-  check('build waits for check; publish waits for both',
-    /^ {4}needs: check\s*$/m.test(J.build.text) && /^ {4}needs: \[check, build\]\s*$/m.test(J.publish.text));
+  check('No job gives a secret to all its steps', ALL.every(j => !/secrets\./.test(jobEnv(j))));
+  check('build waits for check; sign for build; rehash for build and sign; publish for all four',
+    /^ {4}needs: check\s*$/m.test(J.build.text) && /^ {4}needs: build\s*$/m.test(J.sign.text) && /^ {4}needs: \[build, sign\]\s*$/m.test(J.rehash.text)
+      && /^ {4}needs: \[check, build, sign, rehash\]\s*$/m.test(J.publish.text));
+
+  // ---- code signing (SignPath Foundation): only once the repository variable is set; never an unsigned release then
+  const signPathOn = /vars\.SIGNPATH_ORGANIZATION_ID != ''/;
+  check('sign runs only when SignPath is set up (repository variable SIGNPATH_ORGANIZATION_ID)', signPathOn.test((/^ {4}if:.*$/m.exec(J.sign.text) || [''])[0]), J.sign.text);
+  const unsigned = step => /upload-artifact/.test(step.text) && /installer-unsigned/.test(step.text);
+  check('build keeps the unsigned installer on its own for SignPath, only when SignPath is set up',
+    J.build.steps.some(s => unsigned(s) && signPathOn.test(s.text) && /dist\/\$\{\{ env\.EXE \}\}\s*$/m.test(s.text)) && /unsigned: \$\{\{ steps\.\w+\.outputs\.artifact-id \}\}/.test(J.build.text), J.build.steps.map(s => s.name));
+  const signStep = J.sign.steps.find(s => /signpath\/github-action-submit-signing-request@v\d/.test(s.text)) || { text: '' };
+  check('sign: SignPath\'s action signs that artifact and waits for the approval; its only secret is the SignPath token',
+    /github-artifact-id: \$\{\{ needs\.build\.outputs\.unsigned \}\}/.test(signStep.text) && /wait-for-completion: true/.test(signStep.text)
+      && /organization-id: \$\{\{ vars\.SIGNPATH_ORGANIZATION_ID \}\}/.test(signStep.text)
+      && (J.sign.text.match(/secrets\.\w+/g) || []).every(s => s === 'secrets.SIGNPATH_API_TOKEN') && /secrets\.SIGNPATH_API_TOKEN/.test(signStep.text), signStep.text);
+  check('sign and rehash never see the R2 key, the update key or the GitHub token; sign installs nothing',
+    !/secrets\.(R2_|CF_ACCESS)|github\.token/.test(J.sign.text + J.rehash.text) && !/secrets\./.test(J.rehash.text) && !otherPeoplesCodeRe().test(J.sign.text));
+  check('rehash: the signed installer replaces the unsigned one, with its blockmap and latest.yml made again',
+    /node scripts\/rehash-installer\.js "signed\/\$EXE" dist/.test(J.rehash.text) && /name: installer-signed/.test(J.rehash.text) && /name: installer-final/.test(J.rehash.text));
+  const pubIf = (/^ {4}if: (.*)$/m.exec(J.publish.text) || [])[1] || '';
+  check('publish: unsigned only while SignPath is not set up; signed (rehash done) otherwise; never after a cancel',
+    /!cancelled\(\)/.test(pubIf) && /needs\.check\.result == 'success'/.test(pubIf) && /needs\.build\.result == 'success'/.test(pubIf)
+      && /vars\.SIGNPATH_ORGANIZATION_ID == '' && needs\.sign\.result == 'skipped'/.test(pubIf) && /\|\| needs\.rehash\.result == 'success'/.test(pubIf), pubIf);
+  check('…and it takes the signed files when there are some',
+    /name: \$\{\{ needs\.rehash\.result == 'success' && 'installer-final' \|\| 'installer' \}\}/.test(J.publish.text));
+  check('The release notes link the code signing policy', /Code signing policy/.test(J.publish.text) && /github\.com\/smith89k\/Bohpum#code-signing-policy/.test(J.publish.text));
 
   // ---- who sees which key
-  const otherPeoplesCode = /pnpm install|pnpm exec|electron-builder|msiexec|reader-pack\.js\b|pnpm\/action-setup/;
+  const otherPeoplesCode = otherPeoplesCodeRe();
   check('check and publish install and build nothing (no pnpm, no electron-builder, no MSI)',
     !otherPeoplesCode.test(J.check.text) && !otherPeoplesCode.test(J.publish.text));
   check('build never gets the R2 key or the GitHub token', !/secrets\.R2_|github\.token|secrets\.GITHUB_TOKEN/.test(J.build.text));

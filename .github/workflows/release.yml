@@ -12,6 +12,10 @@
 # shares a machine with other people's code: "build" runs pnpm install, the MSI unpack and electron-builder with no R2
 # key and no GitHub token (only the update key, which goes inside the app anyway); "check" and "publish" have the keys
 # but install nothing and run only this repository's own scripts.
+# Two more once SignPath is set up (repository variable SIGNPATH_ORGANIZATION_ID, secret SIGNPATH_API_TOKEN; free code
+# signing for open source, docs/updates-setup.md section 8): "sign" sends the installer to SignPath and waits until it
+# is approved there by hand; "rehash" (no keys) makes the blockmap and latest.yml again from the signed file. Then
+# publish releases only the signed installer. Until then nothing changes: the installer stays unsigned.
 name: Release
 
 on:
@@ -135,6 +139,8 @@ jobs:
     needs: check
     runs-on: windows-latest
     timeout-minutes: 60
+    outputs:
+      unsigned: ${{ steps.unsigned.outputs.artifact-id }}
     permissions:
       contents: read
     defaults:
@@ -228,6 +234,17 @@ jobs:
           retention-days: 5
           compression-level: 0
 
+      # SignPath signs the files of one artifact: the installer alone goes there.
+      - name: "For SignPath: the installer on its own (only once SignPath is set up)"
+        id: unsigned
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-unsigned
+          path: dist/${{ env.EXE }}
+          retention-days: 5
+          compression-level: 0
+
       - uses: actions/upload-artifact@v7
         if: needs.check.outputs.have != 'true'
         with:
@@ -238,9 +255,91 @@ jobs:
           retention-days: 5
           compression-level: 0
 
+  # SignPath Foundation's free code signing for open source (docs/updates-setup.md section 8): SignPath checks the
+  # artifact came from this run, signs the installer once it is approved there by hand, and gives it back. Only the
+  # SignPath token here: no R2 key, no update key, nothing installed.
+  sign:
+    needs: build
+    if: vars.SIGNPATH_ORGANIZATION_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # the time there is to approve it in SignPath
+    permissions:
+      contents: read
+      actions: read        # SignPath reads this run and downloads the artifact with the GitHub token
+    steps:
+      - name: Sign the installer (waits for the approval in SignPath)
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: Bohpum
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ needs.build.outputs.unsigned }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 21000
+          output-artifact-directory: signed
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installer-signed
+          path: signed/${{ env.EXE }}
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 0
+
+  # The signature changes the installer's bytes, and installed copies check latest.yml's SHA-512 and size and download
+  # only the changed parts (the blockmap): both are made again from the signed file (scripts/rehash-installer.js, with
+  # electron-builder's own blockmap code). No keys at all here.
+  rehash:
+    needs: [build, sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install (electron-builder's blockmap code; no install scripts run)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: installer
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: installer-signed
+          path: signed
+
+      - name: The signed installer replaces the unsigned one, with its own blockmap, SHA-512 and size
+        run: node scripts/rehash-installer.js "signed/$EXE" dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installer-final
+          path: |
+            dist/${{ env.EXE }}
+            dist/${{ env.EXE }}.blockmap
+            dist/latest.yml
+          retention-days: 5
+          compression-level: 0
+
   # Only the built files and this repository's own scripts (nothing installed), with the R2 key and the GitHub token.
+  # Once SignPath is set up it releases only a signed installer: a refused, failed or timed-out signing stops it here.
   publish:
-    needs: [check, build]
+    needs: [check, build, sign, rehash]
+    if: ${{ !cancelled() && needs.check.result == 'success' && needs.build.result == 'success' && ((vars.SIGNPATH_ORGANIZATION_ID == '' && needs.sign.result == 'skipped') || needs.rehash.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -259,7 +358,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: installer
+          name: ${{ needs.rehash.result == 'success' && 'installer-final' || 'installer' }}
           path: dist
 
       - uses: actions/download-artifact@v8
@@ -339,6 +438,7 @@ jobs:
         run: |
           node scripts/release-notes.js "$VERSION" > notes.md
           printf '\nThe Publisher reader (LibreOffice %s) downloads once, the first time a Publisher file is opened.\n' "$LO" >> notes.md
-          printf '\nGive the installer below to the people who should have Bohpum: copies installed from it update themselves.\n\nSHA-256 of the installer: `%s`\n' \
+          printf '\nDownload the installer below and run it: copies installed from it update themselves.\n\nSHA-256 of the installer: `%s`\n' \
             "$(sha256sum "dist/$EXE" | cut -d' ' -f1)" >> notes.md
+          printf '\nFree and open source (GNU GPL 3.0). [Code signing policy](https://github.com/smith89k/Bohpum#code-signing-policy)\n' >> notes.md
           gh release create "v$VERSION" "dist/$EXE" --target "$GITHUB_SHA" --title "Bohpum $VERSION" --notes-file notes.md
