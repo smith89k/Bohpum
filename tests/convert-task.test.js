@@ -18,7 +18,7 @@ function listFile(paths) {
   return f;
 }
 const args = (paths) => ['--bohpum-task=convert', '--bohpum-list=' + listFile(paths)];
-const pub = (name) => { const p = path.join(W, name); fs.copyFileSync(path.join(ROOT, 'samples', 'card-original.pub'), p); return p; };
+const pub = (name) => { const p = path.join(W, name); fs.copyFileSync(path.join(ROOT, 'samples', 'demo-card.pub'), p); return p; };
 const card = pub('card.pub');
 // object ids are random: number them in order of appearance; the name follows the file name
 const norm = (text) => {
