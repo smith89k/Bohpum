@@ -42,6 +42,9 @@ Installed copies check when they start and every 6 hours, download a new version
    release notes; the release stops without them.
 3. Commit and push main.
 4. GitHub → **Actions** → **Release** → **Run workflow** → type the version (or `gh workflow run release.yml -f version=0.3.0`).
+5. Once `store.json` is in place (the Microsoft Store identity), the release also has `Bohpum-Store-<version>.msix`:
+   submit it in Partner Center. Microsoft signs it, so Store users see no warning
+   ([docs/updates-setup.md](docs/updates-setup.md) section 8).
 
 0.2.0 (2026-10-18) is the first release made this way; private updates and the Publisher reader download are in
 place. Give people the installer from the GitHub release page; their copy updates itself from then on. The one-time

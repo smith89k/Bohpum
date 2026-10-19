@@ -152,6 +152,49 @@ Release. Installed copies then say "A newer Publisher reader is ready" the next 
 In the app the reader lives in `%LOCALAPPDATA%\Bohpum\reader\<pack>\`. Updates don't touch it; a full uninstall
 removes it.
 
+## 8. The Microsoft Store
+
+The Store version is the same Bohpum with the Publisher reader inside and no update key. Microsoft signs it, so
+Windows shows no warning, and the Store keeps it up to date. The installer (sections 1–7) stays as it is.
+
+**Once:**
+1. Open a free developer account at https://storedeveloper.microsoft.com with your Microsoft account. Microsoft checks
+   a photo of your ID and a selfie; this can take a few days.
+2. Partner Center → **Apps and games** → **New product** → **MSIX or PWA app** → reserve the name **Bohpum**.
+3. Bohpum → **Product management** → **Product identity**. Copy four values into `store.json` at the top of the
+   repository, then commit and push it (they are not secret):
+   ```json
+   {
+     "identityName": "<Package/Identity/Name>",
+     "publisher": "<Package/Identity/Publisher, CN=…>",
+     "publisherDisplayName": "<Package/Properties/PublisherDisplayName>",
+     "storeId": "<Store ID, 12 characters>"
+   }
+   ```
+   From then on every release also makes `Bohpum-Store-<version>.msix` and puts it on the GitHub release.
+4. Put the privacy policy from `docs/store-listing.md` on a page of your website (for example
+   https://smith89k.com/bohpum/privacy) — Partner Center asks for its address.
+5. The first submission: **Pricing and availability** (Free; markets: all), **Properties** (category Productivity;
+   privacy policy address), **Age ratings** (the questionnaire: no violence, no user content shared, no purchases),
+   **Store listings** (English: description, features and keywords from `docs/store-listing.md`, at least one
+   screenshot of Bohpum with a publication open), **Submission options** → restricted capabilities: paste the
+   `runFullTrust` sentence from `docs/store-listing.md`.
+
+**Each release:**
+1. Release as in section 6.
+2. Open the GitHub release `v<version>` and download `Bohpum-Store-<version>.msix`.
+3. Partner Center → Bohpum → **Start update** (or, the first time, the submission above) → **Packages** → drag the
+   `.msix` in → wait until it says it is valid → **Submit to the Store**.
+4. Microsoft checks it, usually in 1 to 3 days. Store users then get the update by themselves. If certification asks a
+   question (most likely about `runFullTrust` or the LibreOffice inside), answer it in **Notes for certification** and
+   submit again.
+
+**Trying the Store package on this PC first** (before a first submission, or after changing the manifest):
+`pnpm run bundle-libreoffice`, then in PowerShell
+`$env:BOHPUM_STORE_SIDELOAD='1'; $env:BOHPUM_STORE_READER='vendor/libreoffice'; pnpm run dist:store`, then in an
+administrator PowerShell `Add-AppxPackage -Path dist-store\Bohpum-Store-<version>.msix -AllowUnsigned`. It installs as
+"Bohpum" (identity `Bohpum.StoreTest`); remove it with `Get-AppxPackage Bohpum.StoreTest | Remove-AppxPackage`.
+
 ## Good to know
 
 - **Giving someone Bohpum:** download the installer from the GitHub release page and send them the file. Their copy
@@ -161,6 +204,8 @@ removes it.
   reads Publisher files in them.
 - **Windows SmartScreen** warns about the installer because it isn't code-signed yet: **More info** → **Run anyway**.
   Updates installed by the app don't show this.
+- **Without the warning:** the Microsoft Store version (section 8) is signed by Microsoft. Send people the Store link
+  instead of the installer when they shouldn't see SmartScreen at all.
 - **What the app sends:** only the requests for `latest.yml`, the installer and its blockmap, and — when you say
   Download — the reader pack, all with the update key. Nothing about the user or their files. Problems with a check or
   a download go to `%TEMP%\Bohpum\update.log` (a download you asked for also says what went wrong in its box).
