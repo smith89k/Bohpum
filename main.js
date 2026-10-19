@@ -77,8 +77,9 @@ function devSoffice() {
 function installedSoffice() {
   const candidates = [];
   if (process.platform === 'win32') {
-    const pf = [process.env['ProgramFiles'], process.env['ProgramFiles(x86)'], 'C:\\Program Files', 'C:\\Program Files (x86)'];
-    for (const p of pf) if (p) candidates.push(path.join(p, 'LibreOffice', 'program', 'soffice.exe'));
+    // the folders Windows names (the tests point them at empty ones); the usual paths only when it names none
+    const pf = [process.env['ProgramFiles'] || 'C:\\Program Files', process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'];
+    for (const p of pf) candidates.push(path.join(p, 'LibreOffice', 'program', 'soffice.exe'));
     if (process.env.LOCALAPPDATA) candidates.push(path.join(process.env.LOCALAPPDATA, 'Programs', 'LibreOffice', 'program', 'soffice.exe'));
   } else if (process.platform === 'darwin') {
     candidates.push('/Applications/LibreOffice.app/Contents/MacOS/soffice');
