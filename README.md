@@ -33,7 +33,7 @@ pnpm start
 `pnpm run bundle-libreoffice` (it copies the installed LibreOffice, trimmed; `LIBREOFFICE_DIR` names another folder).
 With neither, opening a `.pub` says that this copy can't download the Publisher reader.
 
-`pnpm test` runs the tests: each `tests/*.test.js` starts the real app (`pnpm test -- tests/about.test.js` runs one).
+`pnpm test` runs the tests: each `tests/*.test.js` starts the real app (`pnpm test tests/about.test.js` runs one).
 They use the made-up card in `samples/`.
 
 To build an installer on your PC to try it out (`dist\Bohpum-Setup-<version>.exe`, not signed):
