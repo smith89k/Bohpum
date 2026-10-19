@@ -87,4 +87,5 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           node scripts/release-notes.js "$VERSION" > notes.md
+          printf '\n[Code signing policy](https://github.com/smith89k/Bohpum#code-signing-policy)\n' >> notes.md
           gh release create "$GITHUB_REF_NAME" out/*.exe --title "Bohpum $VERSION" --notes-file notes.md

@@ -1,46 +1,20 @@
 # Bohpum (បោះពុម្ព)
 
-A desktop publishing app for Windows that opens your old Microsoft Publisher (`.pub`) files,
+A free, open-source desktop publishing app for Windows. It opens your old Microsoft Publisher (`.pub`) files,
 lets you edit them, and prints them, including placing a small card anywhere on A4 the way Publisher does.
+*Bohpum* is Khmer for “to print”.
 
-## Run it
+## Download
 
-You need **Node.js** (LTS) and, on the build PC only, **LibreOffice**. The app ships its own trimmed copy of
-LibreOffice to read `.pub` files, so users install nothing extra and never see LibreOffice in the app.
+Get the newest `Bohpum Setup <version>.exe` from the [Releases page](https://github.com/smith89k/Bohpum/releases)
+and run it. Windows 10 and 11, 64-bit. Everything it needs is inside, including its own copy of LibreOffice for
+reading `.pub` files, so you install nothing else.
 
-```
-cd E:\_httdocs\Bohpum
-npm install
-npm run bundle-libreoffice
-npm start
-```
-
-To build an installer (`dist\Bohpum Setup <version>.exe`):
-
-```
-npm run dist
-```
-
-**Before each release**, after changing the version in `package.json`, write that version's notes at the top of
-`src/notes.js` (the What's new window). `npm run dist` stops with a plain message when the newest entry is not
-`package.json`'s version or an entry is broken (`scripts/check-notes.js`).
-
-`npm run dist` then copies the LibreOffice installed on the build PC into `vendor\libreoffice`
-(skipped when that version is already bundled), builds the File Explorer menu add-on (`npm run build:menu`),
-then builds the installer. The menu add-on needs **Visual Studio Build Tools** ("Desktop development with C++",
-x64) and the **Windows 10/11 SDK** on the build PC.
-
-**Keeping LibreOffice patched.** The bundled copy only changes when you ship a new Bohpum release.
-When LibreOffice publishes a security fix, update LibreOffice on the build PC, then run `npm run dist`
-and ship the new installer. To bundle a LibreOffice from another folder, set `LIBREOFFICE_DIR`.
-
-LibreOffice is licensed under MPL 2.0. Its `license.txt` and `LICENSE.html` ship inside the bundle;
-credit LibreOffice on the About page.
-
-The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same files and `@font-face` rules, made from
-@fontsource packages): **IBM Plex Sans** and **IBM Plex Mono** for English and numbers, **Noto Sans Khmer** for Khmer
-(each file only covers its own letters, by `unicode-range`). All are under the SIL Open Font License 1.1; each font's
-`LICENSE` file ships with it. Text inside a publication keeps the fonts chosen for it.
+**If Windows says “Windows protected your PC”:** until the installer carries its free digital signature
+(see [Code signing policy](#code-signing-policy)), Microsoft SmartScreen warns about it because it is new.
+Click **More info**, then **Run anyway**. Or, before opening it: right-click the file → **Properties** → tick
+**Unblock** → **OK**. If there is no *Run anyway* button, Smart App Control is on for that PC
+(Windows Security → App & browser control → Smart App Control).
 
 ## What it does
 
@@ -127,6 +101,55 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
 - WordArt, mail-merge fields and linked text-box chains come in as normal text boxes.
 - Install the original fonts (e.g. Khmer OS Siemreap, Khmer OS Muol Light) for exact line breaks.
 
+## Build from source
+
+You need **Node.js** (LTS), **LibreOffice**, **Visual Studio Build Tools** ("Desktop development with C++", x64) and
+the **Windows 10/11 SDK**. The app ships its own trimmed copy of LibreOffice to read `.pub` files, so users install
+nothing extra and never see LibreOffice in the app; LibreOffice and the build tools are only needed on the build PC.
+
+```
+git clone https://github.com/smith89k/Bohpum.git
+cd Bohpum
+npm install
+npm run bundle-libreoffice
+npm start
+```
+
+`npm test` runs the tests (each `tests/*.test.js` starts the real app; `npm test -- tests/about.test.js` runs one).
+
+To build an installer on your own PC (`dist\Bohpum Setup <version>.exe`, not signed):
+
+```
+npm run dist
+```
+
+`npm run dist` first checks the What's new notes (`scripts/check-notes.js`), then copies the LibreOffice installed on
+the build PC into `vendor\libreoffice` (skipped when that version is already bundled), builds the File Explorer menu
+add-on (`npm run build:menu`), then builds the installer. To bundle a LibreOffice from another folder, set
+`LIBREOFFICE_DIR`.
+
+## Making a release
+
+Releases are built on GitHub, not on a PC, so that they can be signed
+([.github/workflows/release.yml](.github/workflows/release.yml)):
+
+1. Change the version in `package.json` (`npm version X.Y.Z --no-git-tag-version`) and write that version's notes at
+   the top of `src/notes.js` (the What's new window, also used as the release notes). `npm run dist` and the release
+   stop with a plain message when the newest entry is not `package.json`'s version or an entry is broken.
+2. Commit, then tag and push the tag: `git tag vX.Y.Z` and `git push origin main vX.Y.Z`.
+3. GitHub builds the installer (it installs LibreOffice there and bundles it), sends it to SignPath for signing,
+   waits until it is approved there, and publishes the release with the signed installer and the notes.
+   Until SignPath is set up, the release gets the unsigned installer. *Actions → Release → Run workflow* only builds
+   (the installer is kept with the run) and publishes nothing.
+
+**Setting up SignPath (once):** after SignPath Foundation accepts the project, add the repository variable
+`SIGNPATH_ORGANIZATION_ID` and the secret `SIGNPATH_API_TOKEN` (Settings → Secrets and variables → Actions). In
+SignPath the project is `Bohpum`, the signing policy `release-signing`, and the artifact configuration signs the
+`.exe` inside the GitHub artifact's zip.
+
+**Keeping LibreOffice patched.** The bundled copy only changes when you ship a new Bohpum release. When LibreOffice
+publishes a security fix, make a new release: the build installs the newest LibreOffice.
+
 ## Project layout
 
 ```
@@ -151,6 +174,48 @@ build/           logo.png and bpum-file.png: the logo and the .bpum file icon (s
 scripts/build-explorer-menu.js Builds BohpumMenu.dll and Bohpum.ExplorerMenu.msix into explorer-menu/out
 scripts/bundle-libreoffice.js  Copies a trimmed LibreOffice into vendor/libreoffice for the installer
 scripts/check-notes.js         Stops npm run dist when src/notes.js has no notes for package.json's version
+scripts/release-notes.js       A version's release notes from src/notes.js (used by the release workflow)
+.github/workflows/release.yml  Builds the installer on GitHub from a vX.Y.Z tag, has it signed, publishes the release
 vendor/libreoffice             The bundled LibreOffice (generated, not edited by hand)
+samples/                       demo-card.pub (a made-up Publisher card) and test-shapes.fodg, used by the tests
 tests/                         Electron tests: npm test (each tests/*.test.js runs the real app)
+LICENSE                        GNU GPL 3.0
 ```
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/).
+
+- **What is signed:** only the installers built by the [release workflow](.github/workflows/release.yml) on GitHub,
+  from a version tag of this repository. Installers built on a PC are never signed.
+- **Committers and reviewers:** [Sunnguon TAING](https://github.com/smith89k)
+- **Approvers:** [Sunnguon TAING](https://github.com/smith89k) approves every signing request by hand.
+- Changes from other people are reviewed by a committer before they are merged.
+- Until SignPath Foundation accepts the project, releases are not signed (see [Download](#download)).
+
+## Privacy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user
+or the person installing or operating it. Bohpum makes no network connections: your files stay on your computer.
+The links in Help › About open in your web browser only when you click them.
+
+## License
+
+Copyright © 2026 Sunnguon TAING.
+
+Bohpum is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+It is distributed in the hope that it will be useful, but **without any warranty**; without even the implied warranty
+of merchantability or fitness for a particular purpose. See [LICENSE](LICENSE) for the full text.
+
+Parts made by others, shipped in the installer (also listed in Help › About):
+
+- **Electron** (MIT), with Chromium, Node.js and FFmpeg; their licenses are in `LICENSES.chromium.html` in the app folder.
+- **LibreOffice** (MPL 2.0), used only to read `.pub` and other files. Its `license.txt` and `LICENSE.html` ship inside
+  the bundled copy.
+- The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same files and `@font-face` rules, made
+  from @fontsource packages): **IBM Plex Sans** and **IBM Plex Mono** for English and numbers, **Noto Sans Khmer** for
+  Khmer (each file only covers its own letters, by `unicode-range`). All are under the SIL Open Font License 1.1;
+  each font's `LICENSE` file ships with it. Text inside a publication keeps the fonts chosen for it.
+- The installer is made with electron-builder (MIT) and NSIS (zlib).
