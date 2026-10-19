@@ -8,6 +8,7 @@ const { pathToFileURL } = require('url');
 const menu = require('./explorer-menu');
 const updates = require('./updater');
 const reader = require('./reader');
+const store = require('./store');
 
 const APP_NAME = 'Bohpum';
 const ICON = path.join(__dirname, 'build', 'icon.png'); // the exe, installer and Explorer menu use build/icon.ico
@@ -16,12 +17,23 @@ let dirty = false;
 let pendingOpenPath = null;
 let up = null;              // automatic updates (updater.js), only in the installed app with the key
 
+// The Microsoft Store copy (store.js): Windows says so (process.windowsStore). Tests only (never in the installed app):
+// BOHPUM_STORE_TEST = { resources } makes `electron .` act as one, with <resources> standing in for its resources folder.
+const storeTest = (() => {
+  if (app.isPackaged || !process.env.BOHPUM_STORE_TEST) return null;
+  try { return JSON.parse(process.env.BOHPUM_STORE_TEST) || {}; } catch { return null; }
+})();
+const STORE = store.isStoreCopy({ windowsStore: process.windowsStore, test: !!storeTest });
+const STORE_INFO = STORE ? store.readStoreInfo(path.join(__dirname, 'store.json')) : null;   // its Store ID, for Check for Updates
+const RESOURCES = (storeTest && storeTest.resources) || process.resourcesPath;
+
 // Installer hooks (build/installer.nsh): "Bohpum.exe --explorer-menu=install|uninstall|release|add-package" sets up
 // the File Explorer right-click menu and exits — before the single-instance lock, with no window.
 const menuCmd = (process.argv.find(a => a.startsWith('--explorer-menu=')) || '').slice('--explorer-menu='.length);
 if (menuCmd) {
   const res = path.join(process.resourcesPath, 'explorer-menu');
-  process.exit(app.isPackaged ? menu.runCommand(menuCmd, {
+  // the Store copy's menu comes with its package (build/store-manifest.xml): nothing to set up or remove
+  process.exit(STORE ? 0 : app.isPackaged ? menu.runCommand(menuCmd, {
     installDir: path.dirname(process.execPath), exe: process.execPath,
     dll: path.join(res, 'BohpumMenu.dll'), msix: path.join(res, menu.PKG + '.msix'),
     silent: process.argv.includes('--silent')
@@ -92,7 +104,8 @@ function installedSoffice() {
 // → { soffice, need }: need 'download' (none to read with) or 'newer' (an older pack works; only offered when this
 // copy can download the newer one), else null
 function chooseReader() {
-  const r = reader.chooseReader({ root: READER.root, pack: READER.pack, dev: devSoffice(), installed: installedSoffice() });
+  const r = reader.chooseReader({ root: READER.root, pack: READER.pack, bundled: STORE ? store.bundledSoffice(RESOURCES) : null,
+    dev: devSoffice(), installed: installedSoffice() });
   return r.need === 'newer' && !READER.canDownload ? { soffice: r.soffice, need: null } : r;
 }
 // One download at a time, shared by the editor and the convert window (each window = one caller)
@@ -438,7 +451,11 @@ ipcMain.on('reader-cancel', (e) => readerService.cancel(e.sender.id));
 
 // Automatic updates (updater.js). The page asks about unsaved changes BEFORE install-update: quitAndInstall starts the
 // installer at once and it closes the app by force, so nothing may be left to ask by then.
-ipcMain.handle('check-updates', () => up ? up.checkNow() : { kind: 'dev' });
+// The Store copy: the Store updates it, so Check for Updates opens Bohpum's page there (store.js storePageUrl).
+ipcMain.handle('check-updates', () => {
+  if (STORE) { shell.openExternal(store.storePageUrl(STORE_INFO)).catch(() => {}); return { kind: 'store' }; }
+  return up ? up.checkNow() : { kind: 'dev' };
+});
 ipcMain.handle('install-update', () => {
   const block = updates.installBlock({ downloaded: up && up.downloaded(), taskOpen: !!taskWin, readerBusy: readerService.busy() });
   if (block) return { ok: false, reason: block };
@@ -453,7 +470,7 @@ ipcMain.handle('install-update', () => {
 // run as a separate process so the window doesn't freeze while Windows asks for permission.
 ipcMain.handle('menu-repair', async (_e, action) => {
   if (action === 'check') {
-    return { needed: app.isPackaged && menu.repairNeeded({
+    return { needed: app.isPackaged && !STORE && menu.repairNeeded({
       build: menu.windowsBuild(), msixExists: fs.existsSync(path.join(process.resourcesPath, 'explorer-menu', menu.PKG + '.msix')),
       state: menu.readState(), version: app.getVersion()
     }) };
@@ -632,7 +649,7 @@ else {
     buildMenu();
     const t = loadSettings().theme;
     applyTheme(THEMES.includes(t) ? t : 'system'); // before the window exists: no light flash in Dark
-    if (app.isPackaged) menu.cleanOld(path.dirname(process.execPath)); // menu DLLs moved aside by an update
+    if (app.isPackaged && !STORE) menu.cleanOld(path.dirname(process.execPath)); // menu DLLs moved aside by an update
     reader.cleanStale(READER.root, READER.pack && READER.pack.name); // a download the PC was turned off in, older packs
     // Started by the Explorer menu: only the convert window (Bohpum quits when it closes)
     if (handleTask(process.argv)) { if (!taskWin) app.quit(); return; }
@@ -640,8 +657,9 @@ else {
     if (f) pendingOpenPath = f;
     createWindow();
     // a right-click job alone (above) never checks; electron-updater is loaded only here. The update address is locked:
-    // only a copy built by the release job carries the key (update-config.json), so a copy without it doesn't check.
-    if (updates.updatesRunHere({ packaged: app.isPackaged, platform: process.platform })) {
+    // only a copy built by the release job carries the key (update-config.json), so a copy without it doesn't check;
+    // the Store copy never does (the Store updates it).
+    if (updates.updatesRunHere({ packaged: app.isPackaged, platform: process.platform, store: STORE })) {
       if (!READER.key) updateLog('no update key (update-config.json): this copy does not check for updates');
       else up = updates.createUpdater({
         updater: require('electron-updater').autoUpdater, current: app.getVersion(), key: READER.key, log: updateLog,

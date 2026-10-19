@@ -1975,6 +1975,7 @@ async function checkUpdatesCmd() {
   let a; try { a = await api.checkUpdates(); } catch { a = { kind: 'failed' }; }
   if (!open) return;
   m.close();
+  if (a.kind === 'store') return;   // main opened Bohpum's page in the Store, which updates this copy
   if (a.kind === 'ready') return readyBox(a.version);
   const [title, text] = {
     current: ['You have the latest version', `Bohpum ${a.version} is the newest version.`],
