@@ -1093,8 +1093,9 @@ function renderProps() {
   const single = sel.length === 1 ? sel[0] : null;
   const bb = bbox(sel);
 
-  // position & size
-  const pos = section(P, single ? labelOf(single) : `${sel.length} objects selected`, single ? iconOf(single) : 'group', 'object');
+  // position & size: the icon tells what kind of object it is; its name is said once, by its own section below
+  // (Shape's type, Picture, Line, Text box), not here as well
+  const pos = section(P, single ? 'Position & size' : `${sel.length} objects selected`, single ? iconOf(single) : 'group', 'object');
   const locked = sel.some(o => o.locked);
   const lockBtn = btn(locked ? 'Locked' : 'Lock', () => cmd('lock'), 'cell-btn' + (locked ? ' on' : ''));
   lockBtn.insertAdjacentHTML('afterbegin', icon(locked ? 'lock' : 'unlock'));
@@ -1116,6 +1117,7 @@ function renderProps() {
     const ab = btns(pos);
     ab.append(lockBtn);
   }
+  const types = new Set(sel.map(o => o.type));
 
   const ar = section(P, 'Arrange', 'front', 'arrange');
   ar.append(row('Order', seg(
@@ -1138,7 +1140,9 @@ function renderProps() {
   const gs = seg(gb, ub); gs.classList.add('words');
   ar.append(row('Group', gs));
 
-  const types = new Set(sel.map(o => o.type));
+  // the box itself: its outline, then the words inside it
+  if (types.size === 1 && types.has('box')) { shapeProps(P, sel[0]); textProps(P, sel[0]); }
+
   if (types.size === 1 && types.has('box')) boxProps(P, sel);
   if (types.size === 1 && types.has('image')) imageProps(P, sel);
   if (types.size === 1 && types.has('line')) lineProps(P, sel);
@@ -1166,6 +1170,24 @@ function labelOf(o) {
   return 'Rectangle';
 }
 
+// Shape: only choices that look different. "Text box" (a plain frame) is listed only for a text box, so its list says
+// what it is; a rectangle can't become one (it would look the same). Rounded corners come only from Corner: an older
+// rounded shape ('roundrect', from Publisher files) is shown as a Rectangle with the corner it is drawn with
+// (render.js: 10 % of the shorter side when it has none), and editing its corner makes it a plain rectangle.
+const cornerOf = (o) => o.shape === 'roundrect' ? round2(Math.min(o.radius || Math.min(o.w, o.h) * 0.1, o.w / 2, o.h / 2)) : (o.radius || 0);
+function shapeProps(P, o) {
+  const s = section(P, 'Shape', 'shapes', 'shape');
+  const opts = [...(o.shape === 'none' ? [['none', 'Text box']] : []), ['rect', 'Rectangle'], ['ellipse', 'Ellipse'], ...(o.shape === 'path' ? [['path', 'Custom']] : [])];
+  s.append(row('Type', select(opts, o.shape === 'roundrect' ? 'rect' : o.shape, v => setProp(x => {
+    const r = cornerOf(x);
+    x.shape = v;
+    if (v === 'rect') x.radius = r; // a rounded shape keeps the corner it had
+  }))));
+  if (o.shape !== 'ellipse' && o.shape !== 'path') {
+    s.append(row('Corner', numInput(cornerOf(o), v => setProp(x => { if (x.shape === 'roundrect') x.shape = 'rect'; x.radius = Math.max(0, v); }), 0.5, 'mm')));
+  }
+}
+
 function boxProps(P, sel) {
   const o = sel[0];
   const f = section(P, 'Fill & line', 'fill', 'fill');
@@ -1183,10 +1205,11 @@ function boxProps(P, sel) {
   f.append(row('Weight', numInput(ptOf(o.strokeW), v => setProp(x => x.strokeW = mmOfPt(Math.max(0, v))), 0.25, 'pt')));
   f.append(row('Dash', select([['solid', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted'], ['dashdot', 'Dash-dot']], o.dash || 'solid', v => setProp(x => x.dash = v))));
   if (hasLine(o)) f.append(alignLineRow(o, 'line'));
-  const s = section(P, 'Shape', 'shapes', 'shape');
-  s.append(row('Type', select([['none', 'Frame'], ['rect', 'Rectangle'], ['roundrect', 'Rounded'], ['ellipse', 'Ellipse'], ...(o.shape === 'path' ? [['path', 'Custom']] : [])], o.shape, v => setProp(x => { x.shape = v; if (v === 'roundrect' && !x.radius) x.radius = round2(Math.min(x.w, x.h) * 0.15); }))));
-  if (o.shape === 'roundrect' || o.shape === 'rect') s.append(row('Corner', numInput(o.radius || 0, v => setProp(x => x.radius = Math.max(0, v)), 0.5, 'mm')));
-  const t = section(P, 'Text box', 'text', 'textbox');
+}
+// Text: the words inside a box (any box holds text: a text box, a rectangle, an ellipse). Key 'textbox' as before,
+// so a section folded earlier stays folded.
+function textProps(P, o) {
+  const t = section(P, 'Text', 'text', 'textbox');
   caption(t, 'Inner margins (mm)');
   const g = grid(t);
   const pad = o.pad || { t: 0, r: 0, b: 0, l: 0 };
@@ -1641,17 +1664,94 @@ async function confirmDiscard() {
   if (r === 0) return await save();
   return r === 1;
 }
+// While LibreOffice reads a .pub (or another outside format), a box with the look of the Explorer menu's convert
+// window (task.html) covers the editor: the file, what it's doing, a moving bar, Cancel (also Esc). It closes by
+// itself when the file is in; a problem stays in it, with Close. main.js says when it waits for other files.
+// The same box shows the Publisher reader's download first (progress: a real bar, "12 of 160 MB"; Cancel stops it).
+let reading = null; // that box while the file is being read (or { name } while the reader question is up)
+const mbOf = (bytes) => Math.max(1, Math.round(bytes / 1048576));
+function readingBox(name) {
+  const back = document.createElement('div'); back.className = 'modal-back';
+  back.innerHTML = `<div class="modal progress" role="dialog">
+    <div class="p-head"><img src="img/bpum-file.png" alt="" width="28" height="38" draggable="false"><div><div class="p-what"></div><div class="p-step"></div></div></div>
+    <div class="p-bar"><div class="p-fill"></div></div><ul class="p-lines" hidden></ul>
+    <div class="p-foot"><button class="btn">Cancel</button></div></div>`;
+  const q = (s) => back.querySelector(s), btn = q('.p-foot .btn');
+  const steps = { waiting: 'Waiting for the other files to finish…', reading: /\.pub$/i.test(name) ? 'Reading the Publisher file…' : 'Reading the file…' };
+  const box = { name, cancelled: false, downloading: false };
+  const close = () => { back.remove(); document.removeEventListener('keydown', key, true); if (reading === box) reading = null; };
+  const key = (e) => { if (back === $('modal-root').lastElementChild && e.key === 'Escape') { e.stopPropagation(); btn.click(); } };
+  const bar = (frac) => { q('.modal').classList.toggle('determinate', frac != null); if (frac != null) q('.modal').style.setProperty('--frac', String(frac)); };
+  box.step = (s) => { if (steps[s] && !box.downloading) q('.p-step').textContent = steps[s]; };
+  // the reader download: { phase: 'download', got, total } | { phase: 'unpack' }
+  box.progress = ({ phase, got = 0, total = 0 }) => {
+    if (!box.downloading) return;
+    if (phase === 'download') {
+      const of = mbOf(total);
+      q('.p-step').textContent = `Downloading the Publisher reader… ${Math.min(of, Math.floor(got / 1048576))} of ${of} MB`;
+      bar(total ? Math.min(1, got / total) : 0);
+    } else if (phase === 'unpack') { q('.p-step').textContent = 'Setting up the Publisher reader…'; bar(null); }
+  };
+  box.download = (total) => { box.downloading = true; box.progress({ phase: 'download', got: 0, total }); };
+  box.reading = () => { box.downloading = false; bar(null); q('.p-step').textContent = steps.reading; };
+  box.done = close;
+  box.fail = (why) => {
+    if (reading === box) reading = null;
+    q('.modal').classList.add('failed');
+    q('.p-what').textContent = `Couldn't open ${name}`; q('.p-step').textContent = '1 problem below';
+    const li = document.createElement('li'); li.textContent = why; q('.p-lines').append(li); q('.p-lines').hidden = false;
+    btn.textContent = 'Close'; btn.classList.add('primary'); btn.onclick = close; btn.focus();
+  };
+  btn.onclick = () => { box.cancelled = true; if (box.downloading) api.cancelReader(); else api.cancelRead(); close(); };
+  q('.p-what').textContent = `Opening ${name}`;
+  document.addEventListener('keydown', key, true);
+  $('modal-root').append(back);
+  return reading = box;
+}
+// Before an outside format is read: the Publisher reader (a trimmed LibreOffice, reader.js) is downloaded once, after
+// asking in the app's own box. → null (Not now, or a problem already shown) or { opts, box }: the options for
+// readDocument, and the reading box when the download already opened it.
+let oldReaderOk = false; // Not now to a newer reader: this run reads with the one already here
+async function readerReady(name) {
+  const hold = reading = { name }; // from the question on, another file only gets "Please wait"
+  try {
+    const st = await api.readerStatus();
+    if (!st.need || (st.need === 'newer' && oldReaderOk)) return { opts: { oldReader: oldReaderOk }, box: null };
+    if (!st.canDownload && st.need === 'download') { await choiceBox('Bohpum needs the Publisher reader', st.why, ['OK']); return null; }
+    const mb = mbOf(st.size || 0), newer = st.need === 'newer';
+    const r = newer
+      ? await choiceBox('A newer Publisher reader is ready', `It's a download of about ${mb} MB. Not now opens the file with the reader you have.`, ['Download', 'Not now'])
+      : await choiceBox('Bohpum needs the Publisher reader', `It's a one-time download of about ${mb} MB. Bohpum's own files open without it.`, ['Download', 'Not now']);
+    if (r !== 0) { if (!newer) return null; oldReaderOk = true; return { opts: { oldReader: true }, box: null }; }
+    const box = readingBox(name);
+    box.download(st.size || 0);
+    const got = await api.getReader();
+    if (box.cancelled) return null;
+    if (got.error) { box.fail(got.error); return null; }
+    if (!got.ok) { box.done(); return null; }
+    box.reading();
+    return { opts: {}, box };
+  } finally { if (reading === hold) reading = null; }
+}
 async function openFile(p) {
+  if (reading) return toast(`Please wait: ${reading.name} is still opening.`);
   finishEditing();
   if (!(await confirmDiscard())) return;
   if (!p) p = await api.openDialog();
   if (!p) return;
   const isForeign = !/\.(bpum|kbach|json|fodg)$/i.test(p);
-  if (isForeign) toast('Reading ' + p.split(/[\\/]/).pop() + ' …', 15000);
-  const r = await api.readDocument(p);
+  let box = null, opts = {};
+  if (isForeign) {
+    const name = p.split(/[\\/]/).pop(), ready = await readerReady(name);
+    if (!ready) return;
+    opts = ready.opts; box = ready.box || readingBox(name);
+  }
+  const r = await api.readDocument(p, opts);
+  if (box && box.cancelled) return; // Cancel: the publication on screen stays as it was
+  if (r.needReader) return box.fail('Bohpum needs the Publisher reader. Open the file again to download it.');
   if (r.error) {
     if (r.missing) rememberRecent(p, false);
-    return toast('Could not open the file: ' + r.error, 6000);
+    return box ? box.fail(r.error) : toast('Could not open the file: ' + r.error, 6000);
   }
   const base = p.split(/[\\/]/).pop().replace(/\.[^.]+$/, '');
   try {
@@ -1664,12 +1764,13 @@ async function openFile(p) {
       toast('Opened ' + base);
     } else {
       const { doc: d, warnings: warn } = docFromFodg(r.text, base);
+      if (box) box.done();
       loadDoc(d, null);
       S.importedFrom = p;
       rememberRecent(p);
       toast(`Opened ${base} (${d.pages.length} page${d.pages.length > 1 ? 's' : ''}, ${fmt(d.pageW)} × ${fmt(d.pageH)} mm)` + (warn.length ? ' – ' + warn.join(' ') : '') + ' Save will create a .bpum file.', warn.length ? 9000 : 5000);
     }
-  } catch (err) { toast('Could not read the file: ' + err.message, 6000); }
+  } catch (err) { if (box) box.fail('It may be damaged, or not a Publisher file.'); else toast('Could not read the file: ' + err.message, 6000); }
 }
 async function save(as = false) {
   finishEditing();
@@ -1827,6 +1928,75 @@ async function askClose() {
   if (ok) api.closeNow();
 }
 
+// ---------------------------------------------------------------- automatic updates (main.js, updater.js), as in Sastra PDF
+// Boxes that come by themselves (an update is ready, the right-click menu needs setting up) wait their turn: never over
+// another box (the print screen and the reading box are boxes too) or a file being read, and one at a time.
+const screenFree = () => !$('modal-root').children.length && !reading;
+function whenFree() {
+  return new Promise((res) => {
+    if (screenFree()) return res();
+    const done = () => { if (!screenFree()) return; mo.disconnect(); clearInterval(tick); res(); };
+    const mo = new MutationObserver(done);
+    mo.observe($('modal-root'), { childList: true });
+    const tick = setInterval(done, 500); // a file read ends without a box change when its question was answered Not now
+  });
+}
+let boxTurn = Promise.resolve();
+const inTurn = (open) => (boxTurn = boxTurn.then(whenFree).then(open).catch((e) => console.warn(e)));
+
+async function readyBox(v) {
+  offered.add(v);
+  const r = await choiceBox(`Bohpum ${v} is ready to install`, 'Restart now to use it, or it installs the next time you close Bohpum.', ['Restart now', 'Later']);
+  if (r === 0) await restartForUpdate();
+}
+const offered = new Set(); // asked once per downloaded version while Bohpum runs; Later = it installs on closing
+function updateReady(v) { if (offered.has(v)) return; offered.add(v); inTurn(() => readyBox(v)); }
+// The installer starts at once and closes Bohpum by force, so the unsaved question comes first.
+const RESTART_REFUSED = {
+  task: ["Bohpum can't restart while files are being converted", 'Wait for the small convert window to finish, then use Help › Check for Updates. Or close Bohpum later: the update installs then.'],
+  reader: ["Bohpum can't restart while the Publisher reader is downloading", 'Wait for the download to finish, then use Help › Check for Updates. Or close Bohpum later: the update installs then.'],
+  failed: ["The update couldn't be started", 'Your publication is still open. Bohpum downloads the update again and offers it next time.']
+};
+async function restartForUpdate() {
+  finishEditing();
+  if (S.dirty) {
+    const r = await choiceBox('Save changes first?', 'Your publication has unsaved changes. Save them before restarting?', ['Save', "Don't save", 'Cancel']);
+    if (r === 2 || (r === 0 && !(await save()))) return;
+  }
+  const res = await api.installUpdate();
+  const why = res && !res.ok && RESTART_REFUSED[res.reason];
+  if (why) await choiceBox(why[0], why[1], ['OK']);
+}
+// Help › Check for Updates: "Checking for updates…" (Cancel or Esc drops the answer), then the answer.
+async function checkUpdatesCmd() {
+  if (!screenFree()) return;
+  const m = modal('Checking for updates…', document.createElement('div'), [['Cancel', null]], 'checking');
+  let open = true; m.done.then(() => { open = false; });
+  let a; try { a = await api.checkUpdates(); } catch { a = { kind: 'failed' }; }
+  if (!open) return;
+  m.close();
+  if (a.kind === 'ready') return readyBox(a.version);
+  const [title, text] = {
+    current: ['You have the latest version', `Bohpum ${a.version} is the newest version.`],
+    downloading: [`Version ${a.version} is downloading`, "You'll be asked to restart when it's ready."],
+    dev: ["This copy doesn't update itself", 'Copies installed from a Bohpum release do.'] // pnpm start, or built without the update key
+  }[a.kind] || ["Couldn't check for updates", 'Check the internet connection and try again.'];
+  await choiceBox(title, text, ['OK']);
+}
+// After an update installed silently, the right-click menu may sit under "Show more options" (main.js menu-repair):
+// offer once per version to put it back; Windows then asks for permission. Not now (or Esc) = not again this version.
+async function menuRepairAtStart() {
+  try {
+    if (!(await api.menuRepair('check')).needed) return;
+    await inTurn(async () => {
+      const r = await choiceBox('The right-click menu needs to be set up again', 'Windows will ask for permission once. Without it, Bohpum\'s items stay under "Show more options".', ['Set up', 'Not now']);
+      if (r !== 0) { await api.menuRepair('later'); return; }
+      const { result } = await api.menuRepair('fix');
+      toast(result === 'ok' ? 'The right-click menu is back' : result === 'declined' ? 'The right-click menu stays under "Show more options"' : "Couldn't set up the right-click menu");
+    });
+  } catch (e) { console.warn(e); }
+}
+
 // ---------------------------------------------------------------- About (Help > About), as in Sastra PDF
 const AUTHOR = {
   name: 'Sunnguon Taing', handle: 'smith89k', role: 'Full-stack & DevOps developer · Cambodia', photo: 'img/author.jpg',
@@ -1844,9 +2014,10 @@ const CREDITS = [
   ['Electron', 'Electron contributors, GitHub Inc.', 'MIT', 'https://www.electronjs.org/'],
   ['LibreOffice', 'The Document Foundation', 'MPL-2.0', 'https://www.libreoffice.org/'],
   ['IBM Plex Sans & Mono', 'IBM', 'SIL OFL 1.1', 'https://github.com/IBM/plex'],
-  ['Noto Sans Khmer', 'Google', 'SIL OFL 1.1', 'https://github.com/notofonts/khmer']
+  ['Noto Sans Khmer', 'Google', 'SIL OFL 1.1', 'https://github.com/notofonts/khmer'],
+  ['electron-updater', 'electron-builder contributors', 'MIT', 'https://github.com/electron-userland/electron-builder']
 ];
-const CREDITS_NOTE = 'LibreOffice reads Publisher and other files; its licence files are in the libreoffice folder inside the app. Electron includes Chromium, Node.js and FFmpeg; their licences are in LICENSES.chromium.html in the app folder. The installer is made with electron-builder (MIT) and NSIS (zlib). The font files are packaged by Fontsource (MIT).';
+const CREDITS_NOTE = 'LibreOffice reads Publisher and other files: it is downloaded once, the first time a Publisher file is opened; its licence files are in its folder. Electron includes Chromium, Node.js and FFmpeg; their licences are in LICENSES.chromium.html in the app folder. electron-updater (automatic updates) comes with builder-util-runtime, fs-extra, jsonfile, universalify, js-yaml, lazy-val, lodash.escaperegexp, lodash.isequal, tiny-typed-emitter, debug and ms (MIT), graceful-fs and semver (ISC), argparse (Python-2.0) and sax (Blue Oak 1.0.0). The installer is made with electron-builder (MIT) and NSIS (zlib). The font files are packaged by Fontsource (MIT).';
 function openAbout() {
   if (document.querySelector('#modal-root .modal.about')) return;
   const A = AUTHOR, out = 'target="_blank" rel="noopener"'; // links open in the normal browser (main.js)
@@ -1922,6 +2093,7 @@ function cmd(c) {
     case 'close-request': return askClose();
     case 'about': return openAbout();
     case 'whats-new': return whatsNew();
+    case 'check-updates': return checkUpdatesCmd();
     case 'export-png': return exportPng();
     case 'print': return printDialog();
     case 'page-setup': return pageSetup();
@@ -2163,12 +2335,16 @@ function wire() {
   });
   window.addEventListener('resize', () => drawRulers());
   api.onMenu(cmd);
+  api.onReadStep((s) => { if (reading && reading.step) reading.step(s); });
+  api.onReaderProgress((p) => { if (reading && reading.progress) reading.progress(p); });
+  api.onUpdateReady(updateReady);
   // a file double-clicked in Explorer (or "Open with"): it replaces the welcome screen
   api.onOpenPath((p) => { if (welcome) welcome.close(); openFile(p); });
   setupTextbar();
 }
 
-window.__bohpumApp = { cmd: (c) => cmd(c), openFile: (p) => openFile(p), startEditing: (id) => startEditing(id), finishEditing: () => finishEditing(), state: S };
+window.__bohpumApp = { cmd: (c) => cmd(c), openFile: (p) => openFile(p), startEditing: (id) => startEditing(id), finishEditing: () => finishEditing(), state: S,
+  updateReady: (v) => updateReady(v), menuRepairAtStart: () => menuRepairAtStart() };
 
 async function init() {
   wire();
@@ -2177,6 +2353,6 @@ async function init() {
   if (+S.settings.pagesW) setPagesWidth(+S.settings.pagesW);
   loadDoc(newDoc(210, 297), null);
   if (!window.__noWelcome) newDialog(true);
-  notesAtStart();
+  notesAtStart().then(menuRepairAtStart); // after What's new; the repair box waits its turn behind the open boxes
 }
 init();

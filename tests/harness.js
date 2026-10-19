@@ -16,7 +16,7 @@ function run(test, { setup, timeout = 90000 } = {}) {
   // wheel zoom would then never finish while someone works in another program during the tests)
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
   app.commandLine.appendSwitch('disable-renderer-backgrounding');
-  // started as `electron tests/x.test.js` the app would report Electron's version; `npm start` reports package.json's
+  // started as `electron tests/x.test.js` the app would report Electron's version; `pnpm start` reports package.json's
   const version = require(path.join(ROOT, 'package.json')).version;
   app.getVersion = () => version;
   const ctx = { userData, tmp: fs.mkdtempSync(path.join(os.tmpdir(), 'bohpum-out-')) };
@@ -29,7 +29,6 @@ function run(test, { setup, timeout = 90000 } = {}) {
     try { fs.rmSync(ctx.tmp, { recursive: true, force: true }); } catch {}
     app.exit(results.length && results.every(r => r.pass) ? 0 : 1); // exit() skips the "save changes?" prompt
   };
-  if (setup) setup(ctx);
   app.on('browser-window-created', (_e, win) => {
     if (started) return; started = true; // the editor window; later ones are hidden print windows
     win.webContents.once('did-finish-load', () => test(driver(win, ctx), check).then(finish, (err) => {
@@ -37,7 +36,11 @@ function run(test, { setup, timeout = 90000 } = {}) {
     }));
   });
   setTimeout(() => { check('test finished in time', false, `over ${timeout} ms`); finish(); }, timeout);
-  require(path.join(ROOT, 'main.js'));
+  // a setup that returns a promise (e.g. a test server whose address main.js must know) is waited for first
+  const start = () => require(path.join(ROOT, 'main.js'));
+  const pending = setup ? setup(ctx) : null;
+  if (pending && typeof pending.then === 'function') pending.then(start, (err) => { check('setup ran', false, String(err && err.stack || err)); finish(); });
+  else start();
 }
 
 function driver(win, ctx) {

@@ -1,17 +1,20 @@
 // Bohpum - Electron main process
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, session, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, session, nativeTheme, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { execFile } = require('child_process');
 const { pathToFileURL } = require('url');
 const menu = require('./explorer-menu');
+const updates = require('./updater');
+const reader = require('./reader');
 
 const APP_NAME = 'Bohpum';
 const ICON = path.join(__dirname, 'build', 'icon.png'); // the exe, installer and Explorer menu use build/icon.ico
 let win = null;
 let dirty = false;
 let pendingOpenPath = null;
+let up = null;              // automatic updates (updater.js), only in the installed app with the key
 
 // Installer hooks (build/installer.nsh): "Bohpum.exe --explorer-menu=install|uninstall|release|add-package" sets up
 // the File Explorer right-click menu and exits — before the single-instance lock, with no window.
@@ -42,11 +45,37 @@ function startIn(key, name) {
   return name ? path.join(d, path.basename(name)) : d;
 }
 
-// ---------- LibreOffice (bundled; used only to read .pub and other foreign formats, never shown in the UI) ----------
-// The bundle comes from scripts/bundle-libreoffice.js; a normal LibreOffice install is the fallback.
-function findSoffice() {
-  const bundled = app.isPackaged ? path.join(process.resourcesPath, 'libreoffice') : path.join(__dirname, 'vendor', 'libreoffice');
-  const candidates = [path.join(bundled, 'program', process.platform === 'win32' ? 'soffice.exe' : 'soffice')];
+// ---------- LibreOffice (used only to read .pub and other foreign formats, never shown in the UI) ----------
+// The Publisher reader (reader.js): a trimmed LibreOffice downloaded once, after asking; a LibreOffice installed on
+// the PC needs no download. %TEMP%\Bohpum\update.log gets the update checks' and the downloads' problems.
+const updateLog = updates.logTo(path.join(os.tmpdir(), 'Bohpum', 'update.log'));
+// Tests only (never in the installed app): BOHPUM_READER_TEST = { base, pack, key } instead of the files below, and
+// no developer vendor\libreoffice, so a test sees only the folders it sets up.
+const readerTest = (() => {
+  if (app.isPackaged || !process.env.BOHPUM_READER_TEST) return null;
+  try { return JSON.parse(process.env.BOHPUM_READER_TEST); } catch { return null; }
+})();
+const readText = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+const READER = readerTest ? {
+  base: reader.readBaseUrl('url: ' + (readerTest.base || '')), pack: reader.parsePackInfo(JSON.stringify(readerTest.pack || null)),
+  key: updates.parseUpdateConfig(JSON.stringify(readerTest.key || null))
+} : {
+  // written into the app by the release job (.github/workflows/release.yml); the address is the updates' own
+  base: app.isPackaged ? reader.readBaseUrl(readText(path.join(process.resourcesPath, 'app-update.yml'))) : null,
+  pack: reader.readPackInfo(path.join(__dirname, 'reader-pack.json')),
+  key: updates.readUpdateConfig(path.join(__dirname, 'update-config.json'))
+};
+READER.root = reader.readerRoot(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'));
+READER.canDownload = !!(READER.key && READER.pack && READER.base);
+const fileThere = (p) => { try { return fs.statSync(p).isFile(); } catch { return false; } };
+// in `pnpm start`: the developer's copy from scripts/bundle-libreoffice.js
+function devSoffice() {
+  const p = path.join(__dirname, 'vendor', 'libreoffice', 'program', 'soffice.exe');
+  return !app.isPackaged && !readerTest && fileThere(p) ? p : null;
+}
+// a LibreOffice installed on the PC
+function installedSoffice() {
+  const candidates = [];
   if (process.platform === 'win32') {
     const pf = [process.env['ProgramFiles'], process.env['ProgramFiles(x86)'], 'C:\\Program Files', 'C:\\Program Files (x86)'];
     for (const p of pf) if (p) candidates.push(path.join(p, 'LibreOffice', 'program', 'soffice.exe'));
@@ -59,18 +88,47 @@ function findSoffice() {
   for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch {} }
   return null;
 }
-
-// One conversion at a time: the editor and the Explorer menu's convert window share LibreOffice's profile
-let loQueue = Promise.resolve();
-function convertWithLibreOffice(inputPath) {
-  const job = loQueue.then(() => convertOne(inputPath));
-  loQueue = job.catch(() => {});
-  return job;
+// → { soffice, need }: need 'download' (none to read with) or 'newer' (an older pack works; only offered when this
+// copy can download the newer one), else null
+function chooseReader() {
+  const r = reader.chooseReader({ root: READER.root, pack: READER.pack, dev: devSoffice(), installed: installedSoffice() });
+  return r.need === 'newer' && !READER.canDownload ? { soffice: r.soffice, need: null } : r;
 }
-function convertOne(inputPath) {
+// One download at a time, shared by the editor and the convert window (each window = one caller)
+const readerService = reader.createReaderService({
+  download: (onProgress, signal) => reader.downloadPack({
+    fetch: (...a) => net.fetch(...a),   // Electron's network: the PC's proxy settings, as electron-updater
+    url: reader.packUrl(READER.base, READER.pack), headers: updates.keyHeaders(READER.key), pack: READER.pack, root: READER.root, onProgress, signal
+  }).then(() => {
+    updateLog('reader downloaded: ' + READER.pack.name);
+    if (loJobs === 0) reader.cleanStale(READER.root, READER.pack.name);   // older packs, unless one is reading
+  }, (e) => { if (e !== reader.CANCELLED) updateLog('reader download: ' + (e.code || '') + ' ' + (e.message || e)); throw e; })
+});
+
+// One conversion at a time: the editor and the Explorer menu's convert window share LibreOffice's profile.
+// job: step('waiting') when files are ahead of it, step('reading') on its turn; cancelled before its turn it never
+// starts, and stopRead() ends it while LibreOffice reads (the editor's progress box: Cancel).
+let loQueue = Promise.resolve(), loJobs = 0;
+const CANCELLED = new Error('cancelled');
+function convertWithLibreOffice(inputPath, job = {}, soffice) {
+  if (loJobs++) job.step?.('waiting');
+  const run = loQueue.then(() => {
+    if (job.cancelled) throw CANCELLED;
+    job.step?.('reading');
+    return convertOne(inputPath, job, soffice);
+  });
+  loQueue = run.then(() => {}, () => {}).then(() => { loJobs--; });
+  return run;
+}
+function stopRead(job) {
+  job.cancelled = true;
+  const child = job.child; if (!child) return;
+  // soffice.exe only starts soffice.bin and waits for it: end both, or the one left keeps the profile busy
+  if (process.platform === 'win32' && child.pid) execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true }, () => {});
+  else child.kill();
+}
+function convertOne(inputPath, job, soffice) {
   return new Promise((resolve, reject) => {
-    const soffice = findSoffice();
-    if (!soffice) return reject(new Error('Part of Bohpum is missing. Please reinstall Bohpum.'));
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bohpum-'));
     const ext = path.extname(inputPath) || '.pub';
     const tmpIn = path.join(tmp, 'input' + ext.toLowerCase());
@@ -81,8 +139,10 @@ function convertOne(inputPath) {
     const profileUrl = pathToFileURL(profile).href;
     const args = ['-env:UserInstallation=' + profileUrl, '--headless', '--norestore', '--nolockcheck',
       '--convert-to', 'fodg', '--outdir', tmp, tmpIn];
-    execFile(soffice, args, { timeout: 180000, windowsHide: true }, (err) => {
+    job.child = execFile(soffice, args, { timeout: 180000, windowsHide: true }, (err) => {
+      job.child = null;
       const out = path.join(tmp, 'input.fodg');
+      if (job.cancelled) { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} return reject(CANCELLED); }
       if (fs.existsSync(out)) {
         const xml = fs.readFileSync(out, 'utf8');
         try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
@@ -309,6 +369,7 @@ function buildMenu() {
       { role: 'toggleDevTools' }
     ]},
     { label: 'Help', submenu: [
+      { label: 'Check for Updates…', click: () => send('check-updates') }, // the page asks main ('check-updates' IPC)
       { label: "What's New", click: () => send('whats-new') }, // the page's What's new window (src/notes.js)
       { label: 'About ' + APP_NAME, click: () => send('about') } // the page shows its own About page
     ]}
@@ -318,11 +379,15 @@ function buildMenu() {
 
 const FOREIGN = ['.pub', '.odg', '.vsd', '.vsdx', '.cdr', '.wpg', '.cmx', '.p65', '.pmd', '.qxd', '.zmf'];
 
-async function readAnyDocument(p) {
+// opts.oldReader: the user said Not now to a newer Publisher reader, so an older one reads it.
+// → the document, or { needReader: 'download'|'newer' } when the page must ask first (LibreOffice isn't started)
+async function readAnyDocument(p, job, opts = {}) {
   const ext = path.extname(p).toLowerCase();
   if (ext === '.bpum' || ext === '.kbach' || ext === '.json') return { kind: 'bpum', text: fs.readFileSync(p, 'utf8'), path: p };
   if (ext === '.fodg') return { kind: 'fodg', text: fs.readFileSync(p, 'utf8'), path: p };
-  const xml = await convertWithLibreOffice(p);
+  const r = chooseReader();
+  if (r.need === 'download' || (r.need === 'newer' && !opts.oldReader)) return { needReader: r.need };
+  const xml = await convertWithLibreOffice(p, job, r.soffice);
   return { kind: 'fodg', text: xml, path: p };
 }
 
@@ -344,11 +409,61 @@ ipcMain.handle('open-dialog', async () => {
   return r.canceled ? null : r.filePaths[0];
 });
 
-ipcMain.handle('read-document', async (_e, p) => {
+// Each window's file being read: the editor's progress box shows its steps ('read-step') and its Cancel stops it
+const reading = new Map(); // webContents id → job (see convertWithLibreOffice)
+ipcMain.handle('read-document', async (e, p, opts) => {
   if (!fs.existsSync(p)) return { error: 'The file was moved or deleted.', missing: true };
   rememberDir('lastDir', p); // also files opened from Explorer, Recent or a drop
-  try { return await readAnyDocument(p); }
-  catch (err) { return { error: String(err && err.message || err) }; }
+  const id = e.sender.id, job = { step: (s) => { if (!e.sender.isDestroyed()) e.sender.send('read-step', s); } };
+  reading.set(id, job);
+  try { return await readAnyDocument(p, job, { oldReader: !!(opts && opts.oldReader) }); }
+  catch (err) { return err === CANCELLED ? { cancelled: true } : { error: String(err && err.message || err) }; }
+  finally { if (reading.get(id) === job) reading.delete(id); }
+});
+ipcMain.on('cancel-read', (e) => { const job = reading.get(e.sender.id); if (job) stopRead(job); });
+
+// The Publisher reader: is one needed (and can this copy download it)? Then the download, its progress and Cancel.
+ipcMain.handle('reader-status', () => {
+  const { need } = chooseReader();
+  return { need, size: READER.pack ? READER.pack.size : null, canDownload: READER.canDownload,
+    why: need === 'download' && !READER.canDownload ? reader.READER_TEXT['no-key'] : null };
+});
+ipcMain.handle('reader-get', (e) => {
+  if (!READER.canDownload) return { error: reader.READER_TEXT['no-key'] };
+  const wc = e.sender;
+  return readerService.get(wc.id, (p) => { if (!wc.isDestroyed()) wc.send('reader-progress', p); });
+});
+ipcMain.on('reader-cancel', (e) => readerService.cancel(e.sender.id));
+
+// Automatic updates (updater.js). The page asks about unsaved changes BEFORE install-update: quitAndInstall starts the
+// installer at once and it closes the app by force, so nothing may be left to ask by then.
+ipcMain.handle('check-updates', () => up ? up.checkNow() : { kind: 'dev' });
+ipcMain.handle('install-update', () => {
+  const block = updates.installBlock({ downloaded: up && up.downloaded(), taskOpen: !!taskWin, readerBusy: readerService.busy() });
+  if (block) return { ok: false, reason: block };
+  const was = dirty;
+  dirty = false;   // before: the window's close guard must not stop the quit a moment after the installer starts
+  if (up.install()) return { ok: true };
+  dirty = was;     // it didn't start: closing must ask about unsaved changes again
+  return { ok: false, reason: 'failed' };
+});
+// After a silent update the right-click menu may have fallen back to "Show more options" (explorer-menu.js
+// repairNeeded): 'check' → { needed }, 'later' → not again for this version, 'fix' → the installer's own setup step,
+// run as a separate process so the window doesn't freeze while Windows asks for permission.
+ipcMain.handle('menu-repair', async (_e, action) => {
+  if (action === 'check') {
+    return { needed: app.isPackaged && menu.repairNeeded({
+      build: menu.windowsBuild(), msixExists: fs.existsSync(path.join(process.resourcesPath, 'explorer-menu', menu.PKG + '.msix')),
+      state: menu.readState(), version: app.getVersion()
+    }) };
+  }
+  if (action === 'later') { menu.writeState({ asked: app.getVersion() }); return {}; }
+  if (action === 'fix') {
+    await new Promise(res => execFile(process.execPath, ['--explorer-menu=install'], { windowsHide: true }, () => res()));
+    const st = menu.readState();
+    return { result: st.mode === 'package' ? 'ok' : st.declined === '1' ? 'declined' : 'failed' };
+  }
+  return {};
 });
 
 ipcMain.handle('save-dialog', async (_e, { defaultName, filters }) => {
@@ -517,11 +632,21 @@ else {
     const t = loadSettings().theme;
     applyTheme(THEMES.includes(t) ? t : 'system'); // before the window exists: no light flash in Dark
     if (app.isPackaged) menu.cleanOld(path.dirname(process.execPath)); // menu DLLs moved aside by an update
+    reader.cleanStale(READER.root, READER.pack && READER.pack.name); // a download the PC was turned off in, older packs
     // Started by the Explorer menu: only the convert window (Bohpum quits when it closes)
     if (handleTask(process.argv)) { if (!taskWin) app.quit(); return; }
     const f = process.argv.slice(1).find(a => /\.(bpum|kbach|pub|odg|fodg|vsdx?|cdr)$/i.test(a));
     if (f) pendingOpenPath = f;
     createWindow();
+    // a right-click job alone (above) never checks; electron-updater is loaded only here. The update address is locked:
+    // only a copy built by the release job carries the key (update-config.json), so a copy without it doesn't check.
+    if (updates.updatesRunHere({ packaged: app.isPackaged, platform: process.platform })) {
+      if (!READER.key) updateLog('no update key (update-config.json): this copy does not check for updates');
+      else up = updates.createUpdater({
+        updater: require('electron-updater').autoUpdater, current: app.getVersion(), key: READER.key, log: updateLog,
+        send: (channel, v) => { if (win) win.webContents.send(channel, v); }
+      });
+    }
   });
   app.on('window-all-closed', () => app.quit());
 }

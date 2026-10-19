@@ -56,7 +56,7 @@ Explorer menu (same machinery, same installer behaviour). Each `.pub` becomes a 
    `desktop5:ItemType Type=".pub"`, surrogate COM server `resources\explorer-menu\BohpumMenu.dll`.
    Logos from the new app icon.
 3. **`scripts/build-explorer-menu.js`** (vswhere → vcvars64 → cl/link; makeappx) → `explorer-menu/out/`
-   (gitignored). `npm run dist` runs it; `npm run build:menu` alone. Checks CLSID / name / version agree.
+   (gitignored). `pnpm run dist` runs it; `pnpm run build:menu` alone. Checks CLSID / name / version agree.
 4. **`explorer-menu.js`** (main process, no Electron): `parseTaskArgs`, `readTaskList` (only
    `%TEMP%\Bohpum\menu-*.txt`, deleted after reading, existing `.pub` files, de-duplicated, name order
    01, 02, 10), classic registration (`HKCU\Software\Classes\SystemFileAssociations\.pub\shell\Bohpum`

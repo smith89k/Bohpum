@@ -1,12 +1,28 @@
-// Prints a version's GitHub release notes (package.json's by default) from src/notes.js — the same notes as the app's
-// What's new window, tags in its order. `node scripts/release-notes.js [version]`, run by .github/workflows/release.yml.
+// GitHub release notes from a version's What's new entry (src/notes.js), so the notes are written once (as Sastra PDF).
+// `node scripts/release-notes.js <version>` prints Markdown; exit 1 when that version has no entry. Run by the release
+// workflow (.github/workflows/release.yml).
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.join(__dirname, '..');
-const version = process.argv[2] || require(path.join(ROOT, 'package.json')).version;
-const window = {};
-vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'src', 'notes.js'), 'utf8'), { window });
-const N = window.BohpumNotes, e = N.noteFor(version);
-if (!e) { console.error(`release-notes: src/notes.js has no notes for ${version}`); process.exit(1); }
 const WORDS = { new: 'New', improved: 'Improved', fixed: 'Fixed', removed: 'Removed' };
-const sorted = e.notes.map((n, i) => [n, i]).sort((a, b) => N.KINDS.indexOf(a[0].kind) - N.KINDS.indexOf(b[0].kind) || a[1] - b[1]);
-console.log(`What's new in Bohpum ${version} (${e.date})\n\n` + sorted.map(([n]) => `- **${WORDS[n.kind]}:** ${n.text}`).join('\n'));
+
+function loadNotes(file = path.join(ROOT, 'src', 'notes.js')) {
+  const window = {};
+  vm.runInNewContext(fs.readFileSync(file, 'utf8'), { window }, { filename: file });
+  return window.BohpumNotes;
+}
+
+// "## New\n- …\n\n## Fixed\n- …\n": the kinds in What's new's order, only those the entry has
+function notesMarkdown(entry, kinds = Object.keys(WORDS)) {
+  return kinds.map(k => entry.notes.filter(n => n.kind === k))
+    .map((list, i) => list.length ? `## ${WORDS[kinds[i]]}\n${list.map(n => `- ${n.text}\n`).join('')}` : '')
+    .filter(Boolean).join('\n');
+}
+
+if (require.main === module) {
+  const version = process.argv[2];
+  const N = loadNotes(), entry = N.noteFor(version);
+  if (!entry) { console.error(`::error::src/notes.js has no What's new entry for ${version}`); process.exit(1); }
+  process.stdout.write(notesMarkdown(entry, N.KINDS));
+}
+
+module.exports = { loadNotes, notesMarkdown };

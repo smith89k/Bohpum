@@ -16,7 +16,9 @@ run(async (t, check) => {
   // a thick red line, so the pixels can be read: 6 pt, Standard Colours → Red
   await t.js(`(() => { const i = [...document.querySelectorAll('#props .prow')].find(r => r.querySelector('label').textContent === 'Weight').querySelector('input'); i.value = 6; i.dispatchEvent(new Event('change')); return true; })()`);
   await t.js(`(() => { [...document.querySelectorAll('#props .prow')].find(r => r.querySelector('label') && r.querySelector('label').textContent === 'Line').querySelector('.cbtn').id = 'linebtn'; return true; })()`);
-  await t.click('#linebtn'); await t.click('#colorpop .cgrid.std .sw[data-c="#ff0000"]');
+  // the panel is taller than the window: scroll a control into view before clicking it, as a person would
+  const clickSeen = async (sel) => { await t.js(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: 'center' }); 0`); await t.sleep(150); await t.click(sel); };
+  await clickSeen('#linebtn'); await t.click('#colorpop .cgrid.std .sw[data-c="#ff0000"]');
 
   // red just inside and just outside the right edge (a quarter of the line width away), with nothing selected
   const sides = async () => {
@@ -32,7 +34,7 @@ run(async (t, check) => {
   const center = await sides();
   check('Center: the line sits on the edge, half inside and half outside', center.inside && center.outside && center.half > 4, center);
 
-  const pick = async (k) => { await t.click(`#props .align-line [data-align="${k}"]`); await t.sleep(200); };
+  const pick = async (k) => { await clickSeen(`#props .align-line [data-align="${k}"]`); await t.sleep(200); };
   await pick('inside');
   const inside = await sides(), r1 = await row();
   check('Inside: the line is all inside the shape; Inside is now chosen', inside.inside && !inside.outside && r1.buttons.join(' ') === 'Center Inside* Outside', { inside, r1 });
@@ -56,6 +58,6 @@ run(async (t, check) => {
 
   // a shape without a line has no Align row
   await t.js(`(() => { [...document.querySelectorAll('#props .prow')].find(r => r.querySelector('label') && r.querySelector('label').textContent === 'Line').querySelector('.cbtn').id = 'linebtn2'; return true; })()`);
-  await t.click('#linebtn2'); await t.click('#colorpop [data-c="none"]');
+  await clickSeen('#linebtn2'); await t.click('#colorpop [data-c="none"]');
   check('No line, no Align row', !(await row()));
 });

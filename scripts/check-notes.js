@@ -1,4 +1,4 @@
-// Run first by `npm run dist`: stops the build when src/notes.js has no What's new entry for package.json's
+// Run first by `pnpm run dist`: stops the build when src/notes.js has no What's new entry for package.json's
 // version, or an entry is broken — a release would otherwise ship an empty What's new and nobody would notice
 // (as in Sastra PDF). `node scripts/check-notes.js [file]` checks another copy (tests/check-notes.test.js).
 const fs = require('fs'), path = require('path'), vm = require('vm');

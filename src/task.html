@@ -7,9 +7,7 @@
 <link rel="stylesheet" href="tokens.css">
 <style>
 /* The small window for the File Explorer menu's "Convert to Bohpum": what it's doing, a progress bar, problems
-   and notes, the "already there" question, Cancel / Close. Light and dark follow tokens.css. */
-:root { --err: #b3261e; }
-@media (prefers-color-scheme: dark) { :root { --err: #ff8a80; } }
+   and notes, the "already there" and Publisher reader questions, Cancel / Close. Light and dark follow tokens.css. */
 [hidden] { display: none !important; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
@@ -52,7 +50,7 @@ button, #lines { -webkit-app-region: no-drag; }
   <div id="ask" hidden><p id="askMsg"></p><p id="askDetail" class="muted"></p></div>
   <ul id="lines" hidden></ul>
   <div class="foot">
-    <button class="btn" id="bNo" hidden>Cancel</button><button class="btn" id="bReplace" hidden>Replace</button><button class="btn primary" id="bKeep" hidden>Keep both</button>
+    <button class="btn" id="bNo" hidden>Cancel</button><button class="btn" id="bReplace" hidden>Replace</button><button class="btn primary" id="bKeep" hidden>Keep both</button><button class="btn" id="bLater" hidden>Not now</button><button class="btn primary" id="bDownload" hidden>Download</button>
     <button class="btn" id="bCancel">Cancel</button><button class="btn primary" id="bClose" hidden>Close</button>
   </div>
 </main>
