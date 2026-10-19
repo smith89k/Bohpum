@@ -31,6 +31,8 @@ run(async (t, check) => {
   answer = [png]; await t.js('window.__bohpumApp.cmd("insert-image")'); await t.sleep(300);
   answer = null; await t.js('window.__bohpumApp.cmd("insert-image")'); await t.sleep(200);
   check('Insert picture remembers its own folder', last().kind === 'open' && last().opts.defaultPath === pics, last());
+  // the picture made the publication unsaved: Open would first ask "Save changes first?" (not what this test is about)
+  await t.js('window.__bohpumApp.state.dirty = false; 0');
   await t.js('window.__bohpumApp.cmd("open")'); await t.sleep(200);
   check('…and Open keeps the publication folder', last().opts.defaultPath === t.ctx.tmp, last());
 
