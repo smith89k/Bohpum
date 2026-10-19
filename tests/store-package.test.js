@@ -30,7 +30,7 @@ run(async (t, check) => {
     c.appx.identityName === id.identityName && c.appx.publisher === id.publisher && c.appx.publisherDisplayName === id.publisherDisplayName
       && c.appx.applicationId === 'Bohpum' && c.appx.displayName === 'Bohpum' && c.appx.minVersion === '10.0.19041.0'
       && c.appx.maxVersionTested === '10.0.26100.0' && c.appx.customManifestPath === 'build/store-manifest.xml'
-      && c.appx.artifactName === 'Bohpum-Store-${version}.${ext}', c.appx);
+      && c.appx.artifactName === 'Bohpum-Store-${version}.msix', c.appx);   // .msix: electron-builder's ext would say .appx (the same format)
   check('The installer\'s own config is untouched', pkg.build.win.target === 'nsis' && pkg.build.files.includes('update-config.json'), pkg.build.win);
 
   // build/store.config.js: what electron-builder loads

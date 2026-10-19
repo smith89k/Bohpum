@@ -17,7 +17,7 @@ Design: `docs/superpowers/specs/2026-10-19-microsoft-store-design.md`.
 - Run one test file with `pnpm test tests/<file>.test.js` (no `--`: pnpm passes it on as a file and the runner hangs). Several files: `pnpm test tests/a.test.js tests/b.test.js`.
 - Tests never write a real or made-up Windows program (PE/"MZ" bytes) to disk: this PC's Trend Micro deletes them. A stand-in `soffice.exe` holds the text `x`, as the existing tests do.
 - The installer stays exactly as it is: `package.json` `build` changes only by adding `"store.js"` to `files`.
-- Store package: target `appx`, output folder `dist-store/`, file `Bohpum-Store-${version}.${ext}`, `applicationId` `Bohpum`, `displayName` `Bohpum`, `minVersion` `10.0.19041.0`, `maxVersionTested` `10.0.26100.0`.
+- Store package: target `appx`, output folder `dist-store/`, file `Bohpum-Store-${version}.msix` (electron-builder's own ext would be .appx: the same format), `applicationId` `Bohpum`, `displayName` `Bohpum`, `minVersion` `10.0.19041.0`, `maxVersionTested` `10.0.26100.0`.
 - Never inside the Store package: `update-config.json` (the update key), `reader-pack.json`, `app-update.yml`, `Bohpum.ExplorerMenu.msix`.
 - The menu CLSID is `1e11f0a8-6fc0-4a9c-9031-6924b71a4d77` (explorer-menu.js `CLSID`, with braces there).
 - The unsigned test identity's publisher: `CN=Bohpum, OID.2.25.311729368913984317654407730594956997722=1`.
@@ -504,7 +504,7 @@ run(async (t, check) => {
     c.appx.identityName === id.identityName && c.appx.publisher === id.publisher && c.appx.publisherDisplayName === id.publisherDisplayName
       && c.appx.applicationId === 'Bohpum' && c.appx.displayName === 'Bohpum' && c.appx.minVersion === '10.0.19041.0'
       && c.appx.maxVersionTested === '10.0.26100.0' && c.appx.customManifestPath === 'build/store-manifest.xml'
-      && c.appx.artifactName === 'Bohpum-Store-${version}.${ext}', c.appx);
+      && c.appx.artifactName === 'Bohpum-Store-${version}.msix', c.appx);
   check('The installer\'s own config is untouched', pkg.build.win.target === 'nsis' && pkg.build.files.includes('update-config.json'), pkg.build.win);
 
   // build/store.config.js: what electron-builder loads
@@ -579,7 +579,7 @@ function storeBuildConfig({ base, id, readerDir, storeJson }) {
       applicationId: 'Bohpum', displayName: 'Bohpum', backgroundColor: 'transparent', languages: ['en-US'],
       minVersion: '10.0.19041.0', maxVersionTested: '10.0.26100.0',   // the menu's FileExplorerContextMenus needs 2004+
       customManifestPath: 'build/store-manifest.xml',
-      artifactName: 'Bohpum-Store-${version}.${ext}'
+      artifactName: 'Bohpum-Store-${version}.msix'
     }
   };
 }

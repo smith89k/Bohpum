@@ -23,7 +23,7 @@ function storeBuildConfig({ base, id, readerDir, storeJson }) {
       applicationId: 'Bohpum', displayName: 'Bohpum', backgroundColor: 'transparent', languages: ['en-US'],
       minVersion: '10.0.19041.0', maxVersionTested: '10.0.26100.0',   // the menu's FileExplorerContextMenus needs 2004+
       customManifestPath: 'build/store-manifest.xml',
-      artifactName: 'Bohpum-Store-${version}.${ext}'
+      artifactName: 'Bohpum-Store-${version}.msix'   // electron-builder's ext is appx: the same format, under its newer name
     }
   };
 }
