@@ -20,13 +20,22 @@ Your files stay on your computer. Bohpum has no account, no ads and sends nothin
 
 ## Keywords
 
-publisher, pub, desktop publishing, greeting card, flyer, khmer, print
+publisher, desktop publishing, pub file, greeting card, flyer, khmer, print
 
 ## Privacy policy
 
 Bohpum does not collect, store or send any personal information. Your publications and pictures stay on your computer
 and are never uploaded. Bohpum has no account, no analytics and no ads. Updates come from the Microsoft Store.
-Questions: use the contact details on Bohpum's page in the Microsoft Store.
+
+(Partner Center takes this as text: Properties › Privacy policy › Provide privacy policy text. A URL is not needed.)
+
+## Short description
+
+Open, edit and print Microsoft Publisher (.pub) files without Publisher. Your files stay on your computer.
+
+## Copyright and developer
+
+© 2026 smith89k · Developed by Taing Sunnguon
 
 ## Restricted capability: runFullTrust
 
