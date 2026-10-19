@@ -4,6 +4,8 @@
 // "publish" uploads the built files with the key and installs nothing. Uploads put the file that points at the others
 // LAST, the lock check also tries the reader pack, and "is it in R2?" counts only a real "not found" as absent — a
 // passing network error must never make the job rebuild and overwrite a reader pack installed copies already trust.
+// Once store.json holds the Partner Center identity, build also makes the Microsoft Store package (no update key in
+// it, checked) and publish attaches it to the GitHub release only, never to R2.
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -84,6 +86,24 @@ run(async (t, check) => {
   check('"Is it in R2?" goes through r2_has, for the installer and for the reader pack',
     /r2_has "\$EXE"/.test(step('check', 'The version matches package.json').run) && /r2_has "reader\/\$name\.json"/.test(step('check', 'Is the reader pack in R2?').run)
       && !/head-object/.test(J.check.text));
+
+  // ---- the Microsoft Store package: only once store.json holds the Partner Center identity
+  const storeSteps = J.build.steps.filter(s => s.name.startsWith('For the Store:') || /^ {10}name: store$/m.test(s.text));
+  check('build: four Store steps, each only when store.json is there',
+    storeSteps.length === 4 && storeSteps.every(s => /if: hashFiles\('store\.json'\) != ''/.test(s.text)), storeSteps.map(s => s.name));
+  const sr = step('build', 'For the Store: the Publisher reader');
+  check('…after the installer; the reader comes from R2 only when this run didn\'t build the pack',
+    inOrder('build', ['Build the installer', 'For the Store: the Publisher reader', 'For the Store: build the Store package', 'For the Store: the package has'])
+      && /needs\.check\.outputs\.have == 'true'/.test(sr.text) && /node scripts\/store-reader\.js dist-reader/.test(sr.run), sr.text);
+  const sb = step('build', 'For the Store: build the Store package').run;
+  check('…the update key is deleted before the Store package is built with build/store.config.js',
+    pos(sb, /rm -f update-config\.json/) >= 0 && pos(sb, /electron-builder --win appx --publish never --config build\/store\.config\.js/) > pos(sb, /rm -f update-config\.json/), sb);
+  check('…then scripts/store-check.js checks it', /node scripts\/store-check\.js dist-store "\$MSIX"/.test(step('build', 'For the Store: the package has').run));
+  const storeDl = J.publish.steps.filter(s => /^ {10}name: store$/m.test(s.text));
+  const ghRelease = step('publish', 'GitHub release').run;
+  check('publish: the Store package goes to the GitHub release (when there is one), never to R2',
+    storeDl.length === 1 && /if: hashFiles\('store\.json'\) != ''/.test(storeDl[0].text) && /dist-store\/\$MSIX/.test(ghRelease)
+      && !/MSIX|dist-store/.test(upload.run + step('publish', 'Remove older installers').run) && /^ {2}MSIX: Bohpum-Store-\$\{\{ inputs\.version \}\}\.msix$/m.test(topEnv), ghRelease);
 
   // ---- scripts/r2-put.sh, run for real in bash with a stand-in aws
   const sh = path.join(ROOT, 'scripts', 'r2-put.sh'), shText = fs.existsSync(sh) ? fs.readFileSync(sh, 'utf8') : '';

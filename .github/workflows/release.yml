@@ -12,6 +12,9 @@
 # shares a machine with other people's code: "build" runs pnpm install, the MSI unpack and electron-builder with no R2
 # key and no GitHub token (only the update key, which goes inside the app anyway); "check" and "publish" have the keys
 # but install nothing and run only this repository's own scripts.
+# Once store.json holds the Partner Center identity (docs/updates-setup.md section 8), build also makes the Microsoft
+# Store package (store.js, build/store.config.js): the same app with the Publisher reader inside and no update key. It
+# goes to the GitHub release only, never to R2; the user submits it in Partner Center, and Microsoft signs it.
 name: Release
 
 on:
@@ -31,6 +34,7 @@ concurrency:
 env:
   VERSION: ${{ inputs.version }}
   EXE: Bohpum-Setup-${{ inputs.version }}.exe
+  MSIX: Bohpum-Store-${{ inputs.version }}.msix
   AWS_DEFAULT_REGION: auto
   # R2 doesn't take the checksums newer AWS CLIs add by default
   AWS_REQUEST_CHECKSUM_CALCULATION: when_required
@@ -217,6 +221,32 @@ jobs:
           done
           if ! grep -q "url: $EXE\$" dist/latest.yml; then echo "::error::latest.yml does not name $EXE"; cat dist/latest.yml; exit 1; fi
 
+      # The Microsoft Store package. The reader inside it: the pack this run just built (dist-reader/LibreOffice), or the
+      # one already in R2, downloaded with the key already in update-config.json and checked like installed copies do.
+      - name: "For the Store: the Publisher reader unpacked (the pack already in R2)"
+        if: hashFiles('store.json') != '' && needs.check.outputs.have == 'true'
+        run: node scripts/store-reader.js dist-reader
+
+      # The installer is built: the update key leaves the workspace before the Store package is made.
+      - name: "For the Store: build the Store package (no update key inside)"
+        if: hashFiles('store.json') != ''
+        run: |
+          rm -f update-config.json
+          pnpm exec electron-builder --win appx --publish never --config build/store.config.js
+
+      - name: "For the Store: the package has the reader and the menu, and no update key"
+        if: hashFiles('store.json') != ''
+        run: node scripts/store-check.js dist-store "$MSIX"
+
+      - uses: actions/upload-artifact@v7
+        if: hashFiles('store.json') != ''
+        with:
+          name: store
+          path: dist-store/${{ env.MSIX }}
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 0
+
       # What publish uploads; also kept a few days on the run's page, in case R2 misbehaves.
       - uses: actions/upload-artifact@v7
         with:
@@ -261,6 +291,12 @@ jobs:
         with:
           name: installer
           path: dist
+
+      - uses: actions/download-artifact@v8
+        if: hashFiles('store.json') != ''
+        with:
+          name: store
+          path: dist-store
 
       - uses: actions/download-artifact@v8
         if: needs.check.outputs.have != 'true'
@@ -341,4 +377,9 @@ jobs:
           printf '\nThe Publisher reader (LibreOffice %s) downloads once, the first time a Publisher file is opened.\n' "$LO" >> notes.md
           printf '\nGive the installer below to the people who should have Bohpum: copies installed from it update themselves.\n\nSHA-256 of the installer: `%s`\n' \
             "$(sha256sum "dist/$EXE" | cut -d' ' -f1)" >> notes.md
-          gh release create "v$VERSION" "dist/$EXE" --target "$GITHUB_SHA" --title "Bohpum $VERSION" --notes-file notes.md
+          files=("dist/$EXE")
+          if [ -f "dist-store/$MSIX" ]; then
+            files+=("dist-store/$MSIX")
+            printf '\n%s is for the Microsoft Store: submit it in Partner Center (docs/updates-setup.md section 8). Microsoft signs it.\n' "$MSIX" >> notes.md
+          fi
+          gh release create "v$VERSION" "${files[@]}" --target "$GITHUB_SHA" --title "Bohpum $VERSION" --notes-file notes.md
