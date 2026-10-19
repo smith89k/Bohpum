@@ -1,30 +1,16 @@
 # Bohpum (បោះពុម្ព)
 
-A free, open-source desktop publishing app for Windows. It opens your old Microsoft Publisher (`.pub`) files,
+A desktop publishing app for Windows that opens your old Microsoft Publisher (`.pub`) files,
 lets you edit them, and prints them, including placing a small card anywhere on A4 the way Publisher does.
-*Bohpum* is Khmer for “to print”.
 
-## Download
-
-Get the newest `Bohpum-Setup-<version>.exe` from the [Releases page](https://github.com/smith89k/Bohpum/releases)
-and run it (Windows 10 and 11, 64-bit). Installed copies update themselves. The **Publisher reader** (a trimmed
-LibreOffice that reads `.pub` files) downloads once, the first time you open a Publisher file, after asking.
-
-**If Windows says “Windows protected your PC”:** until releases carry their free digital signature
-(see [Code signing policy](#code-signing-policy)), Microsoft SmartScreen warns about the installer because it is new.
-Click **More info**, then **Run anyway**. Or, before opening it: right-click the file → **Properties** → tick
-**Unblock** → **OK**. If there is no *Run anyway* button, Smart App Control is on for that PC
-(Windows Security → App & browser control → Smart App Control). Updates installed by the app don't show this.
-
-## Build from source
+## Run it
 
 You need **Node.js** (LTS) and **pnpm**. No LibreOffice is needed on the build PC, and the installer doesn't carry it:
 installed copies download the **Publisher reader** (a trimmed LibreOffice) once, the first time a Publisher file is
 opened, after asking. Users never see LibreOffice in the app.
 
 ```
-git clone https://github.com/smith89k/Bohpum.git
-cd Bohpum
+cd E:\_httdocs\Bohpum
 pnpm install
 pnpm start
 ```
@@ -33,10 +19,7 @@ pnpm start
 `pnpm run bundle-libreoffice` (it copies the installed LibreOffice, trimmed; `LIBREOFFICE_DIR` names another folder).
 With neither, opening a `.pub` says that this copy can't download the Publisher reader.
 
-`pnpm test` runs the tests: each `tests/*.test.js` starts the real app (`pnpm test tests/about.test.js` runs one).
-They use the made-up card in `samples/`.
-
-To build an installer on your PC to try it out (`dist\Bohpum-Setup-<version>.exe`, not signed):
+To build an installer on your PC to try it out (`dist\Bohpum-Setup-<version>.exe`):
 
 ```
 pnpm run dist
@@ -49,7 +32,7 @@ doesn't update itself or download the Publisher reader. Only the release job's i
 
 ## Releasing
 
-GitHub Actions builds each release from this repository and puts it in a Cloudflare R2 bucket behind
+GitHub Actions builds each release and puts it in a private Cloudflare R2 bucket behind
 `https://bohpum-update.smith89k.com/`, locked so that only installed copies (which carry the update key) get in.
 Installed copies check when they start and every 6 hours, download a new version quietly, then ask **Restart now** /
 **Later** (Later = it installs when Bohpum is closed). **Help › Check for Updates** checks by hand.
@@ -59,12 +42,13 @@ Installed copies check when they start and every 6 hours, download a new version
    release notes; the release stops without them.
 3. Commit and push main.
 4. GitHub → **Actions** → **Release** → **Run workflow** → type the version (or `gh workflow run release.yml -f version=0.3.0`).
-5. Once SignPath is set up: approve the signing request in SignPath (the run waits for it). The release then gets the
-   signed installer, and updates use it too.
 
 0.2.0 (2026-10-18) is the first release made this way; private updates and the Publisher reader download are in
-place. The one-time Cloudflare, GitHub and SignPath setup, and what each step of the job does:
-[docs/updates-setup.md](docs/updates-setup.md).
+place. Give people the installer from the GitHub release page; their copy updates itself from then on. The one-time
+Cloudflare and GitHub setup, and what each step of the job does: [docs/updates-setup.md](docs/updates-setup.md).
+
+**Privacy.** Bohpum goes online by itself only to check for updates, and downloads the Publisher reader only when you
+say yes. Nothing about you or your files is sent.
 
 ## The Publisher reader (LibreOffice)
 
@@ -72,7 +56,7 @@ Bohpum reads `.pub` and the other outside formats with LibreOffice, in the backg
 The release job downloads the LibreOffice pinned in `libreoffice.json` from The Document Foundation (and checks its
 SHA-256), trims it as `scripts/bundle-libreoffice.js` does (no help, gallery, templates or Python; one icon theme; the
 Visual C++ runtime copied in), checks that the trimmed copy really opens a Publisher file, then zips it and stores it
-in the same bucket as `reader/LibreOffice-<version>-pack<n>.zip`. It does this only when that pack isn't there
+in the same private bucket as `reader/LibreOffice-<version>-pack<n>.zip`. It does this only when that pack isn't there
 yet. The pack's name, size and SHA-256 are built into the app, so nothing on the server can swap it.
 
 In the app, the first `.pub` asks "Bohpum needs the Publisher reader" (with its size); **Download** shows the download
@@ -162,8 +146,6 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
   and **Group / Ungroup** (greyed out when they would do nothing); they are no longer in the toolbar. For an object the
   panel starts with Position & size (its icon shows what kind of object it is), then Arrange, then **Shape** (Rectangle /
   Ellipse, and Text box for a text box; Corner rounds the corners) and **Text** (inner margins, Fit height, Edit text)
-- **Help › About** shows the version, the author, the license (GNU GPL 3.0 or later) with a link to this source code,
-  and the open-source parts inside Bohpum
 
 ## Shortcuts
 
@@ -219,55 +201,8 @@ scripts/check-notes.js         Stops pnpm run dist when src/notes.js has no note
 scripts/reader-pack.js         Makes the reader pack (trimmed LibreOffice zip + its name, size, SHA-256); reader-check.js
                                checks it opens a Publisher file
 scripts/r2-prune.js, r2-put.sh, release-notes.js  The release job's helpers (which old installers go, uploads, notes)
-scripts/rehash-installer.js    After signing: the signed installer's blockmap, SHA-512 and size for latest.yml
-.github/workflows/release.yml  The Release button (by hand only): builds, has it signed, uploads to R2, makes the release
-docs/updates-setup.md          The Cloudflare, GitHub and SignPath setup, and how to release
+.github/workflows/release.yml  The Release button (by hand only): builds, uploads to R2, makes the GitHub release
+docs/updates-setup.md          The Cloudflare and GitHub setup, and how to release
 vendor/libreoffice             A trimmed LibreOffice for pnpm start only (generated, not edited by hand)
-samples/                       demo-card.pub / .bpum (a made-up Publisher card) and test-shapes.fodg, for the tests
 tests/                         Electron tests: pnpm test (each tests/*.test.js runs the real app)
-LICENSE                        The GNU General Public License 3.0
 ```
-
-## Code signing policy
-
-Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
-[SignPath Foundation](https://signpath.org/).
-
-- **What is signed:** only the installers built by the [release workflow](.github/workflows/release.yml) on GitHub
-  from this repository. Installers built on a PC are never signed.
-- **Committers and reviewers:** [Sunnguon TAING](https://github.com/smith89k)
-- **Approvers:** [Sunnguon TAING](https://github.com/smith89k) approves every signing request by hand.
-- Changes from other people are reviewed by a committer before they are merged.
-- Until SignPath Foundation accepts the project, releases are not signed (see [Download](#download)).
-
-## Privacy
-
-This program will not transfer any information to other networked systems unless specifically requested by the user
-or the person installing or operating it, with these exceptions:
-
-- **Update checks:** when it starts and every 6 hours, Bohpum asks `https://bohpum-update.smith89k.com/` (run by the
-  author on Cloudflare) whether a newer version exists, and downloads it if so. **Help › Check for Updates** does the
-  same by hand.
-- **The Publisher reader:** only when you click **Download** after Bohpum asks, it is downloaded from the same address.
-
-These requests carry only Bohpum's update key and what any web request carries (such as your IP address). Nothing
-about you or your files is sent: your publications stay on your computer. The links in Help › About open in your web
-browser only when you click them.
-
-## License
-
-Copyright © 2026 Sunnguon TAING.
-
-Bohpum is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-It is distributed in the hope that it will be useful, but **without any warranty**; without even the implied warranty
-of merchantability or fitness for a particular purpose. See [LICENSE](LICENSE) for the full text.
-
-Parts made by others (also listed in Help › About):
-
-- **Electron** (MIT), with Chromium, Node.js and FFmpeg; their licenses are in `LICENSES.chromium.html` in the app folder.
-- **electron-updater** (MIT) for automatic updates, with the small libraries it uses (MIT, ISC, Python-2.0, Blue Oak 1.0.0).
-- **LibreOffice** (MPL 2.0), the Publisher reader, downloaded separately. Its `license.txt` and `LICENSE.html` are
-  inside its folder.
-- **IBM Plex Sans**, **IBM Plex Mono** and **Noto Sans Khmer** (SIL Open Font License 1.1), packaged by Fontsource (MIT).
-- The installer is made with electron-builder (MIT) and NSIS (zlib).

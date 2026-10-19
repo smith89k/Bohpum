@@ -1,16 +1,11 @@
 {
   "name": "bohpum",
   "productName": "Bohpum",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Bohpum (បោះពុម្ព) - desktop publishing app that opens Microsoft Publisher .pub files",
   "main": "main.js",
   "author": "Sunnguon TAING",
-  "license": "GPL-3.0-or-later",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/smith89k/Bohpum.git"
-  },
-  "homepage": "https://github.com/smith89k/Bohpum",
+  "license": "UNLICENSED",
   "packageManager": "pnpm@12.4.1",
   "scripts": {
     "start": "electron .",

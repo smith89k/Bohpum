@@ -10,6 +10,9 @@ const KINDS = Object.freeze(['new', 'improved', 'fixed', 'removed']); // the win
 const N = (version, date, notes) => Object.freeze({ version, date, notes: Object.freeze(notes.map(([kind, text]) => Object.freeze({ kind, text }))) });
 
 const NOTES = Object.freeze([
+  N('0.2.4', '2026-10-19', [
+    ['removed', 'Bohpum is no longer open source. Help › About no longer links to its code on GitHub.']
+  ]),
   N('0.2.3', '2026-10-19', [
     ['new', 'Bohpum is open source, under the GNU GPL 3.0: anyone can read its code and download it on GitHub. Help › About says so and links to it.'],
     ['improved', 'Releases are ready for a free digital signature from SignPath Foundation, so Windows can stop warning about the installer once the signature is in place.']
