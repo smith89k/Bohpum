@@ -29,6 +29,7 @@
       "explorer-menu.js",
       "updater.js",
       "reader.js",
+      "store.js",
       "update-config.json",
       "reader-pack.json",
       "src/**/*",
