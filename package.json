@@ -13,6 +13,7 @@
     "bundle-libreoffice": "node scripts/bundle-libreoffice.js",
     "reader-pack": "node scripts/reader-pack.js",
     "dist": "node scripts/check-notes.js && node scripts/build-explorer-menu.js && electron-builder --win nsis --publish never",
+    "dist:store": "node scripts/check-notes.js && node scripts/build-explorer-menu.js && electron-builder --win appx --publish never --config build/store.config.js",
     "build:menu": "node scripts/build-explorer-menu.js",
     "icons": "electron scripts/make-icons.js"
   },

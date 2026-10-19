@@ -1,7 +1,9 @@
 // Makes every icon from the two source pictures (pnpm run icons; run it again after changing either picture):
 //   build/logo.png       → build/icon.ico (16–256) + icon.png (the app: exe, installer, windows, Explorer menu item),
-//                          explorer-menu/Assets/* (the Windows 11 menu package), src/img/logo.png (title row, welcome)
-//   build/bpum-file.png  → build/bpum.ico (.bpum files in Explorer), src/img/bpum-file.png (the convert window)
+//                          explorer-menu/Assets/* (the Windows 11 menu package), build/appx/* (the Microsoft Store
+//                          package's logos), src/img/logo.png (title row, welcome)
+//   build/bpum-file.png  → build/bpum.ico (.bpum files in Explorer), src/img/bpum-file.png (the convert window),
+//                          build/appx/BpumFile.png (the Store package's .bpum and .pub file types)
 // The pictures come cut out of a green background: their body is 94–99 % opaque and the edge has faint lime specks,
 // so the body is made solid and the specks removed first. Runs in Electron (canvas, good downscaling).
 const { app, BrowserWindow } = require('electron');
@@ -11,8 +13,9 @@ const ROOT = path.join(__dirname, '..');
 const ICO = [16, 20, 24, 32, 40, 48, 64, 128, 256];
 const JOBS = [
   { src: 'build/logo.png', ico: 'build/icon.ico', png: { 'build/icon.png': 256, 'explorer-menu/Assets/Square44x44Logo.png': 44,
-    'explorer-menu/Assets/Square150x150Logo.png': 150, 'explorer-menu/Assets/StoreLogo.png': 50, 'src/img/logo.png': 128 } },
-  { src: 'build/bpum-file.png', ico: 'build/bpum.ico', png: { 'src/img/bpum-file.png': 120 } }
+    'explorer-menu/Assets/Square150x150Logo.png': 150, 'explorer-menu/Assets/StoreLogo.png': 50, 'src/img/logo.png': 128,
+    'build/appx/StoreLogo.png': 50, 'build/appx/Square44x44Logo.png': 44, 'build/appx/Square150x150Logo.png': 150 } },
+  { src: 'build/bpum-file.png', ico: 'build/bpum.ico', png: { 'src/img/bpum-file.png': 120, 'build/appx/BpumFile.png': 256 } }
 ];
 
 // PNG-in-ICO (Windows Vista and later)
