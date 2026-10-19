@@ -13,6 +13,8 @@ run(async (t, check) => {
   check('Updates run only in the installed Windows app',
     up.updatesRunHere({ packaged: true, platform: 'win32' }) === true && up.updatesRunHere({ packaged: false, platform: 'win32' }) === false
       && up.updatesRunHere({ packaged: true, platform: 'darwin' }) === false);
+  check('…and not in the Microsoft Store copy (the Store updates it)',
+    up.updatesRunHere({ packaged: true, platform: 'win32', store: true }) === false && up.updatesRunHere({ packaged: true, platform: 'win32', store: false }) === true);
 
   const answers = [
     up.checkAnswer({ downloaded: '0.3.0' }), up.checkAnswer({ error: new Error('offline') }),
