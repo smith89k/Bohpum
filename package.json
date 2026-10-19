@@ -5,7 +5,12 @@
   "description": "Bohpum (បោះពុម្ព) - desktop publishing app that opens Microsoft Publisher .pub files",
   "main": "main.js",
   "author": "Sunnguon TAING",
-  "license": "UNLICENSED",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/smith89k/Bohpum.git"
+  },
+  "homepage": "https://github.com/smith89k/Bohpum",
   "scripts": {
     "start": "electron .",
     "test": "node tests/run.js",

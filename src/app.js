@@ -1856,6 +1856,7 @@ function openAbout() {
       <div><div class="about-name">Bohpum<span class="km" lang="km">បោះពុម្ព</span></div><div class="about-ver"></div></div></div>
     <p>Open, edit and print Microsoft Publisher files, or start a new publication. Your files stay on this computer.</p>
     <p class="note"><span lang="km">បោះពុម្ព</span> (bohpum) is Khmer for “to print”.</p>
+    <p class="note license">Free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" ${out}>GNU GPL 3.0</a> or later, with no warranty. <a href="https://github.com/smith89k/Bohpum" ${out}>Source code on GitHub</a></p>
     <section aria-label="Made by"><h3>Made by</h3>
       <div class="author"><img src="${A.photo}" alt="" width="64" height="64" draggable="false"><div><b>${A.name}<span class="nick">${A.handle}</span></b><span>${A.role}</span></div></div>
       <p>${A.bio}</p>
