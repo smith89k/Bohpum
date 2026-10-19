@@ -11,7 +11,8 @@ const N = (version, date, notes) => Object.freeze({ version, date, notes: Object
 
 const NOTES = Object.freeze([
   N('0.2.4', '2026-10-19', [
-    ['removed', 'Bohpum is no longer open source. Help › About no longer links to its code on GitHub.']
+    ['new', 'Bohpum is in the Microsoft Store, signed by Microsoft, so Windows doesn\'t warn you when you install it from there.'],
+    ['removed', 'Help › About no longer links to Bohpum\'s code on GitHub.']
   ]),
   N('0.2.3', '2026-10-19', [
     ['new', 'Bohpum is open source, under the GNU GPL 3.0: anyone can read its code and download it on GitHub. Help › About says so and links to it.'],
