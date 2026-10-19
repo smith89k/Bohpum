@@ -1,6 +1,6 @@
 # Bohpum in the Microsoft Store (MSIX, signed by Microsoft) — design
 
-Date: 2026-10-19 · Status: approved by the user in three parts ("Looks right" to each). Plan: to be written next.
+Date: 2026-10-19 · Status: approved by the user in three parts ("Looks right" to each). Plan: docs/superpowers/plans/2026-10-19-microsoft-store.md.
 
 The user's words: "let use Microsoft Store (MSIX) to get free code-signing" — after SignPath Foundation said no and
 the repository went private again. Then, one question at a time: Store listing for **everyone**; **keep both** (the
