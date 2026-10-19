@@ -20,11 +20,12 @@ function hasSignature(buf) {
   return size > 0 && at > 0 && at + size <= buf.length;
 }
 
-async function rehash(signed, dist) {
+// isSigned: the tests pass their own, so they never write a made-up program to disk (virus scanners remove those)
+async function rehash(signed, dist, isSigned = hasSignature) {
   const name = path.basename(signed), exe = path.join(dist, name), yml = path.join(dist, 'latest.yml');
   const text = fs.readFileSync(yml, 'utf8');
   if (!new RegExp(`^\\s*(- )?url: ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\r?$`, 'm').test(text)) throw new Error(`latest.yml doesn't name ${name}`);
-  if (!hasSignature(fs.readFileSync(signed))) throw new Error(`${name} from SignPath has no signature`);
+  if (!isSigned(fs.readFileSync(signed))) throw new Error(`${name} from SignPath has no signature`);
   fs.copyFileSync(signed, exe);
   const info = await buildBlockMap(exe, 'gzip', exe + '.blockmap');
   fs.writeFileSync(yml, text.replace(/^(\s*sha512: ).*$/gm, `$1${info.sha512}`).replace(/^(\s*size: ).*$/m, `$1${info.size}`));
