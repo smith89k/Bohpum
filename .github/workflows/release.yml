@@ -1,27 +1,23 @@
-# Builds the Windows installer and releases it: into the private Cloudflare R2 bucket behind
-# https://bohpum-update.smith89k.com/ (locked with Cloudflare Access: only installed copies, which carry the update key,
-# get in), and as a GitHub release with the notes from What's new (src/notes.js) — the installer to hand out.
-# The installer has no LibreOffice in it: the Publisher reader (a trimmed LibreOffice, the one pinned in
-# libreoffice.json) is a pack in the same bucket, built here from The Document Foundation's MSI only when it isn't
-# there yet, and downloaded once by the app the first time a Publisher file is opened.
+# Builds the Microsoft Store package and makes it a GitHub release (store.js, build/store.config.js): download
+# Bohpum-Store-<version>.msix from the release and submit it in Partner Center; Microsoft signs it and the Store updates
+# installed copies (docs/updates-setup.md section 8). Since 0.2.5 there is no installer and nothing goes to R2: copies
+# installed from an installer stay on 0.2.4 (R2 still serves it, and the Publisher reader pack, to them).
+# The Publisher reader (a trimmed LibreOffice, the one pinned in libreoffice.json) goes inside the package: built here
+# from The Document Foundation's MSI on every release.
 # Runs only by hand: Actions > Release > Run workflow, type the version (= package.json), or
-#   gh workflow run release.yml -f version=0.2.0
-# Pushing code or tags never releases. Setup (bucket, domain, lock, the six secrets): docs/updates-setup.md.
+#   gh workflow run release.yml -f version=0.2.5
+# Pushing code or tags never releases.
 #
-# Three jobs, each on its own fresh machine. The R2 upload key can put an update on every installed copy, so it never
-# shares a machine with other people's code: "build" runs pnpm install, the MSI unpack and electron-builder with no R2
-# key and no GitHub token (only the update key, which goes inside the app anyway); "check" and "publish" have the keys
-# but install nothing and run only this repository's own scripts.
-# Once store.json holds the Partner Center identity (docs/updates-setup.md section 8), build also makes the Microsoft
-# Store package (store.js, build/store.config.js): the same app with the Publisher reader inside and no update key. It
-# goes to the GitHub release only, never to R2; the user submits it in Partner Center, and Microsoft signs it.
+# Three jobs, each on its own fresh machine, and no secret at all: "check" (the GitHub token, installs nothing) — the
+# version and store.json; "build" runs other people's code (pnpm install, the MSI unpack, electron-builder) with no
+# token; "publish" (the GitHub token, installs nothing) makes the GitHub release with the package.
 name: Release
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to release, the same as package.json (e.g. 0.2.0)
+        description: Version to release, the same as package.json (e.g. 0.2.5)
         required: true
 
 permissions:
@@ -33,27 +29,16 @@ concurrency:
 
 env:
   VERSION: ${{ inputs.version }}
-  EXE: Bohpum-Setup-${{ inputs.version }}.exe
   MSIX: Bohpum-Store-${{ inputs.version }}.msix
-  AWS_DEFAULT_REGION: auto
-  # R2 doesn't take the checksums newer AWS CLIs add by default
-  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
-  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
 
 jobs:
-  # Before anything is built: the version, the secrets, nothing left in R2 by a stopped run, and whether the reader
-  # pack is already there (then its info, { name, size, sha256 }, goes to the build).
+  # Before anything is built: the version, and the Store identity the package is built with.
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
       run:
         shell: bash
-    outputs:
-      pack: ${{ steps.pack.outputs.name }}
-      lo: ${{ steps.pack.outputs.lo }}
-      have: ${{ steps.pack.outputs.have }}
-      info: ${{ steps.pack.outputs.info }}
     steps:
       - uses: actions/checkout@v7
 
@@ -61,18 +46,10 @@ jobs:
         with:
           node-version: 24
 
-      - name: The version matches package.json, is not released yet, and the secrets are set
+      - name: The version matches package.json, is not released yet, and store.json holds the Store identity
         env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          source scripts/r2-put.sh
           v="$(node -p "require('./package.json').version")"
           if [ "$v" != "$VERSION" ]; then
             echo "::error::You typed $VERSION, but package.json says $v. Bump package.json, push main, then run again."; exit 1
@@ -80,61 +57,9 @@ jobs:
           if gh release view "v$VERSION" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
             echo "::error::v$VERSION is already released. Bump the version for a new release."; exit 1
           fi
-          for s in R2_ACCOUNT_ID R2_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY CF_ACCESS_CLIENT_ID CF_ACCESS_CLIENT_SECRET; do
-            if [ -z "${!s}" ]; then echo "::error::A GitHub secret is missing ($s): see docs/updates-setup.md"; exit 1; fi
-          done
-          # An earlier run stopped after uploading but before the GitHub release: building again would put different
-          # bytes under the same name (Cloudflare may still serve the old ones), and updates would fail their checksum.
-          if r2_has "$EXE"; then
-            echo "::error::$EXE is already in R2 from an earlier run that stopped before the GitHub release. Bump the version and run again."; exit 1
-          fi
+          node -e "if (!require('./store').readStoreInfo('store.json')) { console.error('::error::store.json is missing or not valid: see docs/updates-setup.md section 8'); process.exit(1); }"
 
-      # Before anything is built or uploaded: the address must refuse requests without the key and let this key in
-      # (latest.yml may not be there yet, so "let in" means R2's own answer: 200 or 404). A wrong CF_ACCESS_* secret
-      # stops the run here, not after the installer is in the bucket (which would use up the version number).
-      - name: "Before anything is built: the update address is locked, and the update key opens it"
-        env:
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          url=https://bohpum-update.smith89k.com/latest.yml
-          without="$(curl -s -o /dev/null -w '%{http_code}' "$url")"
-          with="$(curl -s -o /dev/null -w '%{http_code}' -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" "$url")"
-          if [ "$without" = "200" ] || [ "$without" = "404" ]; then
-            echo "::error::The update address is NOT locked (HTTP $without without the key). Check the Cloudflare Access application for bohpum-update.smith89k.com."; exit 1
-          fi
-          case "$with" in
-            200|404) echo "Locked (HTTP $without without the key); the update key opens it (HTTP $with)" ;;
-            *) echo "::error::The update key doesn't open the update address (HTTP $with). Check the Access policy and the CF_ACCESS_* secrets."; exit 1 ;;
-          esac
-
-      # The pack's info file (reader/<pack>.json) is uploaded after its zip, so when it is there the zip is too. Reused
-      # packs keep their bytes: installed copies already carry their checksum.
-      - name: Is the reader pack in R2?
-        id: pack
-        env:
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        run: |
-          source scripts/r2-put.sh
-          name="$(node -p "require('./reader').packName(require('./libreoffice.json'))")"
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-          echo "lo=$(node -p "require('./libreoffice.json').version")" >> "$GITHUB_OUTPUT"
-          if r2_has "reader/$name.json"; then
-            aws s3 cp "s3://$R2_BUCKET/reader/$name.json" reader-pack.json --endpoint-url "$R2_ENDPOINT" --only-show-errors
-            node -e "const r = require('./reader'), p = r.readPackInfo('reader-pack.json');
-              if (!p || p.name !== process.argv[1]) { console.error('::error::reader/' + process.argv[1] + '.json in R2 is not valid pack info'); process.exit(1); }" "$name"
-            echo "info=$(cat reader-pack.json)" >> "$GITHUB_OUTPUT"
-            echo "have=true" >> "$GITHUB_OUTPUT"
-            echo "The reader pack $name is in R2: reusing it"
-          else
-            echo "have=false" >> "$GITHUB_OUTPUT"
-            echo "The reader pack $name is not in R2 yet: the build makes it from The Document Foundation's MSI"
-          fi
-
-  # Other people's code runs here (pnpm install, the MSI, electron-builder): no R2 key, no GitHub token.
+  # Other people's code runs here (pnpm install, the MSI, electron-builder): no secret, no GitHub token.
   build:
     needs: check
     runs-on: windows-latest
@@ -160,8 +85,7 @@ jobs:
       - name: Check What's new has notes for this version (src/notes.js)
         run: node scripts/check-notes.js
 
-      - name: "Build the reader pack: download LibreOffice from The Document Foundation and check its SHA-256"
-        if: needs.check.outputs.have != 'true'
+      - name: "The Publisher reader: download LibreOffice from The Document Foundation and check its SHA-256"
         run: |
           url="$(node -p "require('./libreoffice.json').msi")"
           want="$(node -p "require('./libreoffice.json').sha256")"
@@ -171,75 +95,30 @@ jobs:
           echo "lo.msi: $(stat -c %s lo.msi) bytes, SHA-256 matches libreoffice.json"
 
       # An administrative install only unpacks the MSI's files into a folder: nothing is installed on the runner.
-      - name: "Build the reader pack: unpack the MSI"
-        if: needs.check.outputs.have != 'true'
+      - name: "The Publisher reader: unpack the MSI"
         shell: pwsh
         run: |
           $p = Start-Process msiexec -ArgumentList '/a', "$pwd\lo.msi", '/qn', "TARGETDIR=$pwd\lo-admin" -Wait -PassThru
           if ($p.ExitCode -ne 0) { Write-Output "::error::msiexec /a ended with $($p.ExitCode)"; exit 1 }
 
-      - name: "Build the reader pack: trim and zip it, and check it opens a Publisher file"
-        if: needs.check.outputs.have != 'true'
+      # scripts/reader-pack.js trims it into dist-reader/LibreOffice, where build/store.config.js takes it from.
+      - name: "The Publisher reader: trim it, and check it opens a Publisher file"
         run: |
           soffice="$(find lo-admin -type f -iname soffice.exe -path '*program*' | head -1)"
           if [ -z "$soffice" ]; then echo "::error::The unpacked MSI has no program/soffice.exe"; find lo-admin -maxdepth 3; exit 1; fi
           node scripts/reader-pack.js "$(dirname "$(dirname "$soffice")")" dist-reader
           node scripts/reader-check.js dist-reader/LibreOffice/program/soffice.exe samples/demo-card.pub
-          cp "dist-reader/${{ needs.check.outputs.pack }}.json" reader-pack.json
 
-      - name: The reader pack already in R2 is the one the app gets
-        if: needs.check.outputs.have == 'true'
-        env:
-          INFO: ${{ needs.check.outputs.info }}
-        run: printf '%s' "$INFO" > reader-pack.json
-
-      # The app is built with the pack's name, size and SHA-256 (never read from the server, so nothing there can swap it).
-      - name: The app knows its reader pack (reader-pack.json)
-        run: |
-          node -e "const r = require('./reader'), p = r.readPackInfo('reader-pack.json'), want = r.packName(require('./libreoffice.json'));
-            if (!p || p.name !== want) { console.error('::error::reader-pack.json is not the pack info for ' + want); process.exit(1); }
-            console.log(p.name + ': ' + Math.round(p.size / 1048576) + ' MB, ' + p.sha256);"
-
-      # The update address only lets this key in; it goes inside the app, so every copy installed from this release can
-      # update and download the reader. Never committed (.gitignore). A build without it doesn't check for updates.
-      - name: Put the update key into the app (update-config.json)
-        env:
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: node -e "require('fs').writeFileSync('update-config.json', JSON.stringify({ clientId:process.env.CF_ACCESS_CLIENT_ID, clientSecret:process.env.CF_ACCESS_CLIENT_SECRET }))"
-
-      - name: Build the File Explorer menu (C++ DLL + package; needs the runner's Visual Studio + Windows SDK)
+      - name: Build the File Explorer menu (C++ DLL; needs the runner's Visual Studio + Windows SDK)
         run: node scripts/build-explorer-menu.js
 
-      - name: Build the installer
-        run: pnpm exec electron-builder --win nsis --publish never
+      - name: Build the Store package
+        run: pnpm exec electron-builder --win appx --publish never --config build/store.config.js
 
-      - name: The build has the installer, its blockmap and latest.yml naming it
-        run: |
-          for f in "dist/$EXE" "dist/$EXE.blockmap" dist/latest.yml; do
-            if [ ! -f "$f" ]; then echo "::error::The build made no $f"; ls dist; exit 1; fi
-          done
-          if ! grep -q "url: $EXE\$" dist/latest.yml; then echo "::error::latest.yml does not name $EXE"; cat dist/latest.yml; exit 1; fi
-
-      # The Microsoft Store package. The reader inside it: the pack this run just built (dist-reader/LibreOffice), or the
-      # one already in R2, downloaded with the key already in update-config.json and checked like installed copies do.
-      - name: "For the Store: the Publisher reader unpacked (the pack already in R2)"
-        if: hashFiles('store.json') != '' && needs.check.outputs.have == 'true'
-        run: node scripts/store-reader.js dist-reader
-
-      # The installer is built: the update key leaves the workspace before the Store package is made.
-      - name: "For the Store: build the Store package (no update key inside)"
-        if: hashFiles('store.json') != ''
-        run: |
-          rm -f update-config.json
-          pnpm exec electron-builder --win appx --publish never --config build/store.config.js
-
-      - name: "For the Store: the package has the reader and the menu, and no update key"
-        if: hashFiles('store.json') != ''
+      - name: The package has the reader and the menu, and no update key
         run: node scripts/store-check.js dist-store "$MSIX"
 
       - uses: actions/upload-artifact@v7
-        if: hashFiles('store.json') != ''
         with:
           name: store
           path: dist-store/${{ env.MSIX }}
@@ -247,39 +126,16 @@ jobs:
           retention-days: 5
           compression-level: 0
 
-      # What publish uploads; also kept a few days on the run's page, in case R2 misbehaves.
-      - uses: actions/upload-artifact@v7
-        with:
-          name: installer
-          path: |
-            dist/${{ env.EXE }}
-            dist/${{ env.EXE }}.blockmap
-            dist/latest.yml
-          retention-days: 5
-          compression-level: 0
-
-      - uses: actions/upload-artifact@v7
-        if: needs.check.outputs.have != 'true'
-        with:
-          name: reader-pack
-          path: |
-            dist-reader/${{ needs.check.outputs.pack }}.zip
-            dist-reader/${{ needs.check.outputs.pack }}.json
-          retention-days: 5
-          compression-level: 0
-
-  # Only the built files and this repository's own scripts (nothing installed), with the R2 key and the GitHub token.
+  # Only the built package and this repository's own scripts (nothing installed), with the GitHub token.
   publish:
     needs: [check, build]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     permissions:
       contents: write   # create the tag and the GitHub release
     defaults:
       run:
         shell: bash
-    env:
-      PACK: ${{ needs.check.outputs.pack }}
     steps:
       - uses: actions/checkout@v7
 
@@ -289,97 +145,15 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: installer
-          path: dist
-
-      - uses: actions/download-artifact@v8
-        if: hashFiles('store.json') != ''
-        with:
           name: store
           path: dist-store
-
-      - uses: actions/download-artifact@v8
-        if: needs.check.outputs.have != 'true'
-        with:
-          name: reader-pack
-          path: dist-reader
-
-      # The zip first, its info file last: a later run reuses the pack only once both are there.
-      - name: Upload the reader pack to R2
-        if: needs.check.outputs.have != 'true'
-        env:
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        run: |
-          source scripts/r2-put.sh
-          put "dist-reader/$PACK.zip" "reader/$PACK.zip" --content-type application/zip
-          put "dist-reader/$PACK.json" "reader/$PACK.json" --content-type application/json
-
-      # Installer first, latest.yml last: an installed copy never reads a latest.yml whose installer isn't there yet.
-      - name: Upload to R2
-        env:
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        run: |
-          source scripts/r2-put.sh
-          put "dist/$EXE" "$EXE"
-          put "dist/$EXE.blockmap" "$EXE.blockmap"
-          put dist/latest.yml latest.yml --cache-control no-cache --content-type text/yaml
-
-      # Without the key the address must refuse (no public downloads, of updates or of the reader); with it, installed
-      # copies must get this version and the reader pack.
-      - name: The update address is locked, and opens with the key
-        env:
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          key=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
-          url=https://bohpum-update.smith89k.com/latest.yml
-          without="$(curl -s -o /dev/null -w '%{http_code}' "$url")"
-          if [ "$without" = "200" ]; then
-            echo "::error::The update address is NOT locked: anyone can download. Check the Cloudflare Access application for bohpum-update.smith89k.com."; exit 1
-          fi
-          if ! body="$(curl -sf "${key[@]}" "$url")"; then
-            echo "::error::The update key doesn't open the update address. Check the Access policy and the CF_ACCESS_* secrets."; exit 1
-          fi
-          if ! grep -q "^version: $VERSION" <<< "$body"; then echo "::error::latest.yml at the address is not $VERSION:"; echo "$body"; exit 1; fi
-          zip="https://bohpum-update.smith89k.com/reader/$PACK.zip"
-          zipWithout="$(curl -sI -o /dev/null -w '%{http_code}' "$zip")"
-          if [ "$zipWithout" = "200" ]; then echo "::error::The reader pack is NOT locked: anyone can download it ($zip)."; exit 1; fi
-          zipWith="$(curl -sI -o /dev/null -w '%{http_code}' "${key[@]}" "$zip")"
-          if [ "$zipWith" != "200" ]; then echo "::error::The update key doesn't open the reader pack (HTTP $zipWith): $zip"; exit 1; fi
-          echo "Locked (without the key: HTTP $without, reader pack HTTP $zipWithout); with the key: version $VERSION and the reader pack"
-
-      - name: Remove older installers from R2 (every .blockmap and the reader packs stay)
-        env:
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        run: |
-          aws s3api list-objects-v2 --bucket "$R2_BUCKET" --endpoint-url "$R2_ENDPOINT" --query 'Contents[].[Key]' --output text > r2-keys.txt
-          node scripts/r2-prune.js "$EXE" < r2-keys.txt > r2-old.txt
-          while IFS= read -r key; do
-            echo "Removing $key"
-            aws s3 rm "s3://$R2_BUCKET/$key" --endpoint-url "$R2_ENDPOINT" --only-show-errors
-          done < r2-old.txt
 
       - name: GitHub release (notes from What's new)
         env:
           GH_TOKEN: ${{ github.token }}
-          LO: ${{ needs.check.outputs.lo }}
         run: |
           node scripts/release-notes.js "$VERSION" > notes.md
-          printf '\nThe Publisher reader (LibreOffice %s) downloads once, the first time a Publisher file is opened.\n' "$LO" >> notes.md
-          printf '\nGive the installer below to the people who should have Bohpum: copies installed from it update themselves.\n\nSHA-256 of the installer: `%s`\n' \
-            "$(sha256sum "dist/$EXE" | cut -d' ' -f1)" >> notes.md
-          files=("dist/$EXE")
-          if [ -f "dist-store/$MSIX" ]; then
-            files+=("dist-store/$MSIX")
-            printf '\n%s is for the Microsoft Store: submit it in Partner Center (docs/updates-setup.md section 8). Microsoft signs it.\n' "$MSIX" >> notes.md
-          fi
-          gh release create "v$VERSION" "${files[@]}" --target "$GITHUB_SHA" --title "Bohpum $VERSION" --notes-file notes.md
+          printf '\nThe Publisher reader (LibreOffice %s) is inside the package.\n' "$(node -p "require('./libreoffice.json').version")" >> notes.md
+          printf '\n%s is for the Microsoft Store: submit it in Partner Center (docs/updates-setup.md section 8). Microsoft signs it.\n\nSHA-256 of the package: `%s`\n' \
+            "$MSIX" "$(sha256sum "dist-store/$MSIX" | cut -d' ' -f1)" >> notes.md
+          gh release create "v$VERSION" "dist-store/$MSIX" --target "$GITHUB_SHA" --title "Bohpum $VERSION" --notes-file notes.md

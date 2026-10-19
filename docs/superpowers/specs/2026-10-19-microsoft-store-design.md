@@ -7,6 +7,11 @@ the repository went private again. Then, one question at a time: Store listing f
 installer handed out today and the Store version); the Publisher reader **inside** the Store version; each release
 **made by the Release button and uploaded by hand** in Partner Center; approach 1, "one button, two files".
 
+**Changed the same day, after 0.2.4 was released with both files:** "next release should not build .exe and push to
+R2, since we use microsoft store." Since 0.2.5 the Release run makes only the Store package: no installer, nothing to
+R2, no secret (the reader is built from the MSI on every release). Copies installed from an installer stay on 0.2.4;
+the R2 bucket, its lock and keys stay so they keep their reader download. The app code for installer copies stays.
+
 ## Why
 SmartScreen warns about Bohpum's installer because it has no signature, and a certificate costs money. Since
 September 2025 a Microsoft Store developer account is free for individuals, and an MSIX package sent to the Store is

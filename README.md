@@ -32,26 +32,25 @@ doesn't update itself or download the Publisher reader. Only the release job's i
 
 ## Releasing
 
-GitHub Actions builds each release and puts it in a private Cloudflare R2 bucket behind
-`https://bohpum-update.smith89k.com/`, locked so that only installed copies (which carry the update key) get in.
-Installed copies check when they start and every 6 hours, download a new version quietly, then ask **Restart now** /
-**Later** (Later = it installs when Bohpum is closed). **Help › Check for Updates** checks by hand.
+Bohpum comes from the **Microsoft Store** (https://apps.microsoft.com/detail/9MWKGK7SCMJS): Microsoft signs it, so
+Windows shows no warning, and the Store keeps it up to date. The Store version has the Publisher reader inside.
+GitHub Actions builds each release's Store package; you submit it in Partner Center.
 
 1. `pnpm version 0.3.0 --no-git-tag-version --no-git-checks` (only edits package.json).
 2. Write that version's notes at the top of `src/notes.js` (What's new) with today's date. They become the GitHub
    release notes; the release stops without them.
 3. Commit and push main.
 4. GitHub → **Actions** → **Release** → **Run workflow** → type the version (or `gh workflow run release.yml -f version=0.3.0`).
-5. Once `store.json` is in place (the Microsoft Store identity), the release also has `Bohpum-Store-<version>.msix`:
-   submit it in Partner Center. Microsoft signs it, so Store users see no warning
-   ([docs/updates-setup.md](docs/updates-setup.md) section 8).
+5. Download `Bohpum-Store-<version>.msix` from the GitHub release and submit it in Partner Center.
 
-0.2.0 (2026-10-18) is the first release made this way; private updates and the Publisher reader download are in
-place. Give people the installer from the GitHub release page; their copy updates itself from then on. The one-time
-Cloudflare and GitHub setup, and what each step of the job does: [docs/updates-setup.md](docs/updates-setup.md).
+Up to 0.2.4 releases were an installer with private updates from a Cloudflare R2 bucket behind
+`https://bohpum-update.smith89k.com/`. Copies installed that way stay on 0.2.4 (the bucket still serves them, and the
+Publisher reader); since 0.2.5 nothing goes there. The Store setup, each release's upload, and the old update setup:
+[docs/updates-setup.md](docs/updates-setup.md).
 
-**Privacy.** Bohpum goes online by itself only to check for updates, and downloads the Publisher reader only when you
-say yes. Nothing about you or your files is sent.
+**Privacy.** The Store version never goes online by itself (the Store updates it). An installer copy goes online only
+to check for updates, and downloads the Publisher reader only when you say yes. Nothing about you or your files is
+sent.
 
 ## The Publisher reader (LibreOffice)
 
@@ -181,6 +180,7 @@ main.js          Electron main process: windows, menus, files, LibreOffice impor
 preload.js       Safe bridge between the window and main process
 updater.js       Automatic updates: when to check, what Check for Updates says, the update key (as Sastra PDF)
 reader.js        The Publisher reader: which LibreOffice to use, its download, checksum and unpack, one shared download
+store.js         The Microsoft Store copy: which copy it is, its identity (store.json), the Store page, the reader inside
 libreoffice.json The one pinned LibreOffice the reader pack is made from (version, trim number, MSI, SHA-256)
 src/index.html   Editor window
 src/app.js       Editor: canvas, tools, panels, pages, undo, shortcuts
@@ -203,9 +203,12 @@ scripts/bundle-libreoffice.js  The trim (trimCopy); copies the installed LibreOf
 scripts/check-notes.js         Stops pnpm run dist when src/notes.js has no notes for package.json's version
 scripts/reader-pack.js         Makes the reader pack (trimmed LibreOffice zip + its name, size, SHA-256); reader-check.js
                                checks it opens a Publisher file
-scripts/r2-prune.js, r2-put.sh, release-notes.js  The release job's helpers (which old installers go, uploads, notes)
-.github/workflows/release.yml  The Release button (by hand only): builds, uploads to R2, makes the GitHub release
-docs/updates-setup.md          The Cloudflare and GitHub setup, and how to release
+scripts/release-notes.js       The GitHub release notes from What's new
+scripts/store-config.js        The Store package's build config (loaded through build/store.config.js; the manifest is
+                               build/store-manifest.xml, the logos build/appx); store-check.js checks the built package
+.github/workflows/release.yml  The Release button (by hand only): builds the Store package, makes the GitHub release
+docs/updates-setup.md          How to release and submit to the Store; the old installer update setup (R2, Cloudflare)
+docs/store-listing.md          The Store page texts (description, privacy policy, notes for certification)
 vendor/libreoffice             A trimmed LibreOffice for pnpm start only (generated, not edited by hand)
 tests/                         Electron tests: pnpm test (each tests/*.test.js runs the real app)
 ```

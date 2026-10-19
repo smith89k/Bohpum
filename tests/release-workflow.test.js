@@ -1,12 +1,9 @@
-// .github/workflows/release.yml, read as text (no YAML library): it runs only by hand with a typed version, in three
-// jobs. "check" holds the R2 key but installs nothing; "build" runs other people's code (pnpm install, the MSI unpack,
-// electron-builder) and gets neither the R2 key nor the GitHub token, only the update key that goes into the app;
-// "publish" uploads the built files with the key and installs nothing. Uploads put the file that points at the others
-// LAST, the lock check also tries the reader pack, and "is it in R2?" counts only a real "not found" as absent — a
-// passing network error must never make the job rebuild and overwrite a reader pack installed copies already trust.
-// Once store.json holds the Partner Center identity, build also makes the Microsoft Store package (no update key in
-// it, checked) and publish attaches it to the GitHub release only, never to R2.
-const { spawnSync } = require('child_process');
+// .github/workflows/release.yml, read as text (no YAML library): it runs only by hand with a typed version and makes
+// only the Microsoft Store package (since 0.2.5: no installer and nothing to R2 — copies installed from an installer
+// stay on 0.2.4). Three jobs: "check" (the GitHub token, installs nothing): the version, not released yet, store.json;
+// "build" runs other people's code (pnpm install, the MSI unpack, electron-builder) with no secret and no token: the
+// Publisher reader from The Document Foundation's MSI (its SHA-256 checked), the menu, the Store package, checked by
+// scripts/store-check.js; "publish" (the GitHub token, installs nothing) makes the GitHub release with the package.
 const fs = require('fs');
 const path = require('path');
 const { run, ROOT } = require('./harness');
@@ -21,7 +18,7 @@ run(async (t, check) => {
     /^ {2}workflow_dispatch:/m.test(on) && !/^ {2}(push|pull_request|schedule|release|workflow_run):/m.test(on)
       && /^ {6}version:\n(?: {8}.*\n)*? {8}required: true/m.test(on), on);
   const topEnv = (/^env:\n((?: {2}.*\n)+)/m.exec(text) || [])[1] || '';
-  check('No secret is given to the whole workflow', !/secrets\./.test(topEnv), topEnv);
+  check('The package is named Bohpum-Store-<version>.msix', /^ {2}MSIX: Bohpum-Store-\$\{\{ inputs\.version \}\}\.msix$/m.test(topEnv), topEnv);
 
   // jobs: from each "  <name>:" under "jobs:" to the next; steps: from each "      - name:" / "      - uses:" to the next
   const jobsText = text.slice(text.search(/^jobs:\n/m));
@@ -36,91 +33,44 @@ run(async (t, check) => {
     for (const l of lines) { if (/^ {6}- (name|uses):/.test(l)) steps.push([l]); else if (steps.length) steps.at(-1).push(l); }
     return steps.map((s) => {
       const name = (/^ {6}- name:\s*(.*)$/.exec(s[0]) || [])[1]?.replace(/^["']|["']$/g, '') || s[0].trim();
-      const at = s.findIndex(l => /^ {8}env:\s*$/.test(l)), env = [];
-      if (at >= 0) for (let i = at + 1; i < s.length && /^ {10}/.test(s[i]); i++) env.push(s[i].trim());
       const runAt = s.findIndex(l => /^ {8}run:/.test(l));
-      return { name, text: s.join('\n'), env: env.join('\n'), run: runAt >= 0 ? s.slice(runAt).join('\n') : '' };
+      return { name, text: s.join('\n'), run: runAt >= 0 ? s.slice(runAt).join('\n') : '' };
     });
   };
   const J = Object.fromEntries(Object.entries(jobs).map(([k, v]) => [k, { text: v.join('\n'), steps: stepsOf(v) }]));
-  check('Three jobs: check, build, publish', ['check', 'build', 'publish'].every(k => J[k]), Object.keys(J));
+  check('Three jobs: check, build, publish', ['check', 'build', 'publish'].every(k => J[k]) && Object.keys(J).length === 3, Object.keys(J));
   if (!['check', 'build', 'publish'].every(k => J[k])) return;
-  const jobEnv = (j) => (/^ {4}env:\n((?: {6}.*\n)+)/m.exec(J[j].text + '\n') || [])[1] || '';
-  check('No job gives a secret to all its steps', ['check', 'build', 'publish'].every(j => !/secrets\./.test(jobEnv(j))));
   check('build waits for check; publish waits for both',
     /^ {4}needs: check\s*$/m.test(J.build.text) && /^ {4}needs: \[check, build\]\s*$/m.test(J.publish.text));
 
-  // ---- who sees which key
+  // ---- no installer, nothing to R2, no secret at all
+  check('No secret anywhere (no R2 key, no update key)', !/secrets\./.test(text));
+  check('No installer and nothing to R2', !/--win nsis|Bohpum-Setup|\bEXE\b|R2_|aws |s3:|r2_has|r2-put|r2-prune|update-config|CF_ACCESS|latest\.yml/.test(text));
   const otherPeoplesCode = /pnpm install|pnpm exec|electron-builder|msiexec|reader-pack\.js\b|pnpm\/action-setup/;
   check('check and publish install and build nothing (no pnpm, no electron-builder, no MSI)',
     !otherPeoplesCode.test(J.check.text) && !otherPeoplesCode.test(J.publish.text));
-  check('build never gets the R2 key or the GitHub token', !/secrets\.R2_|github\.token|secrets\.GITHUB_TOKEN/.test(J.build.text));
-  const keySteps = J.build.steps.filter(s => /secrets\./.test(s.text));
-  check('…its only secret is the update key, in the one step that writes it into the app',
-    keySteps.length === 1 && keySteps[0].name.startsWith('Put the update key') && !/secrets\.(?!CF_ACCESS_CLIENT_(ID|SECRET)\b)/.test(keySteps[0].text), keySteps.map(s => s.name));
+  check('build never gets the GitHub token', !/github\.token|GITHUB_TOKEN/.test(J.build.text));
   check('build may only read the repository; publish may write releases',
     /^ {4}permissions:\n {6}contents: read/m.test(J.build.text) && /^ {4}permissions:\n {6}contents: write/m.test(J.publish.text));
 
-  // ---- order
+  // ---- the steps
   const idx = (job, start) => J[job].steps.findIndex(s => s.name.startsWith(start));
   const inOrder = (job, names) => { const at = names.map(n => idx(job, n)); return at.every(i => i >= 0) && at.every((v, i) => !i || v > at[i - 1]); };
-  check('check: the version and secrets first, then the lock, then whether the reader pack is in R2',
-    inOrder('check', ['The version matches package.json', 'Before anything is built: the update address is locked', 'Is the reader pack in R2?']));
-  const early = J.check.steps[idx('check', 'Before anything is built: the update address is locked')] || { run: '', env: '' };
-  check('…the early lock check: refused without the key, let in with it (a wrong key stops the run before any upload)',
-    /bohpum-update\.smith89k\.com/.test(early.run) && /CF-Access-Client-Id/.test(early.run) && /CF_ACCESS_CLIENT_SECRET/.test(early.env) && !/R2_|AWS_/.test(early.env), early);
-  check('build: install, the reader pack (only when R2 hasn\'t got it), the update key, the installer',
-    inOrder('build', ['Install', 'Build the reader pack', 'Put the update key', 'Build the installer']) && /if: needs\.check\.outputs\.have != 'true'/.test(J.build.steps[idx('build', 'Build the reader pack')].text));
-  check('publish: the reader pack, then the installer files, the lock check, prune, the GitHub release',
-    inOrder('publish', ['Upload the reader pack', 'Upload to R2', 'The update address is locked', 'Remove older installers', 'GitHub release']));
-
   const step = (job, start) => J[job].steps[idx(job, start)] || { run: '', text: '' };
-  const upload = step('publish', 'Upload to R2'), readerUp = step('publish', 'Upload the reader pack'), pos = (s, re) => s.search(re);
-  check('Upload to R2: latest.yml goes after the installer', pos(upload.run, /put "dist\/\$EXE"/) >= 0 && pos(upload.run, /latest\.yml/) > pos(upload.run, /put "dist\/\$EXE"/), upload.run);
-  check('Upload the reader pack: its .json goes after its .zip', pos(readerUp.run, /\.zip"/) >= 0 && pos(readerUp.run, /\.json"/) > pos(readerUp.run, /\.zip"/), readerUp.run);
-  const lock = step('publish', 'The update address is locked');
-  check('The lock check also tries the reader pack, without and with the key',
-    /reader\//.test(lock.run) && /bohpum-update\.smith89k\.com/.test(lock.run) && /CF-Access-Client-Id/.test(lock.run), lock.run);
-  check('The GitHub release says the reader downloads once', /The Publisher reader \(LibreOffice .*\) downloads once, the first time a Publisher file is opened\./.test(text));
-  check('Prune goes through scripts/r2-prune.js', /node scripts\/r2-prune\.js "\$EXE"/.test(step('publish', 'Remove older installers').run));
-  check('"Is it in R2?" goes through r2_has, for the installer and for the reader pack',
-    /r2_has "\$EXE"/.test(step('check', 'The version matches package.json').run) && /r2_has "reader\/\$name\.json"/.test(step('check', 'Is the reader pack in R2?').run)
-      && !/head-object/.test(J.check.text));
-
-  // ---- the Microsoft Store package: only once store.json holds the Partner Center identity
-  const storeSteps = J.build.steps.filter(s => s.name.startsWith('For the Store:') || /^ {10}name: store$/m.test(s.text));
-  check('build: four Store steps, each only when store.json is there',
-    storeSteps.length === 4 && storeSteps.every(s => /if: hashFiles\('store\.json'\) != ''/.test(s.text)), storeSteps.map(s => s.name));
-  const sr = step('build', 'For the Store: the Publisher reader');
-  check('…after the installer; the reader comes from R2 only when this run didn\'t build the pack',
-    inOrder('build', ['Build the installer', 'For the Store: the Publisher reader', 'For the Store: build the Store package', 'For the Store: the package has'])
-      && /needs\.check\.outputs\.have == 'true'/.test(sr.text) && /node scripts\/store-reader\.js dist-reader/.test(sr.run), sr.text);
-  const sb = step('build', 'For the Store: build the Store package').run;
-  check('…the update key is deleted before the Store package is built with build/store.config.js',
-    pos(sb, /rm -f update-config\.json/) >= 0 && pos(sb, /electron-builder --win appx --publish never --config build\/store\.config\.js/) > pos(sb, /rm -f update-config\.json/), sb);
-  check('…then scripts/store-check.js checks it', /node scripts\/store-check\.js dist-store "\$MSIX"/.test(step('build', 'For the Store: the package has').run));
-  const storeDl = J.publish.steps.filter(s => /^ {10}name: store$/m.test(s.text));
-  const ghRelease = step('publish', 'GitHub release').run;
-  check('publish: the Store package goes to the GitHub release (when there is one), never to R2',
-    storeDl.length === 1 && /if: hashFiles\('store\.json'\) != ''/.test(storeDl[0].text) && /dist-store\/\$MSIX/.test(ghRelease)
-      && !/MSIX|dist-store/.test(upload.run + step('publish', 'Remove older installers').run) && /^ {2}MSIX: Bohpum-Store-\$\{\{ inputs\.version \}\}\.msix$/m.test(topEnv), ghRelease);
-
-  // ---- scripts/r2-put.sh, run for real in bash with a stand-in aws
-  const sh = path.join(ROOT, 'scripts', 'r2-put.sh'), shText = fs.existsSync(sh) ? fs.readFileSync(sh, 'utf8') : '';
-  check('scripts/r2-put.sh has the put() that checks the stored size', /put\(\)\s*\{[\s\S]*head-object[\s\S]*ContentLength/.test(shText));
-  const bash = ['C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files\\Git\\usr\\bin\\bash.exe'].find(p => fs.existsSync(p)) || 'bash';
-  const has = (awsSays, code) => {
-    const r = spawnSync(bash, ['-c', `aws() { echo "${awsSays}" >&2; return ${code}; }; source scripts/r2-put.sh; r2_has some/key; echo "rc=$?"`], { cwd: ROOT, encoding: 'utf8' });
-    return { out: (r.stdout || '') + (r.stderr || ''), status: r.status };
-  };
-  const there = has('', 0), absent = has('An error occurred (404) when calling the HeadObject operation: Not Found', 254);
-  const blip = has('Could not connect to the endpoint URL: "https://x.r2.cloudflarestorage.com/b/some/key"', 255), refused = has('An error occurred (403) when calling the HeadObject operation: Forbidden', 254);
-  check('r2_has: there → yes', /rc=0/.test(there.out), there);
-  check('r2_has: only a real 404 "Not Found" → absent', /rc=1/.test(absent.out), absent);
-  check('r2_has: any other error (no connection, refused) stops the job instead of guessing "absent"',
-    blip.status === 1 && !/rc=/.test(blip.out) && /::error::/.test(blip.out) && refused.status === 1 && !/rc=/.test(refused.out), { blip, refused });
-
-  // the Windows runner checks out with core.autocrlf: a CRLF .sh breaks bash's `source`
-  const attrs = fs.existsSync(path.join(ROOT, '.gitattributes')) ? fs.readFileSync(path.join(ROOT, '.gitattributes'), 'utf8') : '';
-  check('Shell scripts are checked out with LF line ends', /^\*\.sh\s+text\s+eol=lf\s*$/m.test(attrs), attrs);
+  const first = step('check', 'The version matches package.json').run;
+  check('check: the version matches package.json, is not released yet, and store.json holds the Store identity',
+    /require\('\.\/package\.json'\)\.version/.test(first) && /gh release view "v\$VERSION"/.test(first) && /readStoreInfo\('store\.json'\)/.test(first), first);
+  check('build: install, What\'s new, the reader from the MSI (downloaded, unpacked, trimmed), the menu, the Store package, its check',
+    inOrder('build', ['Install', 'Check What\'s new', 'The Publisher reader: download', 'The Publisher reader: unpack', 'The Publisher reader: trim',
+      'Build the File Explorer menu', 'Build the Store package', 'The package has']), J.build.steps.map(s => s.name));
+  const dl = step('build', 'The Publisher reader: download').run;
+  check('…the MSI\'s SHA-256 must match libreoffice.json', /sha256sum lo\.msi/.test(dl) && /libreoffice\.json'\)\.sha256/.test(dl), dl);
+  check('…the trimmed reader must open the demo card',
+    /reader-check\.js dist-reader\/LibreOffice\/program\/soffice\.exe samples\/demo-card\.pub/.test(step('build', 'The Publisher reader: trim').run));
+  check('…the Store package is built with build/store.config.js, then scripts/store-check.js checks it',
+    /electron-builder --win appx --publish never --config build\/store\.config\.js/.test(step('build', 'Build the Store package').run)
+      && /node scripts\/store-check\.js dist-store "\$MSIX"/.test(step('build', 'The package has').run));
+  const gh = step('publish', 'GitHub release').run;
+  check('publish: the GitHub release has the Store package and the notes from What\'s new',
+    /node scripts\/release-notes\.js "\$VERSION"/.test(gh) && /gh release create "v\$VERSION" "dist-store\/\$MSIX"/.test(gh), gh);
 });

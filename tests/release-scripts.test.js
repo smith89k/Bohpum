@@ -1,7 +1,6 @@
-// The release job's helper scripts: the one pinned LibreOffice (libreoffice.json), the reader pack made from it
-// (trimmed as scripts/bundle-libreoffice.js trims, zipped, with its { name, size, sha256 }), which old installers the
-// job removes from R2 (never latest.yml, a .blockmap or anything under reader/), and the GitHub release notes written
-// from What's new.
+// The release job's helper scripts: the one pinned LibreOffice (libreoffice.json), the reader made from it (trimmed as
+// scripts/bundle-libreoffice.js trims, zipped, with its { name, size, sha256 }; the Store package takes the trimmed
+// folder), and the GitHub release notes written from What's new.
 const { spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -47,13 +46,6 @@ run(async (t, check) => {
       && has('share/registry/res/fcfg_langpack_en-US.xcd') && has('share/registry/Langpack-en-US.xcd') && has('share/registry/ctl_km.xcd') && has('share/registry/main.xcd'));
   const cli = asNode('reader-pack.js', [src, path.join(t.ctx.tmp, 'cli')]);
   check('node scripts/reader-pack.js <LibreOffice> <out> prints the pack info', cli.code === 0 && !!reader.parsePackInfo(cli.out.trim()), cli);
-
-  // ---- R2 prune
-  const { pruneList } = require(path.join(ROOT, 'scripts', 'r2-prune.js'));
-  const keys = ['Bohpum-Setup-0.2.0.exe', 'Bohpum-Setup-0.2.1.exe\r', 'Bohpum-Setup-0.2.0.exe.blockmap', 'latest.yml', 'reader/LibreOffice-25.8.2-pack1.zip', ''];
-  check('Prune removes only the older installers', JSON.stringify(pruneList(keys, 'Bohpum-Setup-0.2.1.exe')) === '["Bohpum-Setup-0.2.0.exe"]', pruneList(keys, 'Bohpum-Setup-0.2.1.exe'));
-  let threw = false; try { pruneList(keys, 'Bohpum-Setup-9.9.9.exe'); } catch { threw = true; }
-  check('…and removes nothing when the new installer is not in the bucket', threw);
 
   // ---- release notes
   const { notesMarkdown, loadNotes } = require(path.join(ROOT, 'scripts', 'release-notes.js'));

@@ -1,5 +1,10 @@
 # Releases, automatic updates and the Publisher reader — setup
 
+> **Since 0.2.5 a release makes only the Microsoft Store package** (section 6 and section 8): no installer, and
+> nothing goes to R2. Sections 1–5 and 7 describe the private updates that copies installed from an installer (0.2.4
+> and older) still use: keep the bucket, the lock and the keys as they are, or those copies can no longer download the
+> Publisher reader. They stay on 0.2.4; to get newer versions, people install Bohpum from the Store.
+
 Installed copies of Bohpum check **https://bohpum-update.smith89k.com/** when they start and every 6 hours. A new
 version downloads quietly; the app then asks **Restart now** or **Later** (Later = it installs when Bohpum is closed).
 **Help › Check for Updates** checks by hand.
@@ -97,31 +102,26 @@ address is locked, and opens with the key").
 
 ## 6. Releasing a version
 
+Since 0.2.5 a release makes only the Microsoft Store package; there is no installer and nothing goes to R2.
+
 1. `pnpm version 0.3.0 --no-git-tag-version --no-git-checks` (only edits package.json).
 2. Write the version's entry at the top of `src/notes.js` (What's new) with today's date — the build refuses to run
    without it, and it becomes the GitHub release notes.
 3. Commit and push main.
 4. GitHub → **Actions** → **Release** → **Run workflow** → type `0.3.0` → Run
    (or `gh workflow run release.yml -R smith89k/Bohpum -f version=0.3.0`).
+5. Download `Bohpum-Store-0.3.0.msix` from the GitHub release and submit it in Partner Center (section 8).
 
-The run has three jobs, each on its own fresh machine, so the upload key never shares a machine with other people's
-code:
-- **check** (has the keys, installs nothing): the version and the six secrets, nothing left in the bucket by a stopped
-  run, and whether the Publisher reader pack is already there. Only a real "not found" counts as absent; any other
-  answer from R2 stops the run instead of guessing (a guess could overwrite a pack installed copies already trust).
-- **build** (no upload key, no GitHub token): installs the tools, builds the reader pack if the bucket hasn't got it
-  (section 7), puts the update key and the pack's name, size and SHA-256 into the app, builds the installer (with the
-  right-click menu).
-- **publish** (has the keys, installs nothing; only the built files and this repository's own scripts): uploads the
-  pack if it is new, then the installer (installer first, `latest.yml` last); checks the address is locked and opens
-  with the key; removes the older installers there (their small `.blockmap` files and every reader pack stay); and
-  makes the GitHub release `v0.3.0` with the notes and the installer to hand out.
-It stops with a plain message if the version doesn't match package.json, is already released, or a secret is missing.
-If a run stops half-way after uploading (the installer is in the bucket but there's no GitHub release), the next run of
-the same version refuses: bump the version and release again.
-
-After the first update that reaches an installed copy, right-click a `.pub` in File Explorer and check that
-**Convert to Bohpum** is still in the first menu (or that Bohpum offered to set it up again and it worked).
+The run has three jobs, each on its own fresh machine, and uses no secret:
+- **check** (the GitHub token, installs nothing): the version matches package.json and isn't released yet, and
+  `store.json` holds the Store identity.
+- **build** (no token): installs the tools; downloads LibreOffice's MSI from The Document Foundation, checks its
+  SHA-256, unpacks and trims it (section 7) and checks the trimmed copy opens `samples/demo-card.pub`; builds the
+  right-click menu; builds the Store package with the reader inside; and checks the package has the reader and the
+  menu, and no update key (`scripts/store-check.js`).
+- **publish** (the GitHub token, installs nothing): makes the GitHub release `v0.3.0` with the notes and the package.
+It stops with a plain message if the version doesn't match package.json, is already released, or `store.json` is
+missing.
 
 ## 7. The Publisher reader
 
@@ -134,28 +134,27 @@ Document Foundation's archive (old versions stay there) and that file's SHA-256.
 | `reader/<pack>.zip` | the trimmed LibreOffice that installed copies download once |
 | `reader/<pack>.json` | `{ name, size, sha256 }` of the zip; uploaded after it, so a later release reuses the pack |
 
-When `reader/<pack>.json` isn't there yet, the release job downloads the MSI, checks its SHA-256, unpacks it
-(`msiexec /a`, nothing is installed), trims it (`scripts/reader-pack.js`, the same trim as
-`scripts/bundle-libreoffice.js`), checks the trimmed copy opens `samples/demo-card.pub`
-(`scripts/reader-check.js`), and uploads the zip, then the json. Otherwise it reuses the json that is there.
+Since 0.2.5 every release downloads the MSI, checks its SHA-256, unpacks it (`msiexec /a`, nothing is installed),
+trims it (`scripts/reader-pack.js`, the same trim as `scripts/bundle-libreoffice.js`), checks the trimmed copy opens
+`samples/demo-card.pub` (`scripts/reader-check.js`), and puts it inside the Store package. Nothing is uploaded: the
+packs already under `reader/` stay for copies installed from an installer (0.2.4 and older), which download them once.
 
-**The job never deletes anything under `reader/`**: a copy that hasn't updated yet still wants its own pack. There is
-one pack per LibreOffice change, so this stays small.
+**Never delete anything under `reader/`**: those copies still want their own pack.
 
 **Moving to a newer LibreOffice** (for example a security fix): take the version from
 https://download.documentfoundation.org/libreoffice/stable/, find its folder under
 https://downloadarchive.documentfoundation.org/libreoffice/old/ (e.g. `26.8.1.1`), and put the version, the
 `…/win/x86_64/LibreOffice_<x.y.z.w>_Win_x86-64.msi` address and that file's SHA-256 (`certutil -hashfile <msi> SHA256`;
 it must match the "SHA-256 Hash" on the download page) into `libreoffice.json`. Bump `pack` only when the trim changes.
-Release. Installed copies then say "A newer Publisher reader is ready" the next time a Publisher file is opened.
+Release: the next Store version carries the newer LibreOffice.
 
-In the app the reader lives in `%LOCALAPPDATA%\Bohpum\reader\<pack>\`. Updates don't touch it; a full uninstall
-removes it.
+In the Store version the reader is inside the package (`resources\libreoffice`). In an installer copy it lives in
+`%LOCALAPPDATA%\Bohpum\reader\<pack>\`; updates don't touch it, and a full uninstall removes it.
 
 ## 8. The Microsoft Store
 
 The Store version is the same Bohpum with the Publisher reader inside and no update key. Microsoft signs it, so
-Windows shows no warning, and the Store keeps it up to date. The installer (sections 1–7) stays as it is.
+Windows shows no warning, and the Store keeps it up to date. Since 0.2.5 it is the only version released.
 
 **Once:**
 1. Open a free developer account at https://storedeveloper.microsoft.com with your Microsoft account. Microsoft checks
@@ -171,7 +170,8 @@ Windows shows no warning, and the Store keeps it up to date. The installer (sect
      "storeId": "<Store ID, 12 characters>"
    }
    ```
-   From then on every release also makes `Bohpum-Store-<version>.msix` and puts it on the GitHub release.
+   Every release makes `Bohpum-Store-<version>.msix` from it and puts it on the GitHub release. (Done on 2026-10-19:
+   `smith89k.Bohpum`, Store ID `9MWKGK7SCMJS`.)
 4. Put the privacy policy from `docs/store-listing.md` on a page of your website (for example
    https://smith89k.com/bohpum/privacy) — Partner Center asks for its address.
 5. The first submission: **Pricing and availability** (Free; markets: all), **Properties** (category Productivity;
@@ -197,8 +197,8 @@ administrator PowerShell `Add-AppxPackage -Path dist-store\Bohpum-Store-<version
 
 ## Good to know
 
-- **Giving someone Bohpum:** download the installer from the GitHub release page and send them the file. Their copy
-  updates itself from then on.
+- **Giving someone Bohpum:** send them its Store link, https://apps.microsoft.com/detail/9MWKGK7SCMJS (it works once
+  Microsoft has published the first submission). The Store keeps their copy up to date.
 - **Copies without the key** — 0.1.0 (built by hand), anything built locally (`pnpm run dist`), `pnpm start` — never
   update and can't download the reader: install a release's installer once. A LibreOffice installed on the PC still
   reads Publisher files in them.
