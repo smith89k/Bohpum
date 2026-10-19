@@ -12,7 +12,7 @@ run(async (t, check) => {
   const state = () => t.js(`(() => { const r = document.getElementById('modal-root'), m = document.querySelector('#modal-root .modal.notes'), top = r.lastElementChild;
     return { boxes: [...r.children].map(b => b.querySelector('.modal').className.replace('modal', '').trim()), topIsNotes: !!top && !!top.querySelector('.modal.notes'),
       title: m && m.querySelector('.modal-h').firstChild.textContent, date: m && (m.querySelector('.notes-date') || {}).textContent,
-      tags: m ? [...m.querySelectorAll('.notes-kind')].map(s => s.textContent) : [], earlier: !!(m && m.querySelector('[data-earlier]')),
+      tags: m ? [...m.querySelectorAll('.notes-body > .notes-list .notes-kind')].map(s => s.textContent) : [], earlier: !!(m && m.querySelector('[data-earlier]')),
       width: m && Math.round(m.getBoundingClientRect().width), focus: document.activeElement && document.activeElement.textContent, flag: document.documentElement.dataset.notes }; })()`);
   const s1 = await state();
   check('Fresh profile: What\'s new opens by itself, on top of the welcome screen', s1.flag === 'shown' && s1.topIsNotes && s1.boxes.join('|') === 'welcome-modal|notes', s1);
@@ -57,6 +57,8 @@ run(async (t, check) => {
   check('Help > What\'s New opens it', s4.topIsNotes && s4.title === `What's new in ${version}`, s4);
 
   t.win.unmaximize(); t.win.setMinimumSize(300, 300); t.win.setContentSize(800, 420); await t.sleep(600);
+  // with the earlier versions shown, so the list is longer than the window even when this version has few notes
+  await t.js(`(() => { const more = document.querySelector('.modal.notes [data-earlier]'); if (more) more.click(); return true; })()`); await t.sleep(200);
   const fit = await t.js(`(() => { const m = document.querySelector('.modal.notes'), b = m.querySelector('.modal-b'), c = m.querySelector('.modal-f .btn.primary').getBoundingClientRect();
     return { scrolls: b.scrollHeight > b.clientHeight, closeIn: c.top >= 0 && c.bottom <= innerHeight, h: Math.round(m.getBoundingClientRect().height), ih: innerHeight }; })()`);
   check('A short window: the list scrolls and Close stays in view', fit.scrolls && fit.closeIn && fit.h <= fit.ih, fit);

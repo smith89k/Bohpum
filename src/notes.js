@@ -10,6 +10,10 @@ const KINDS = Object.freeze(['new', 'improved', 'fixed', 'removed']); // the win
 const N = (version, date, notes) => Object.freeze({ version, date, notes: Object.freeze(notes.map(([kind, text]) => Object.freeze({ kind, text }))) });
 
 const NOTES = Object.freeze([
+  N('0.1.1', '2026-10-19', [
+    ['new', 'Bohpum is open source, under the GNU GPL 3.0. Anyone can read its code on GitHub; Help › About links to it.'],
+    ['improved', 'The installer is now built on GitHub from the public code, ready for a free digital signature so Windows can trust it.']
+  ]),
   N('0.1.0', '2026-10-17', [
     ['new', 'Open Microsoft Publisher (.pub) files, edit them and print them. Save them as Bohpum files (.bpum); the .pub is never changed.'],
     ['new', 'Text boxes with Khmer and English text, shapes, lines and pictures, on many pages with a master page.'],
