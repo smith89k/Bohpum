@@ -446,9 +446,11 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .pv-zoom .pct { min-width: 40px; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .sheet { background: #fff; position: relative; box-shadow: 0 4px 18px rgba(0,0,0,.2); }
 .sheet .nopr { position: absolute; inset: 0; pointer-events: none; }
-.sheet .slot { position: absolute; outline: calc(1px / var(--z, 1)) solid rgba(29,111,216,.45); background: #fff; } /* 1 px at any zoom */
+/* the page on the sheet: no line around it (it never prints, and a text box with no border would look boxed); a light
+   box of dots under the mouse and while it is dragged, 1 px at any zoom */
+.sheet .slot { position: absolute; background: #fff; }
+.sheet .slot:hover, .sheet .slot.moving { outline: calc(1px / var(--z, 1)) dotted rgba(0,0,0,.35); }
 .sheet .slot.drag { cursor: move; }
-.sheet .slot.drag:hover { outline: calc(2px / var(--z, 1)) solid var(--sel); }
 .sheet .slot .pz { transform-origin: 0 0; position: absolute; left: 0; top: 0; pointer-events: none; }
 .warn { background: var(--warn-bg); color: var(--warn-fg); border: 1px solid var(--warn-line); padding: 6px 8px; border-radius: 6px; font-size: 12px; margin-top: 8px; }
 .prev-nav { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: color-mix(in srgb, var(--surface) 90%, transparent); padding: 3px 8px; border-radius: 14px; font-size: 12px; }

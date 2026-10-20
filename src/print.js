@@ -422,6 +422,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     const r = sheet.getBoundingClientRect();
     const k = r.width / sw;
     const sx = e.clientX, sy = e.clientY, ol = o.left, ot = o.top;
+    sheet.querySelector('.slot').classList.add('moving');   // its light box (app.css), also if the mouse runs ahead
     const move = (ev) => {
       let nl = ol + (ev.clientX - sx) / k, nt = ot + (ev.clientY - sy) / k;
       if (!ev.altKey) { nl = Math.round(nl * 2) / 2; nt = Math.round(nt * 2) / 2; }
@@ -437,7 +438,10 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       const L = side.querySelector('[data-k="left"]'), T = side.querySelector('[data-k="top"]');
       if (L) L.value = round(nl); if (T) T.value = round(nt);
     };
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); renderWarn(); markPad(); posRecord(); };
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      sheet.querySelector('.slot').classList.remove('moving'); renderWarn(); markPad(); posRecord();
+    };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   }
 
