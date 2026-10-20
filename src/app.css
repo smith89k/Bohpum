@@ -2,6 +2,10 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--chrome); color: var(--ink); font: 13px/1.35 var(--ui-font); }
 button, input, select { font: inherit; color: inherit; }
 body { display: grid; grid-template-rows: auto auto auto 1fr auto; }
+/* like Sastra PDF and other Windows apps: the window's words can't be selected, and the pointer stays an arrow over
+   them; the places you type (text boxes, a text frame being edited) select as usual */
+body { user-select: none; cursor: default; }
+input:not([type=checkbox], [type=radio], [type=range], [type=color]), textarea, [contenteditable="true"], [contenteditable="true"] * { user-select: text; cursor: text; }
 
 /* ---------- title row ---------- */
 /* Windows draws ─ □ ✕ over the right end (main.js titleBarOverlay: 36 px = this row without its line,
