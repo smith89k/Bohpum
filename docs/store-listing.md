@@ -18,6 +18,20 @@ Your files stay on your computer. Bohpum has no account, no ads and sends nothin
 - Right-click .pub files in File Explorer: Convert to Bohpum (.bpum)
 - Works offline
 
+## What's new in this version
+
+(Partner Center: the submission › Store listings › English › What's new in this version; up to 1500 characters.
+Newest first; the app's own What's new window is src/notes.js.)
+
+### 0.2.5
+
+- Print: Undo and Redo for where the page sits on the paper. Press Ctrl+Z / Ctrl+Y, or use the buttons under the
+  position pad.
+- Text boxes with no border no longer show a dashed line. Light dots appear when you point at one or move it.
+- The print preview no longer draws a line around the page, so it looks just as it will print.
+- Words in menus, panels and buttons no longer turn blue when you drag across them, like in other Windows apps.
+- The Bohpum icon in "Open with" and on the taskbar no longer sits in a box.
+
 ## Keywords
 
 publisher, desktop publishing, pub file, greeting card, flyer, khmer, print
