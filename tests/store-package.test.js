@@ -64,6 +64,11 @@ run(async (t, check) => {
   check('Store pictures: StoreLogo 50, Square44x44Logo 44, Square150x150Logo 150, BpumFile 256 high',
     same(sizes['StoreLogo.png'], [50, 50]) && same(sizes['Square44x44Logo.png'], [44, 44]) && same(sizes['Square150x150Logo.png'], [150, 150])
       && !!sizes['BpumFile.png'] && sizes['BpumFile.png'][1] === 256, sizes);
+  // "Open with", the taskbar and Start ask for these: without them Windows puts the 44 px icon on a plate (a box)
+  const targets = [16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256];
+  const unplated = targets.flatMap(s => ['unplated', 'lightunplated'].map(f => `Square44x44Logo.targetsize-${s}_altform-${f}.png`));
+  const wrong = unplated.filter(f => { const s = +/targetsize-(\d+)/.exec(f)[1]; return !fs.existsSync(A(f)) || !same(pngSize(A(f)), [s, s]); });
+  check('…and the app icon without a plate at every size Windows asks for (16 to 256, dark and light taskbar)', !wrong.length, wrong);
 
   check('pnpm run dist:store builds the Store package with build/store.config.js',
     /electron-builder --win appx --publish never --config build\/store\.config\.js/.test(pkg.scripts['dist:store'] || ''), pkg.scripts);
