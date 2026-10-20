@@ -128,12 +128,7 @@ function renderStage() {
   pg.classList.add('editor');
   if (S.master) pg.classList.add('master-mode');
   pg.style.zoom = S.zoom;
-  pg.querySelectorAll('.kcontent > .kobj').forEach(el => {
-    const o = getObj(el.dataset.id);
-    if (!o) return;
-    if (o.locked) el.classList.add('locked');
-    if (o.type === 'box' && o.shape === 'none' && (!o.fill || o.fill === 'none') && (!o.stroke || o.stroke === 'none')) el.classList.add('empty-frame');
-  });
+  pg.querySelectorAll('.kcontent > .kobj').forEach(el => { const o = getObj(el.dataset.id); if (o) markObjEl(el, o); });
   const guides = document.createElement('div'); guides.id = 'guides'; pg.append(guides);
   const ov = document.createElement('div'); ov.id = 'overlay'; pg.append(ov);
   holder.append(pg);
@@ -142,6 +137,13 @@ function renderStage() {
   fixLineHeights(pg);
   renderOverlay();
   drawRulers();
+}
+
+// The editor's marks on a frame: locked, and empty-frame = no line, fill or shape (a text box without a border: light
+// dots under the mouse and while it is moved, app.css)
+function markObjEl(el, o) {
+  if (o.locked) el.classList.add('locked');
+  if (o.type === 'box' && o.shape === 'none' && (!o.fill || o.fill === 'none') && (!o.stroke || o.stroke === 'none')) el.classList.add('empty-frame');
 }
 
 function updateObjEl(o) {
@@ -553,11 +555,12 @@ function startMove(e, m0) {
       // Ctrl+drag = copy
       const copies = cloneObjects(moving);
       objs().push(...copies);
-      copies.forEach(c => pageEl.querySelector('.kcontent').append(renderObject(c)));
+      copies.forEach(c => { const el = renderObject(c); markObjEl(el, c); pageEl.querySelector('.kcontent').append(el); });
       S.sel = new Set(copies.map(c => c.id));
       moving = copies; orig = moving.map(o => ({ o, x: o.x, y: o.y })); copied = true;
     }
     if (!targets) targets = snapTargets(new Set(moving.map(o => o.id)));
+    if (!moved) moving.forEach(o => { const el = pageEl.querySelector(`.kcontent > .kobj[data-id="${o.id}"]`); if (el) el.classList.add('moving'); });
     moved = true;
     const m = mmFromEvent(ev);
     let dx = m.x - m0.x, dy = m.y - m0.y;
@@ -575,6 +578,7 @@ function startMove(e, m0) {
     renderOverlay(); showSnapLines(lines); drawRulers(); updateStatus();
   }, () => {
     showSnapLines([]);
+    pageEl.querySelectorAll('.kobj.moving').forEach(el => el.classList.remove('moving'));
     if (moved) { commit(); renderProps(); }
   });
 }

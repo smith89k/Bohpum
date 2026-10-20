@@ -187,7 +187,9 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .kpage.editor .kobj.locked { cursor: default; }
 .kpage.editor .kobj.editing { cursor: text; z-index: 5; }
 .kpage.editor .kobj.editing .kt { cursor: text; }
-.kpage.editor .kbox.empty-frame::before { content: ""; position: absolute; inset: 0; outline: 0.15mm dashed rgba(0,0,0,.25); pointer-events: none; }
+/* a frame with no line, fill or shape (a text box without a border): nothing on the page, light dots only under the
+   mouse and while it is moved */
+.kpage.editor .kbox.empty-frame:hover::before, .kpage.editor .kbox.empty-frame.moving::before { content: ""; position: absolute; inset: 0; outline: 1px dotted rgba(0,0,0,.35); pointer-events: none; }
 .tool-create #page-holder, .tool-create .kpage.editor .kobj { cursor: crosshair; }
 .kpage.editor .kt[contenteditable="true"] { outline: none; caret-color: var(--accent); }
 
@@ -427,6 +429,9 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .pos-pad button { padding: 0; border: 0; border-radius: 3px; background: var(--chrome-2); cursor: pointer; }
 .pos-pad button:hover { background: var(--line-2); }
 .pos-pad button.on { background: var(--accent); }
+.pos-undo { grid-column: 1 / -1; display: flex; gap: 6px; }
+.pos-undo .btn { flex: 1; justify-content: center; gap: 6px; }
+.pos-undo svg { width: 15px; height: 15px; }
 .print-preview { background: var(--pasteboard); min-height: 0; position: relative; overflow: hidden; }
 /* the sheet scrolls when zoomed in; margin:auto centres it while it fits */
 .pv-scroll { position: absolute; inset: 0 0 40px 0; display: flex; overflow: auto; padding: 20px; } /* the strip below: sheet arrows, zoom */
