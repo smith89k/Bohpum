@@ -10,6 +10,13 @@ const KINDS = Object.freeze(['new', 'improved', 'fixed', 'removed']); // the win
 const N = (version, date, notes) => Object.freeze({ version, date, notes: Object.freeze(notes.map(([kind, text]) => Object.freeze({ kind, text }))) });
 
 const NOTES = Object.freeze([
+  N('0.2.5', '2026-10-20', [
+    ['new', 'Print: Undo and Redo for where the page sits on the paper, after you drag it, use the 3×3 pad or type Top / Left. Press Ctrl+Z / Ctrl+Y, or use the buttons under the pad.'],
+    ['improved', 'Text boxes with no border no longer show a dashed line on the page. Light dots appear when you point at one or move it.'],
+    ['improved', 'The print preview no longer draws a line around the page, so it looks just as it will print. Light dots show the page when you point at it or drag it.'],
+    ['improved', 'Like other Windows apps, the words in menus, panels and buttons no longer turn blue when you drag across them. Text boxes, and the text you are editing, select as before.'],
+    ['fixed', 'The Bohpum icon in "Open with" and on the taskbar no longer sits in a box.']
+  ]),
   N('0.2.4', '2026-10-19', [
     ['new', 'Bohpum is in the Microsoft Store, signed by Microsoft, so Windows doesn\'t warn you when you install it from there.'],
     ['removed', 'Help › About no longer links to Bohpum\'s code on GitHub.']
