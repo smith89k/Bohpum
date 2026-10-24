@@ -44,6 +44,14 @@ const ICONS = {
   group: 'M3 3h3M18 3h3v3M21 18v3h-3M6 21H3v-3M7 7h6v6H7zM11 11h6v6h-6z',
   ungroup: 'M5 5h7v7H5zM12 12h7v7h-7z',
   plus: 'M12 5v14M5 12h14',
+  // mail merge toolbar
+  mlist: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 9.5h16M4 14.5h16M9.5 4v16"/>',
+  people: '<circle cx="9" cy="8.5" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 5.8a3 3 0 0 1 0 5.4M17 13.6a5.5 5.5 0 0 1 3.5 5.4"/>',
+  field: 'M9.5 7l-4.5 5 4.5 5M14.5 7l4.5 5-4.5 5',
+  photo: '<rect x="4.5" y="3" width="15" height="18" rx="1.5"/><circle cx="12" cy="10" r="3"/><path d="M7.5 18a4.5 4.5 0 0 1 9 0"/>',
+  eye: '<path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+  chevLeft: 'M15 6l-6 6 6 6', chevRight: 'M9 6l6 6-6 6', chevDown: 'M7 10l5 5 5-5',
+  remove: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M9 9l6 6M15 9l-6 6"/>',
   dupPage: 'M9 7h10v14H9zM5 17V3h10',
   // right panel
   ordFront: 'M5 4h14M12 20V8M7 13l5-5 5 5', ordFwd: 'M12 19V5M7 10l5-5 5 5',
@@ -1694,9 +1702,17 @@ const mergeKey = () => S.doc.merge ? JSON.stringify([S.doc.merge.list, S.doc.mer
 let lastMailMenu = '';
 function syncMailMenu() {
   const m = JSON.stringify(mailMenuState(S.mail, selObjs(), !!S.editing));
-  if (m !== lastMailMenu) { lastMailMenu = m; api.setMailMenu(JSON.parse(m)); }
+  if (m !== lastMailMenu) { lastMailMenu = m; api.setMailMenu(JSON.parse(m)); renderBar(); } // the toolbar greys out as the menu does
 }
-function renderBar() { clampAt(); renderMailBar($('mailbar'), S.doc, S.mail, cmd); }
+function renderBar() {
+  clampAt();
+  renderMailBar($('mailbar'), S.doc, S.mail, { cmd, icon, state: mailMenuState(S.mail, selObjs(), !!S.editing), fieldMenu });
+}
+// The toolbar's Insert Field: the columns in a list under the button (the caret stays in the text box)
+function fieldMenu(b) {
+  const r = b.getBoundingClientRect(), cols = S.mail && S.mail.list ? S.mail.list.columns : [];
+  showMenu({ clientX: r.left, clientY: r.bottom + 2 }, cols.map((c, i) => [escHtml(c), 'mail-field-' + i, '', true]));
+}
 // the person showing stays within the ticked people when the list or the ticks change (renderAll draws the bar)
 function clampAt() {
   const m = S.mail;

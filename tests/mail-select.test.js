@@ -125,7 +125,7 @@ run(async (t, check) => {
   check('a sheet gone from the list asks Find the list… / Later', (await modalText()).includes(noSheet) && J(gone2) === J(['Find the list…', 'Later']), gone2);
   await press('Later');
   await t.sleep(200);
-  check('the bar says the sheet is gone', await app('S.mail.error') === noSheet && !(await app('S.mail.list')) && (await barText()) === noSheet, await barText());
+  check('the bar says the sheet is gone', await app('S.mail.error') === noSheet && !(await app('S.mail.list')) && (await t.js('document.querySelector("#mailbar .mb-list").textContent')) === noSheet, await barText());
 
   // undo while the list is still being read must not lose it
   fs.renameSync(f('moved.xlsx'), f('two.xlsx'));

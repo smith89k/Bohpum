@@ -70,25 +70,48 @@ export function problemsBox(modal, problems) {
 
 // The slim bar above the page: ◀ Person 3 of 40 ▶, that person's first value, Preview, Choose people, the list's file;
 // or what is wrong with the list. Its buttons send commands (app.js cmd).
-export function renderMailBar(bar, doc, mail, cmd) {
+// The mail merge toolbar, shown while the publication has a list: every Mailings action with its icon (greyed out
+// when it can't be used now), the person showing, and the list's name. ui = { cmd, icon, state: mailMenuState(…), fieldMenu }
+export function renderMailBar(bar, doc, mail, ui) {
   const m = doc.merge;
   bar.hidden = !m;
   if (!m) return bar.replaceChildren();
+  const { cmd, icon, state } = ui, list = !!(mail && mail.list);
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text });
+  const btn = (cls, ic, label, title, c, on = true) => {
+    const b = el('button', 'btn ' + cls, '');
+    b.innerHTML = icon(ic);
+    if (label) b.append(el('span', 'lbl', label));
+    b.title = title; b.disabled = !on;
+    b.onclick = typeof c === 'function' ? c : () => cmd(c);
+    return b;
+  };
+  const sep = () => el('span', 'mb-sep', '');
+  // Insert Field keeps the caret in the text box: the button never takes the focus
+  const field = btn('mb-field', 'field', 'Insert Field', 'Insert a field («Name») at the cursor', (e) => ui.fieldMenu(e.currentTarget), state.field);
+  field.insertAdjacentHTML('beforeend', icon('chevDown'));
+  field.addEventListener('mousedown', (e) => e.preventDefault());
+  const preview = btn('mb-preview', 'eye', 'Preview', 'Show each person instead of the «blanks»', 'mail-preview', list);
+  preview.classList.toggle('on', !!(mail && mail.preview));
+  preview.setAttribute('aria-pressed', String(!!(mail && mail.preview)));
+  const people = list ? ticked(mail.list, m.off) : [], at = Math.min(list ? mail.at : 0, people.length - 1);
+  const prev = btn('mb-prev', 'chevLeft', '', 'Previous person', 'mail-prev', list && at > 0);
+  const next = btn('mb-next', 'chevRight', '', 'Next person', 'mail-next', list && at < people.length - 1);
+  const who = el('span', 'mb-who', !list ? '—' : people.length ? `Person ${at + 1} of ${people.length}` : 'No one is ticked');
+  const first = el('span', 'mb-name', people.length ? mail.list.rows[people[at]][0] : '');
   const name = el('span', 'mb-list', mail && mail.error ? mail.error : 'Mailing list: ' + m.list.split(/[\\/]/).pop() + (m.sheet ? ' · ' + m.sheet : ''));
   name.title = m.list;
   bar.classList.toggle('bad', !!(mail && mail.error));
-  if (!mail || !mail.list) return bar.replaceChildren(name);
-  const people = ticked(mail.list, m.off), at = Math.min(mail.at, people.length - 1);
-  const btn = (cls, text, c, title) => { const b = el('button', 'btn ' + cls, text); b.title = title; b.onclick = () => cmd(c); return b; };
-  const prev = btn('mb-prev', '◀', 'mail-prev', 'Previous person'), next = btn('mb-next', '▶', 'mail-next', 'Next person');
-  prev.disabled = at <= 0; next.disabled = at >= people.length - 1;
-  const who = el('span', 'mb-who', people.length ? `Person ${at + 1} of ${people.length}` : 'No one is ticked');
-  const first = el('span', 'mb-name', people.length ? mail.list.rows[people[at]][0] : '');
-  const sw = el('label', 'chk mb-preview', ' Preview'), box = document.createElement('input');
-  box.type = 'checkbox'; box.checked = !!mail.preview; box.onchange = () => cmd('mail-preview');
-  sw.prepend(box);
-  bar.replaceChildren(prev, who, next, first, sw, btn('mb-people', 'Choose people', 'mail-people', 'Tick the people to print'), name);
+  bar.replaceChildren(
+    btn('mb-select', 'mlist', 'Select List', 'Choose the Excel or CSV list', 'mail-select'),
+    btn('mb-people', 'people', 'Choose People', 'Tick the people to print', 'mail-people', list),
+    field,
+    btn('mb-photo', 'photo', 'Photo from List', "Take the selected picture's photo from a column of the list", 'mail-photo', state.photo),
+    sep(), preview, prev, who, next, first,
+    sep(),
+    btn('mb-print', 'print', 'Print All', 'Print everyone ticked', 'print', list),
+    btn('mb-remove', 'remove', 'Remove List', 'Forget the list; the «blanks» become plain text', 'mail-remove', list || !!(mail && mail.error)),
+    name);
 }
 
 // What the Mailings menu may do now (main.js mailMenu)

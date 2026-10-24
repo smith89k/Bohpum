@@ -138,6 +138,8 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
 - **Front and back**: a card with two pages prints a sheet of fronts, then a sheet of the matching backs (turn on
   two-sided printing in Printer Properties)
 - **Remove List** turns the blanks back into plain text
+- While a publication has a list, the **mail merge toolbar** above the page has all of these as buttons with icons
+  (greyed out when they can't be used now), the person showing with ◀ ▶, and the list's name
 
 **Right-click in File Explorer** (as in Sastra PDF)
 - Right-click one or more `.pub` files → **Convert to Bohpum (.bpum)** (several: "Convert 3 files to Bohpum").
@@ -205,7 +207,7 @@ src/render.js    Draws objects (shared by editor, thumbnails, print, PDF)
 src/textedit.js  Rich-text editing helpers
 src/print.js     Publisher-style print dialog and sheet layout
 src/merge.js     Mail merge: the list's people and columns, «fields», one person's page filled in (shrunk to fit), everyone
-src/mailings.js  Mailings boxes (sheet, Photo from List, Choose People, problems) and the preview bar
+src/mailings.js  Mailings boxes (sheet, Photo from List, Choose People, problems) and the mail merge toolbar
 src/model.js     Document model (all sizes in mm)
 src/docfile.js   .pub (via LibreOffice) → document → .bpum text; shared by the editor and the convert window
 src/task.html/.js  The Explorer menu's convert window
