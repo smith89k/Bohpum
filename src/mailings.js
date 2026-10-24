@@ -1,5 +1,5 @@
 // Mail merge: the boxes and the bar above the page. app.js passes in what they need, as print.js is used.
-import { ticked } from './merge.js';
+import { ticked, rowKey } from './merge.js';
 
 // Which sheet of a workbook with several? → the name, or null (Cancel)
 export function sheetBox(modal, names) {
@@ -27,6 +27,33 @@ export function photoBox(modal, columns, current, rows = []) {
   return m.done.then(v => v ? (sel.value || null) : undefined);
 }
 const PHOTO_NAME = /photo|picture|image|pic|រូប/i;
+
+// Who gets a copy? Every row with a tick box; the search hides rows (Tick all / Untick all act on the rows shown).
+// → the new list of unticked rows' keys, or null (Cancel). The rows are built once; typing only shows and hides them.
+export function peopleBox(modal, list, off) {
+  const body = document.createElement('div'), skip = new Set(off);
+  const find = document.createElement('input'); find.type = 'search'; find.className = 'field pp-find'; find.placeholder = 'Search';
+  const table = document.createElement('table'), head = table.createTHead().insertRow(), tb = table.createTBody();
+  head.insertCell().textContent = '';
+  for (const c of list.columns) Object.assign(head.appendChild(document.createElement('th')), { textContent: c });
+  const items = list.rows.map((row) => {
+    const tr = tb.insertRow(), box = document.createElement('input');
+    box.type = 'checkbox'; box.checked = !skip.has(rowKey(row));
+    tr.insertCell().append(box);
+    for (let i = 0; i < list.columns.length; i++) tr.insertCell().textContent = row[i] ?? '';
+    return { tr, box, key: rowKey(row), text: row.join('\n').toLowerCase() };
+  });
+  find.oninput = () => { const q = find.value.trim().toLowerCase(); for (const it of items) it.tr.hidden = !!q && !it.text.includes(q); };
+  const all = (on) => { for (const it of items) if (!it.tr.hidden) it.box.checked = on; };
+  const bt = (label, on) => { const b = document.createElement('button'); b.className = 'btn'; b.textContent = label; b.onclick = () => all(on); return b; };
+  const bar = document.createElement('div'); bar.className = 'pp-bar';
+  bar.append(find, bt('Tick all', true), bt('Untick all', false));
+  const wrap = document.createElement('div'); wrap.className = 'pp-list'; wrap.append(table);
+  body.append(bar, wrap);
+  const m = modal('Choose People', body, [['Cancel', null], ['OK', true, true]], 'people');
+  find.focus();
+  return m.done.then(v => v ? items.filter(it => !it.box.checked).map(it => it.key) : null);
+}
 
 // The slim bar above the page: ◀ Person 3 of 40 ▶, that person's first value, Preview, Choose people, the list's file;
 // or what is wrong with the list. Its buttons send commands (app.js cmd).

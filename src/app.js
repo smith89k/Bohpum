@@ -6,7 +6,7 @@ import { docFromFodg, bpumText, withDefaults } from './docfile.js';
 import * as TE from './textedit.js';
 import { openPrintDialog, buildOutputHtml } from './print.js';
 import { parseList, fieldHtml, fieldsIn, ticked, fillPage } from './merge.js';
-import { sheetBox, photoBox, renderMailBar, mailMenuState } from './mailings.js';
+import { sheetBox, photoBox, peopleBox, renderMailBar, mailMenuState } from './mailings.js';
 
 const api = window.api;
 const PXMM = 96 / 25.4;
@@ -1811,6 +1811,15 @@ async function selectList(keepOff = false) {
   S.mail = { list, at: 0, preview: false, photos: new Map(), asking: new Set(), error: null };
   commit(); renderAll();
 }
+// Choose People: tick who gets a copy; the unticked are kept by their row's content
+async function choosePeople() {
+  if (!S.mail || !S.mail.list || !S.doc.merge) return;
+  finishEditing();
+  const off = await peopleBox(modal, S.mail.list, S.doc.merge.off);
+  if (!off) return;
+  S.doc.merge.off = off;
+  commit(); renderAll();
+}
 // Photo from List: which column fills the selected picture
 async function photoFromList() {
   const o = selObjs()[0];
@@ -2275,6 +2284,7 @@ function cmd(c) {
     case 'print': return printDialog();
     case 'page-setup': return pageSetup();
     case 'mail-select': return selectList();
+    case 'mail-people': return choosePeople();
     case 'mail-photo': return photoFromList();
     case 'mail-preview': return togglePreview();
     case 'mail-prev': return stepPerson(-1);
