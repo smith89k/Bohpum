@@ -51,6 +51,9 @@ run(async (t, check) => {
   check('@ on a number', await fmt(12.5, '@', en) === '12.5');
   check('General with text', await fmt(12, 'General\" kg\"', en) === '12 kg');
   check('General with a locale tag', await fmt(12, '[$-409]General', en) === '12');
+  check('rounds like Excel: exponent', await fmt(2.675, '0.00E+00', en) === '2.68E+00');
+  check('exponent rolls over', await fmt(9.999, '0.00E+00', en) === '1.00E+01');
+  check('@ keeps the minus', await fmt(-12, '@', en) === '-12');
   check('General long number', await fmt(0.1 + 0.2, 'General', en) === '0.3');
 
   // through a real file: a styled date and a number, and a text cell that looks like a number

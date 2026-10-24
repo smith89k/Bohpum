@@ -72,7 +72,7 @@ function formatNumber(v, toks, sign) {
   const raw = v; v = r15(Math.abs(v) * 100 ** toks.filter(c => c === '%').length);
   const isPh = (c) => typeof c === 'string' && '#0?,.'.includes(c);
   const start = toks.findIndex(isPh);
-  if (start < 0) return litText(toks.map(c => c === '@' ? { lit: plain(Math.abs(raw)) } : c)); // @ shows the value as it is
+  if (start < 0) return (sign ? '-' : '') + litText(toks.map(c => c === '@' ? { lit: plain(Math.abs(raw)) } : c)); // @ shows the value as it is
   let end = start; while (isPh(toks[end])) end++;
   const [ip, dp = ''] = toks.slice(start, end).join('').split('.');
   let exp = null;
@@ -84,8 +84,9 @@ function formatNumber(v, toks, sign) {
   const minInt = (ip.match(/[0?]/g) || []).length, minDec = (dp.match(/0/g) || []).length;
   let s, tail = '';
   if (exp) {
-    const [m, e] = r15(v).toExponential(dp.length).split('e'), n = +e;
-    s = m; tail = 'E' + (n < 0 ? '-' : exp.plus ? '+' : '') + String(Math.abs(n)).padStart(exp.n, '0');
+    let n = v ? +v.toExponential().split('e')[1] : 0, m = roundTo(v / 10 ** n, dp.length);
+    if (m >= 10) { m /= 10; n++; }
+    s = m.toFixed(dp.length); tail = 'E' + (n < 0 ? '-' : exp.plus ? '+' : '') + String(Math.abs(n)).padStart(exp.n, '0');
   } else s = roundTo(v, dp.length).toFixed(dp.length);
   let [i, d = ''] = s.split('.');
   while (d.length > minDec && d.endsWith('0')) d = d.slice(0, -1);
