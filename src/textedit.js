@@ -56,7 +56,7 @@ function cleanAttrs(el) {
       const keep = [];
       for (const prop of STYLE_KEEP) { const v = el.style.getPropertyValue(prop); if (v) keep.push(`${prop}:${v}`); }
       if (keep.length) el.setAttribute('style', keep.join(';')); else el.removeAttribute('style');
-    } else if (!['data-ls', 'data-lhfix', 'colspan', 'rowspan', 'data-field'].includes(a.name)) el.removeAttribute(a.name);
+    } else if (!['data-ls', 'data-lhfix', 'colspan', 'rowspan', 'data-field', 'data-col'].includes(a.name) && !(a.name === 'contenteditable' && el.tagName === 'SPAN' && el.hasAttribute('data-field'))) el.removeAttribute(a.name);
   }
 }
 

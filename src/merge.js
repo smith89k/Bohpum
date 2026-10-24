@@ -207,3 +207,20 @@ export function parseList(r, { sheet } = {}) {
   });
   return { sheets, sheet: name, columns, rows: body.map(row => Array.from({ length: width }, (_, i) => String(row[i] ?? ''))) };
 }
+
+// ---- fields in text: «Name» is one piece (contenteditable=false) that carries its column name
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+export const fieldHtml = (col) => `<span data-field="merge" data-col="${esc(col)}" contenteditable="false">«${esc(col)}»</span>`;
+
+// the columns a publication uses: text fields in any box, photo columns on pictures (page and master objects)
+export function fieldsIn(doc) {
+  const text = new Set(), photo = new Set();
+  for (const o of [...doc.pages.flatMap(p => p.objects), ...((doc.master && doc.master.objects) || [])]) {
+    if (o.type === 'image' && o.mergePhoto) photo.add(o.mergePhoto);
+    if (o.type !== 'box' || !o.html || !o.html.includes('data-field="merge"')) continue;
+    const d = document.createElement('div');
+    d.innerHTML = o.html;
+    d.querySelectorAll('span[data-field="merge"]').forEach(s => text.add(s.dataset.col));
+  }
+  return { text, photo };
+}

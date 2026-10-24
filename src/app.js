@@ -5,7 +5,7 @@ import { RENDER_CSS } from './renderCss.js';
 import { docFromFodg, bpumText, withDefaults } from './docfile.js';
 import * as TE from './textedit.js';
 import { openPrintDialog, buildOutputHtml } from './print.js';
-import { parseList } from './merge.js';
+import { parseList, fieldHtml } from './merge.js';
 import { sheetBox, renderMailBar, mailMenuState } from './mailings.js';
 
 const api = window.api;
@@ -139,6 +139,7 @@ function renderStage() {
     if (o.locked) el.classList.add('locked');
     if (o.type === 'box' && o.shape === 'none' && (!o.fill || o.fill === 'none') && (!o.stroke || o.stroke === 'none')) el.classList.add('empty-frame');
   });
+  markMissingFields(pg);
   const guides = document.createElement('div'); guides.id = 'guides'; pg.append(guides);
   const ov = document.createElement('div'); ov.id = 'overlay'; pg.append(ov);
   holder.append(pg);
@@ -147,6 +148,12 @@ function renderStage() {
   fixLineHeights(pg);
   renderOverlay();
   drawRulers();
+}
+
+// a field whose column is not in the list shows «Name ?» (the mark is only on screen, never saved)
+function markMissingFields(root) {
+  const cols = S.mail && S.mail.list && S.mail.list.columns;
+  root.querySelectorAll('.kt [data-field="merge"]').forEach(s => s.toggleAttribute('data-missing', !!cols && !cols.includes(s.dataset.col)));
 }
 
 function updateObjEl(o) {
@@ -836,7 +843,17 @@ function editingRoot() {
   if (!S.editing || !pageEl) return null;
   return pageEl.querySelector(`.kcontent > .kobj[data-id="${S.editing}"] .kt`);
 }
+// copied text that holds merge fields keeps them (its html, without the style the copy added); anything else pastes as plain text
+function withFields(h) {
+  if (!h || !h.includes('data-field="merge"')) return '';
+  const d = document.createElement('div');
+  d.innerHTML = h;
+  d.querySelectorAll('[style]').forEach(n => n.removeAttribute('style'));
+  return TE.sanitizeHtml(d.innerHTML);
+}
 function onEditPaste(e) {
+  const fields = withFields(e.clipboardData.getData('text/html'));
+  if (fields) { e.preventDefault(); return void document.execCommand('insertHTML', false, fields); }
   const text = e.clipboardData.getData('text/plain');
   e.preventDefault();
   if (text) document.execCommand('insertText', false, text.replace(/\r\n/g, '\n'));
@@ -1565,11 +1582,11 @@ async function pasteFromSystem() {
     }
   } catch { if (S.clip) pasteObjects(S.clip); }
 }
-function pasteText(t) {
+function pasteText(t, html = '') {
   if (t.startsWith('BOHPUM-OBJECTS:')) { try { return pasteObjects(JSON.parse(t.slice(15))); } catch { return; } }
   if (!t.trim()) return;
   const w = Math.min(100, S.doc.pageW * 0.7);
-  const o = makeObject('box', { x: round2((S.doc.pageW - w) / 2), y: round2(S.doc.pageH / 3), w, h: 20, shape: 'none', html: TE.htmlFromPlainText(t) });
+  const o = makeObject('box', { x: round2((S.doc.pageW - w) / 2), y: round2(S.doc.pageH / 3), w, h: 20, shape: 'none', html: html || TE.htmlFromPlainText(t) });
   objs().push(o); S.sel = new Set([o.id]);
   commit(); renderStage(); renderProps();
   fitHeight();
@@ -1684,7 +1701,7 @@ async function loadMailList(askIfMissing = true) {
   } catch (e) { error = e.message; }
   if (mergeKey() !== key) return; // another list was chosen (or none) while the file was read
   S.mail = { list, at: 0, preview: false, photos: new Map(), error };
-  renderMailBar($('mailbar'), S.doc, S.mail); syncMailMenu();
+  renderMailBar($('mailbar'), S.doc, S.mail); syncMailMenu(); renderStage();
   if (error && askIfMissing && (await choiceBox(error, 'The design still opens and shows its «blanks».', ['Find the list…', 'Later'])) === 0) await selectList(true);
 }
 // Pick a list file (and a sheet) for the publication; keepOff: the same people stay unticked (Find the list…)
@@ -1706,6 +1723,21 @@ async function selectList(keepOff = false) {
   S.doc.merge = { list: p, sheet: list.sheet, off: keepOff && S.doc.merge ? S.doc.merge.off : [] };
   S.mail = { list, at: 0, preview: false, photos: new Map(), error: null };
   commit(); renderAll();
+}
+// Insert Field: at the caret of the box being edited; the native menu took the focus, so the kept range is put back first
+function insertField(col) {
+  const kt = editingRoot();
+  if (!kt || col == null) return;
+  restoreRange(kt); kt.focus();
+  // the field is wrapped in the spans around the caret so it takes their formatting; the zero-width space after it
+  // is a spot to type in (stripped on finish)
+  const sel = window.getSelection();
+  let html = fieldHtml(col) + '​';
+  for (let n = sel.rangeCount ? sel.getRangeAt(0).startContainer : null; n && n !== kt; n = n.parentNode) {
+    if (n.tagName === 'SPAN' && n.getAttribute('style')) html = `<span style="${n.getAttribute('style').replace(/"/g, '&quot;')}">${html}</span>`;
+  }
+  document.execCommand('insertHTML', false, html);
+  fixLineHeights(kt.closest('.kobj'));
 }
 async function confirmDiscard() {
   if (!S.dirty) return true;
@@ -2182,6 +2214,7 @@ function cmd(c) {
     case 'theme-next': return setTheme(THEMES[(THEMES.indexOf(S.theme) + 1) % THEMES.length], true);
     case 'theme-system': case 'theme-light': case 'theme-dark': return setTheme(c.slice(6), true);
   }
+  if (c.startsWith('mail-field-') && S.mail && S.mail.list) return insertField(S.mail.list.columns[+c.slice(11)]);
 }
 
 // ---------------------------------------------------------------- status / context menu
@@ -2366,7 +2399,7 @@ function wire() {
     const img = items.find(i => i.type.startsWith('image/'));
     if (img) { e.preventDefault(); return insertImageBlob(img.getAsFile()); }
     const t = e.clipboardData.getData('text/plain');
-    if (t) { e.preventDefault(); return pasteText(t); }
+    if (t) { e.preventDefault(); return pasteText(t, withFields(e.clipboardData.getData('text/html'))); }
     if (S.clip) pasteObjects(S.clip);
   });
   // drag & drop

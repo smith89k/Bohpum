@@ -190,6 +190,10 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .kpage.editor .kbox.empty-frame::before { content: ""; position: absolute; inset: 0; outline: 0.15mm dashed rgba(0,0,0,.25); pointer-events: none; }
 .tool-create #page-holder, .tool-create .kpage.editor .kobj { cursor: crosshair; }
 .kpage.editor .kt[contenteditable="true"] { outline: none; caret-color: var(--accent); }
+/* merge fields: a tint on screen only (print uses RENDER_CSS); a column the list lacks turns red and says «Name ?» */
+.kpage.editor .kt [data-field="merge"] { background: var(--accent-soft); border-radius: 0.5mm; }
+.kpage.editor .kt [data-field="merge"][data-missing] { background: rgba(220, 60, 50, 0.18); }
+.kpage.editor .kt [data-field="merge"][data-missing]::after { content: ' ?'; }
 
 #guides { position: absolute; inset: 0; pointer-events: none; }
 .mguide { position: absolute; border: 0 dashed var(--margin-guide); opacity: .7; }
