@@ -23,6 +23,20 @@ Your files stay on your computer. Bohpum has no account, no ads and sends nothin
 (Partner Center: the submission › Store listings › English › What's new in this version; up to 1500 characters.
 Newest first; the app's own What's new window is src/notes.js.)
 
+### 0.3.0
+
+- Mail merge, as in Publisher: Mailings › Select Recipients picks an Excel or CSV list, and Bohpum makes one card or
+  certificate for each recipient. Khmer names work.
+- Insert Merge Field puts a «Name» field in a text box. A name too long for its box gets a little smaller.
+- Picture Field gives each recipient their own photo: right-click the photo in File Explorer › Copy as path, then paste
+  it in the Excel list.
+- Preview Results shows each recipient; Edit Recipient List ticks who gets a copy.
+- Print every ticked recipient at once, several on one sheet or a full sheet each, or save them as one PDF. Cards with a
+  front and a back print a sheet of fronts, then the matching backs.
+- A mail merge toolbar above the page has every Mailings button.
+- Text boxes work as in Publisher: an I-beam over the words, one click to type, drag the edge to move.
+- The text pointer is dark, so it shows on the white page.
+
 ### 0.2.5
 
 - Print: Undo and Redo for where the page sits on the paper. Press Ctrl+Z / Ctrl+Y, or use the buttons under the

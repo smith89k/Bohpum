@@ -10,6 +10,16 @@ const KINDS = Object.freeze(['new', 'improved', 'fixed', 'removed']); // the win
 const N = (version, date, notes) => Object.freeze({ version, date, notes: Object.freeze(notes.map(([kind, text]) => Object.freeze({ kind, text }))) });
 
 const NOTES = Object.freeze([
+  N('0.3.0', '2026-10-24', [
+    ['new', 'Mail merge, as in Publisher: Mailings › Select Recipients picks an Excel or CSV list, and Bohpum makes one card or certificate for each recipient. Khmer names work.'],
+    ['new', 'Insert Merge Field puts a «Name» field in a text box. A name too long for its box gets a little smaller, for that recipient only.'],
+    ['new', 'Picture Field gives each recipient their own photo: in File Explorer, right-click the photo › Copy as path, then paste it in the Excel list.'],
+    ['new', 'Preview Results shows each recipient on the page, one at a time. Edit Recipient List ticks who gets a copy.'],
+    ['new', 'Print every ticked recipient at once, several on one sheet or a full sheet each, or save them as one PDF. A card with a front and a back prints a sheet of fronts, then the matching backs. Before printing, Bohpum lists anyone whose photo is missing.'],
+    ['new', 'While a publication has a list, a mail merge toolbar above the page has every Mailings button.'],
+    ['improved', 'Text boxes work as in Publisher: over the words the pointer is an I-beam and one click puts the cursor there. Drag a box by its edge to move it.'],
+    ['fixed', 'The text pointer over text boxes is dark, so it shows on the white page.']
+  ]),
   N('0.2.5', '2026-10-20', [
     ['new', 'Print: Undo and Redo for where the page sits on the paper, after you drag it, use the 3×3 pad or type Top / Left. Press Ctrl+Z / Ctrl+Y, or use the buttons under the pad.'],
     ['improved', 'Text boxes with no border no longer show a dashed line on the page. Light dots appear when you point at one or move it.'],
