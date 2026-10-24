@@ -70,13 +70,14 @@ export function layoutDuplex(doc, o, pageIdxs, perPerson) {
   const sheets = [];
   const pair = (chunk, slotOf) => {
     sheets.push(chunk.map((u, k) => ({ pi: u.front, ...slotOf(k) })));
-    if (chunk.some(u => u.back != null)) sheets.push(chunk.flatMap((u, k) => u.back == null ? [] : [{ pi: u.back, ...mirror(slotOf(k)) }]));
+    sheets.push(chunk.flatMap((u, k) => u.back == null ? [] : [{ pi: u.back, ...mirror(slotOf(k)) }])); // always, even blank: the printer pairs sheets 1/2, 3/4 …
   };
   if (o.order === 'sequence') {
     for (let i = 0; i < units.length; i += g.slots.length) pair(units.slice(i, i + g.slots.length), k => g.slots[k]);
   } else {
     for (const u of units) pair(g.slots.map(() => u), k => g.slots[k]);
   }
+  if (sheets.length && !sheets[sheets.length - 1].length) sheets.pop(); // nothing to turn over at the very end
   return { sw, sh, sheets, grid: g };
 }
 

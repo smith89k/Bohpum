@@ -73,8 +73,38 @@ run(async (t, check) => {
   const u = await sheet(0), un = await info();
   check('untick: fronts and backs side by side in order', un.startsWith('1 sheet ·') && J(u.map(s => s.t)) === J(P.flatMap(p => [p, 'back ' + p])), { un, u: u.map(s => s.t) });
 
-  // one page per person: no tick
+  // Flip on goes with the tick
+  const flipHidden = await t.js(`!document.querySelector('#pd-side [data-k="flip"]')`);
   await tick('duplex');
+  const flipShown = await t.js(`!!document.querySelector('#pd-side [data-k="flip"]')`);
+  check('Flip on hides when Front and back is unticked and shows when ticked', flipHidden && flipShown, { flipHidden, flipShown });
+
+  // 3 pages per person: the last page has no back, but its backs sheet stays (blank) so every pair stays aligned
+  await t.js(`(async () => { const A = window.__bohpumApp, S = A.state, { makeObject, newPage } = await import('./model.js'), { fieldHtml } = await import('./merge.js');
+    const pg = newPage(); S.doc.pages.push(pg); pg.objects.push(makeObject('box', { x: 5, y: 5, w: 70, h: 16, html: '<p>third ' + fieldHtml('Name') + '</p>' }));
+    A.cmd('toggle-master'); A.cmd('toggle-master'); return 1; })()`);
+  await t.key('Escape');
+  await t.waitFor('!document.querySelector(".print-preview")');
+  await t.js('(window.__bohpumApp.cmd("print"), 1)');
+  await built();
+  const texts = async (n) => { const r = []; for (let i = 0; i < n; i++) r.push((await sheet(i)).map(s => s.t).join('|')); return r; };
+  await set('order', 'repeat');
+  const rep = await texts(4);
+  const repN = await info();
+  const first4 = rep.map(x => [...new Set(x.split('|'))].join('|'));
+  check('3 pages per person, full sheet each: front, back, front, blank back', repN.startsWith('11 sheets ·') && J(first4) === J([P[0], 'back ' + P[0], 'third ' + P[0], '']), { repN, first4 });
+  const p2 = (await texts(8)).slice(4).map(x => [...new Set(x.split('|'))].join('|'));
+  check('3 pages per person: person 2 starts on a fronts sheet again', J(p2) === J([P[1], 'back ' + P[1], 'third ' + P[1], '']), p2);
+
+  // one slot per sheet (sequence): the blank backs sheet keeps later pairs aligned
+  await set('order', 'sequence');
+  await t.js(`(() => { for (const [k, v] of [['marginL', 100], ['marginT', 200]]) { const el = document.querySelector('#pd-side [data-k="' + k + '"]'); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); } })()`);
+  await t.sleep(300);
+  const sq = await texts(11), sqN = await info();
+  const want = P.flatMap(p => [p, 'back ' + p, 'third ' + p, '']).slice(0, 11);
+  check('one slot per sheet: pairs stay aligned, trailing blank dropped', sqN.startsWith('11 sheets ·') && J(sq) === J(want), { sqN, sq });
+
+  // one page per person: no tick
   await set('pages', 'current');
   check('off by default for one page; tick hidden', (await dup()) === null && !(await t.js('document.getElementById("pd-side").textContent')).includes('Front and back'));
 }, {
