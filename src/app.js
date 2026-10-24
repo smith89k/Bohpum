@@ -6,7 +6,7 @@ import { docFromFodg, bpumText, withDefaults } from './docfile.js';
 import * as TE from './textedit.js';
 import { openPrintDialog, buildOutputHtml } from './print.js';
 import { parseList, fieldHtml } from './merge.js';
-import { sheetBox, renderMailBar, mailMenuState } from './mailings.js';
+import { sheetBox, photoBox, renderMailBar, mailMenuState } from './mailings.js';
 
 const api = window.api;
 const PXMM = 96 / 25.4;
@@ -1270,6 +1270,7 @@ function imageProps(P, sel) {
   const b = btns(s); b.style.marginTop = '6px';
   b.append(btn('Replace…', () => replaceImage(o)), btn('Original ratio', () => resetRatio(o)));
   if (o.note && !o.src) s.append(Object.assign(document.createElement('div'), { className: 'warn', textContent: o.note }));
+  if (o.mergePhoto) s.append(Object.assign(document.createElement('div'), { className: 'muted', textContent: 'Photo from list: ' + o.mergePhoto }));
 }
 
 function lineProps(P, sel) {
@@ -1723,6 +1724,15 @@ async function selectList(keepOff = false) {
   S.doc.merge = { list: p, sheet: list.sheet, off: keepOff && S.doc.merge ? S.doc.merge.off : [] };
   S.mail = { list, at: 0, preview: false, photos: new Map(), error: null };
   commit(); renderAll();
+}
+// Photo from List: which column fills the selected picture
+async function photoFromList() {
+  const o = selObjs()[0];
+  if (!S.mail || !S.mail.list || !o || o.type !== 'image') return;
+  const col = await photoBox(modal, S.mail.list.columns, o.mergePhoto, S.mail.list.rows);
+  if (col === undefined) return;
+  setProp(x => { if (col) x.mergePhoto = col; else delete x.mergePhoto; });
+  syncMailMenu();
 }
 // Insert Field: at the caret of the box being edited; the native menu took the focus, so the kept range is put back first
 function insertField(col) {
@@ -2179,6 +2189,7 @@ function cmd(c) {
     case 'print': return printDialog();
     case 'page-setup': return pageSetup();
     case 'mail-select': return selectList();
+    case 'mail-photo': return photoFromList();
     case 'undo': return undo();
     case 'redo': return redo();
     case 'cut': return copySel(true);
@@ -2426,7 +2437,7 @@ function wire() {
   setupTextbar();
 }
 
-window.__bohpumApp = { cmd: (c) => cmd(c), openFile: (p) => openFile(p), startEditing: (id) => startEditing(id), finishEditing: () => finishEditing(), state: S,
+window.__bohpumApp = { cmd: (c) => cmd(c), openFile: (p) => openFile(p), startEditing: (id) => startEditing(id), finishEditing: () => finishEditing(), selectionChanged: () => selectionChanged(), state: S,
   updateReady: (v) => updateReady(v), menuRepairAtStart: () => menuRepairAtStart() };
 
 async function init() {

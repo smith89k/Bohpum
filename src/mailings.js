@@ -11,6 +11,22 @@ export function sheetBox(modal, names) {
   return m.done.then(v => v ? sel.value : null);
 }
 
+// Which column holds the photos? → a column name, null ("Not from the list") or undefined (Cancel)
+export function photoBox(modal, columns, current, rows = []) {
+  const body = document.createElement('div');
+  const text = document.createElement('div'); text.textContent = 'Which column of the list holds the photo files?';
+  const sel = document.createElement('select'); sel.className = 'field'; sel.style.marginTop = '10px';
+  sel.add(new Option('Not from the list', ''));
+  for (const c of columns) sel.add(new Option(c, c));
+  const first = (i) => { const r = rows.find(r => String(r[i]).trim()); return r ? String(r[i]).trim().replace(/["']$/, '') : ''; };
+  const guess = columns.find(c => PHOTO_NAME.test(c)) || columns.find((c, i) => /\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(first(i)));
+  sel.value = columns.includes(current) ? current : guess || '';
+  body.append(text, sel);
+  const m = modal('Photo from List', body, [['Cancel', false], ['OK', true, true]]);
+  return m.done.then(v => v ? (sel.value || null) : undefined);
+}
+const PHOTO_NAME = /photo|picture|image|pic|រូប/i;
+
 // The slim bar above the page: the list's file and sheet, or what is wrong with it. Task 6 adds the people to it.
 export function renderMailBar(bar, doc, mail) {
   const m = doc.merge;

@@ -547,6 +547,20 @@ ipcMain.handle('read-list', async (_e, p) => {
   return { ...res, locale: app.getSystemLocale() };
 });
 
+// Photos for the cells of a photo column → { cell: { url } | { missing: path tried } | { empty: true } }
+ipcMain.handle('mail-photos', (_e, cells, listPath) => {
+  const out = {};
+  for (const cell of Array.isArray(cells) ? cells : []) {
+    const c = String(cell == null ? '' : cell);
+    if (c in out) continue;
+    if (!c.trim()) { out[c] = { empty: true }; continue; }
+    const p = lists.photoPath(c, listPath);
+    try { out[c] = p ? { url: lists.photoUrl(p) } : { missing: lists.photoTried(c, listPath) }; }
+    catch { out[c] = { missing: p }; }
+  }
+  return out;
+});
+
 ipcMain.handle('app-info', () => ({ version: app.getVersion(), electron: process.versions.electron }));
 ipcMain.handle('get-settings', () => loadSettings());
 ipcMain.handle('set-settings', (_e, patch) => { const s = { ...loadSettings(), ...patch }; saveSettings(s); return s; });

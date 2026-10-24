@@ -74,4 +74,42 @@ async function readList(p, opts = {}) {
   } catch (err) { return { error: listError(err) }; }
 }
 
-module.exports = { unzipEntries, readList, listError };
+// A photo cell (File Explorer's "Copy as path" gives "C:\Photos\Sokha.jpg" with quotes) → the full path it names, or null if empty
+function photoTried(cell, listPath) {
+  let c = String(cell == null ? '' : cell).trim();
+  const q = c[0];
+  if ((q === '"' || q === "'") && c.length > 1 && c.endsWith(q)) c = c.slice(1, -1).trim();
+  if (!c) return null;
+  c = c.replace(/\//g, '\\');
+  return path.isAbsolute(c) ? c : path.join(path.dirname(listPath), c);
+}
+// … and only if that file is there
+function photoPath(cell, listPath) {
+  const full = photoTried(cell, listPath);
+  return full && fs.existsSync(full) ? full : null;
+}
+
+const MAX_SIDE = 1600, MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp', svg: 'image/svg+xml' };
+const urls = new Map();
+// A photo as a data URL; big jpg/png are scaled to 1600 px on the long side. Cached by path + mtime + size.
+function photoUrl(p) {
+  const st = fs.statSync(p), key = p + '|' + st.mtimeMs + '|' + st.size;
+  if (urls.has(key)) return urls.get(key);
+  const ext = path.extname(p).slice(1).toLowerCase();
+  let buf = fs.readFileSync(p), mime = MIME[ext] || 'image/' + ext;
+  if (ext === 'jpg' || ext === 'jpeg' || ext === 'png') {
+    const { nativeImage } = require('electron');
+    const img = nativeImage.createFromBuffer(buf), { width, height } = img.getSize();
+    if (Math.max(width, height) > MAX_SIDE) {
+      const k = MAX_SIDE / Math.max(width, height);
+      const small = img.resize({ width: Math.round(width * k), height: Math.round(height * k), quality: 'best' });
+      buf = ext === 'png' ? small.toPNG() : small.toJPEG(90);
+    }
+  }
+  const url = 'data:' + mime + ';base64,' + buf.toString('base64');
+  if (urls.size >= 50) urls.delete(urls.keys().next().value);
+  urls.set(key, url);
+  return url;
+}
+
+module.exports = { unzipEntries, readList, listError, photoPath, photoTried, photoUrl };
