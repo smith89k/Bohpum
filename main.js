@@ -548,15 +548,12 @@ ipcMain.handle('read-list', async (_e, p) => {
 });
 
 // Photos for the cells of a photo column → { cell: { url } | { missing: path tried } | { empty: true } }
-ipcMain.handle('mail-photos', (_e, cells, listPath) => {
+ipcMain.handle('mail-photos', async (e, cells, listPath) => {
+  if (!win || e.sender !== win.webContents) return {};
   const out = {};
   for (const cell of Array.isArray(cells) ? cells : []) {
     const c = String(cell == null ? '' : cell);
-    if (c in out) continue;
-    if (!c.trim()) { out[c] = { empty: true }; continue; }
-    const p = lists.photoPath(c, listPath);
-    try { out[c] = p ? { url: lists.photoUrl(p) } : { missing: lists.photoTried(c, listPath) }; }
-    catch { out[c] = { missing: p }; }
+    if (!(c in out)) out[c] = await lists.photoResult(c, String(listPath));
   }
   return out;
 });

@@ -18,7 +18,7 @@ export function photoBox(modal, columns, current, rows = []) {
   const sel = document.createElement('select'); sel.className = 'field'; sel.style.marginTop = '10px';
   sel.add(new Option('Not from the list', ''));
   for (const c of columns) sel.add(new Option(c, c));
-  const first = (i) => { const r = rows.find(r => String(r[i]).trim()); return r ? String(r[i]).trim().replace(/["']$/, '') : ''; };
+  const first = (i) => { const r = rows.find(r => String(r[i] ?? '').trim()); return r ? String(r[i]).trim().replace(/["']$/, '') : ''; };
   const guess = columns.find(c => PHOTO_NAME.test(c)) || columns.find((c, i) => /\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(first(i)));
   sel.value = columns.includes(current) ? current : guess || '';
   body.append(text, sel);
