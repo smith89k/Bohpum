@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('api', {
   saveDialog: (opts) => ipcRenderer.invoke('save-dialog', opts),
   writeFile: (opts) => ipcRenderer.invoke('write-file', opts),
   pickImages: () => ipcRenderer.invoke('pick-images'),
+  pickList: () => ipcRenderer.invoke('pick-list'),
+  readList: (p) => ipcRenderer.invoke('read-list', p),
   appInfo: () => ipcRenderer.invoke('app-info'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSettings: (patch) => ipcRenderer.invoke('set-settings', patch),

@@ -9,6 +9,7 @@ const menu = require('./explorer-menu');
 const updates = require('./updater');
 const reader = require('./reader');
 const store = require('./store');
+const lists = require('./list');
 
 const APP_NAME = 'Bohpum';
 const ICON = path.join(__dirname, 'build', 'icon.png'); // the exe, installer and Explorer menu use build/icon.ico
@@ -124,12 +125,12 @@ const readerService = reader.createReaderService({
 // starts, and stopRead() ends it while LibreOffice reads (the editor's progress box: Cancel).
 let loQueue = Promise.resolve(), loJobs = 0;
 const CANCELLED = new Error('cancelled');
-function convertWithLibreOffice(inputPath, job = {}, soffice) {
+function convertWithLibreOffice(inputPath, job = {}, soffice, to) {
   if (loJobs++) job.step?.('waiting');
   const run = loQueue.then(() => {
     if (job.cancelled) throw CANCELLED;
     job.step?.('reading');
-    return convertOne(inputPath, job, soffice);
+    return convertOne(inputPath, job, soffice, to);
   });
   loQueue = run.then(() => {}, () => {}).then(() => { loJobs--; });
   return run;
@@ -141,7 +142,8 @@ function stopRead(job) {
   if (process.platform === 'win32' && child.pid) execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true }, () => {});
   else child.kill();
 }
-function convertOne(inputPath, job, soffice) {
+// to: 'fodg' → the text, 'xlsx' → a Buffer
+function convertOne(inputPath, job, soffice, to = 'fodg') {
   return new Promise((resolve, reject) => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bohpum-'));
     const ext = path.extname(inputPath) || '.pub';
@@ -152,15 +154,15 @@ function convertOne(inputPath, job, soffice) {
     // Must be a proper file URL: a raw space in the path (e.g. a user name) makes soffice exit 127
     const profileUrl = pathToFileURL(profile).href;
     const args = ['-env:UserInstallation=' + profileUrl, '--headless', '--norestore', '--nolockcheck',
-      '--convert-to', 'fodg', '--outdir', tmp, tmpIn];
+      '--convert-to', to, '--outdir', tmp, tmpIn];
     job.child = execFile(soffice, args, { timeout: 180000, windowsHide: true }, (err) => {
       job.child = null;
-      const out = path.join(tmp, 'input.fodg');
+      const out = path.join(tmp, 'input.' + to);
       if (job.cancelled) { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} return reject(CANCELLED); }
       if (fs.existsSync(out)) {
-        const xml = fs.readFileSync(out, 'utf8');
+        const data = fs.readFileSync(out, to === 'fodg' ? 'utf8' : undefined);
         try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
-        resolve(xml);
+        resolve(data);
       } else {
         try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
         // err.message holds the soffice command line; log it, show the user a plain message
@@ -514,6 +516,23 @@ ipcMain.handle('pick-images', async () => {
     const mime = ext === 'svg' ? 'image/svg+xml' : ext === 'jpg' ? 'image/jpeg' : 'image/' + ext;
     return { name: path.basename(p), dataUrl: 'data:' + mime + ';base64,' + fs.readFileSync(p).toString('base64') };
   });
+});
+
+// Mail merge lists: the page parses what list.js returns (see src/mail/)
+ipcMain.handle('pick-list', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Choose a list', properties: ['openFile'], defaultPath: startIn('lastListDir'),
+    filters: [{ name: 'Lists', extensions: ['xlsx', 'xls', 'csv'] }] });
+  if (r.canceled) return null;
+  rememberDir('lastListDir', r.filePaths[0]);
+  return r.filePaths[0];
+});
+ipcMain.handle('read-list', async (_e, p) => {
+  const res = await lists.readList(p, { convertXls: (f) => {
+    const r = chooseReader();
+    if (r.need) return Promise.reject(Object.assign(new Error('no reader'), { code: 'NO_XLS_READER' }));   // never downloads here
+    return convertWithLibreOffice(f, {}, r.soffice, 'xlsx').catch((err) => { throw Object.assign(err, { plain: true }); });
+  } });
+  return { ...res, locale: app.getSystemLocale() };
 });
 
 ipcMain.handle('app-info', () => ({ version: app.getVersion(), electron: process.versions.electron }));

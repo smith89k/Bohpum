@@ -31,6 +31,7 @@
       "updater.js",
       "reader.js",
       "store.js",
+      "list.js",
       "update-config.json",
       "reader-pack.json",
       "src/**/*",
