@@ -32,7 +32,7 @@ const PHOTO_NAME = /photo|picture|image|pic|រូប/i;
 // → the new list of unticked rows' keys, or null (Cancel). The rows are built once; typing only shows and hides them.
 export function peopleBox(modal, list, off) {
   const body = document.createElement('div'), skip = new Set(off);
-  const find = document.createElement('input'); find.type = 'search'; find.className = 'field pp-find'; find.placeholder = 'Search';
+  const find = document.createElement('input'); find.type = 'search'; find.className = 'field pp-find'; find.placeholder = 'Search'; find.dataset.enterSelf = ''; // Enter here must not press OK (modal)
   const table = document.createElement('table'), head = table.createTHead().insertRow(), tb = table.createTBody();
   head.insertCell().textContent = '';
   for (const c of list.columns) Object.assign(head.appendChild(document.createElement('th')), { textContent: c });
@@ -45,7 +45,7 @@ export function peopleBox(modal, list, off) {
   });
   find.oninput = () => { const q = find.value.trim().toLowerCase(); for (const it of items) it.tr.hidden = !!q && !it.text.includes(q); };
   const all = (on) => { for (const it of items) if (!it.tr.hidden) it.box.checked = on; };
-  const bt = (label, on) => { const b = document.createElement('button'); b.className = 'btn'; b.textContent = label; b.onclick = () => all(on); return b; };
+  const bt = (label, on) => { const b = document.createElement('button'); b.className = 'btn'; b.dataset.enterSelf = ''; b.textContent = label; b.onclick = () => all(on); return b; };
   const bar = document.createElement('div'); bar.className = 'pp-bar';
   bar.append(find, bt('Tick all', true), bt('Untick all', false));
   const wrap = document.createElement('div'); wrap.className = 'pp-list'; wrap.append(table);

@@ -53,6 +53,21 @@ run(async (t, check) => {
   await search('');
   await press('Cancel');
 
+  // Enter: in the search field it does nothing; on a bulk button it presses that button; Esc still cancels
+  await open();
+  await t.js("document.querySelector('#modal-root input[type=search]').focus()");
+  await search('chan');
+  await t.key('Enter');
+  await t.sleep(200);
+  check('Enter in the search box keeps the box open and saves nothing', await t.js('!!document.querySelector("#modal-root .modal.people")') && J(await rows()).includes('Chan Mony') && await app('S.doc.merge.off.length === 1'));
+  await t.js("[...document.querySelectorAll('#modal-root .modal .btn')].find(b => b.textContent === 'Untick all').focus()");
+  await t.key('Enter');
+  await t.waitFor('[...document.querySelectorAll("#modal-root tbody tr")].filter(r => !r.hidden).every(r => !r.querySelector("input").checked)');
+  check('Enter on Untick all unticks the shown rows and keeps the box open', await t.js('!!document.querySelector("#modal-root .modal.people")') && J(await ticks()) === '[true,false,true]' && await app('S.doc.merge.off.length === 1'), await ticks());
+  await t.key('Escape');
+  await t.waitFor('!document.querySelector("#modal-root .modal.people")');
+  check('Esc cancels', await app('S.doc.merge.off.length === 1'));
+
   // undo
   await t.key('Z', ['control']);
   await t.waitFor('window.__bohpumApp.state.doc.merge.off.length === 0');
