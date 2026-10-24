@@ -145,6 +145,7 @@ function renderStage() {
     const o = getObj(el.dataset.id);
     if (!o) return void el.classList.add('from-master'); // Preview puts the filled master objects in the page's layer
     if (o.locked) el.classList.add('locked');
+    if (typesIn(o)) el.classList.add('typein');
     if (o.type === 'box' && o.shape === 'none' && (!o.fill || o.fill === 'none') && (!o.stroke || o.stroke === 'none')) el.classList.add('empty-frame');
   });
   markMissingFields(pg);
@@ -531,8 +532,14 @@ function onWorkspaceDown(e) {
   if (S.tool !== 'select') { e.preventDefault(); return startCreate(e, m); }
   const objEl = t.closest('.kcontent > .kobj');
   if (objEl) {
-    e.preventDefault();
     const o = getObj(objEl.dataset.id);
+    // as in Publisher: a click in a text box (not on its edge) puts the typing cursor there
+    // (in the empty part below the text, the browser would take the focus away: the cursor goes to the end instead)
+    if (typesIn(o) && !e.shiftKey && !e.ctrlKey && !onEdge(o, m)) {
+      if (!t.closest('.kt')) e.preventDefault();
+      return startEditing(o.id, e);
+    }
+    e.preventDefault();
     if (!o) return;
     const ids = o.groupId && !e.ctrlKey ? objs().filter(x => x.groupId === o.groupId).map(x => x.id) : [o.id];
     if (e.shiftKey) {
@@ -548,6 +555,23 @@ function onWorkspaceDown(e) {
   e.preventDefault();
   if (!e.shiftKey && S.sel.size) { S.sel.clear(); selectionChanged(); }
   startMarquee(e, m);
+}
+
+// A text box shows the I-beam inside and the move arrow on its edge (6 screen px, along its own sides when turned)
+const EDGE_PX = 6;
+const typesIn = (o) => !!o && o.type === 'box' && o.shape === 'none' && !o.locked && !o.groupId;
+function onEdge(o, m) {
+  const a = (o.rot || 0) * Math.PI / 180, dx = m.x - (o.x + o.w / 2), dy = m.y - (o.y + o.h / 2);
+  const lx = dx * Math.cos(a) + dy * Math.sin(a), ly = -dx * Math.sin(a) + dy * Math.cos(a), band = EDGE_PX / pxPerMm();
+  return o.w / 2 - Math.abs(lx) < band || o.h / 2 - Math.abs(ly) < band;
+}
+let edgeEl = null;
+function onWorkspaceHover(e) {
+  if (e.buttons || !pageEl) return;
+  const el = S.tool === 'select' && e.target.closest ? e.target.closest('.kcontent > .kobj.typein') : null;
+  if (edgeEl && edgeEl !== el) edgeEl.classList.remove('edge');
+  edgeEl = el;
+  if (el) { const o = getObj(el.dataset.id); el.classList.toggle('edge', !!o && onEdge(o, mmFromEvent(e))); }
 }
 
 function selectionChanged() { renderOverlay(); renderProps(); updateTextbar(); updateStatus(); drawRulers(); syncMailMenu(); }
@@ -949,7 +973,7 @@ function updateTextbar() {
   const tb = $('textbar');
   const st = currentTextStyle();
   tb.classList.toggle('disabled', !st);
-  $('tb-hint').textContent = S.editing ? 'Editing text – Esc to finish' : st ? 'Formatting applies to the whole text box. Double-click to edit text.' : 'Select a text box, or double-click one to edit text';
+  $('tb-hint').textContent = S.editing ? 'Editing text – Esc to finish' : st ? 'Formatting applies to the whole text box. Click in it to type.' : 'Select a text box, or click in one to type';
   if (!st) return;
   if (document.activeElement !== $('tb-font')) $('tb-font').value = st.font;
   if (document.activeElement !== $('tb-size')) $('tb-size').value = st.size;
@@ -2567,12 +2591,13 @@ function wire() {
   $('zoom-sel').onchange = () => { const v = $('zoom-sel').value; if (v === 'fit') zoomFit(); else setZoom(+v / 100); };
   const ws = $('workspace');
   ws.addEventListener('pointerdown', onWorkspaceDown);
+  ws.addEventListener('pointermove', onWorkspaceHover);
   ws.addEventListener('dblclick', (e) => {
     const objEl = e.target.closest('.kcontent > .kobj');
     if (!objEl) return;
     const o = getObj(objEl.dataset.id);
     if (!o || o.locked) return;
-    if (o.type === 'box') startEditing(o.id, e);
+    if (o.type === 'box' && S.editing !== o.id) startEditing(o.id, e); // already typing: the double-click picks a word
     else if (o.type === 'image') replaceImage(o);
   });
   ws.addEventListener('contextmenu', openCtx);
