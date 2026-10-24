@@ -12,7 +12,7 @@ run(async (t, check) => {
   await t.ready(null);
   const dir = t.ctx.tmp, f = (n) => path.join(dir, n), J = JSON.stringify;
   const app = (code) => t.js(`(() => { const A = window.__bohpumApp, S = A.state; return ${code}; })()`);
-  const menu = () => Menu.getApplicationMenu().items.find(i => i.label === 'Mailings').submenu.items.find(i => i.label === 'Insert Field');
+  const menu = () => Menu.getApplicationMenu().items.find(i => i.label === 'Mailings').submenu.items.find(i => i.label === 'Insert Merge Field');
   const type = async (s) => { t.wc.insertText(s); await t.sleep(150); };
   const html = (id) => app(`S.doc.pages[0].objects.find(o => o.id === ${J(id)}).html`);
   const info = (id) => app(`(() => { const d = document.createElement('div'); d.innerHTML = S.doc.pages[0].objects.find(o => o.id === ${J(id)}).html;

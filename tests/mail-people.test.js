@@ -33,7 +33,7 @@ run(async (t, check) => {
   await open();
   await tick(0);
   await press('Cancel');
-  check('Cancel changes nothing', !(await app('S.dirty')) && await app('S.doc.merge.off.length === 0') && (await bar()).includes('Person 1 of 3'), await bar());
+  check('Cancel changes nothing', !(await app('S.dirty')) && await app('S.doc.merge.off.length === 0') && (await bar()).includes('Recipient 1 of 3'), await bar());
 
   // untick one
   await open();
@@ -41,9 +41,9 @@ run(async (t, check) => {
   check('the box lists every person with every column', shown.length === 3 && shown[0].includes(P1) && shown[0].includes('Phnom Penh'), shown);
   await tick(1);
   await press('OK');
-  check('untick one: 2 people, dirty, remembered by content', (await bar()).includes('Person 1 of 2') && await app('S.dirty && S.doc.merge.off.length === 1 && S.doc.merge.off[0] === JSON.stringify(S.mail.list.rows[1])'), await bar());
+  check('untick one: 2 people, dirty, remembered by content', (await bar()).includes('Recipient 1 of 2') && await app('S.dirty && S.doc.merge.off.length === 1 && S.doc.merge.off[0] === JSON.stringify(S.mail.list.rows[1])'), await bar());
   await t.js('window.__bohpumApp.cmd("mail-next")');
-  check('the arrow skips the unticked person', (await bar()).includes('Person 2 of 2') && (await t.js('document.querySelector("#mailbar .mb-name").textContent')) === P3);
+  check('the arrow skips the unticked person', (await bar()).includes('Recipient 2 of 2') && (await t.js('document.querySelector("#mailbar .mb-name").textContent')) === P3);
 
   // the box shows the ticks as they are; Khmer is found as typed
   await open();
@@ -96,7 +96,7 @@ run(async (t, check) => {
   check('after the list gains a row on top: same person unticked, new row ticked',
     await app('(() => { const m = S.mail.list, off = S.doc.merge.off; return m.rows.map(r => off.includes(JSON.stringify(r))).join() === "false,false,true,false"; })()'),
     await app('JSON.stringify(S.doc.merge.off)'));
-  check('and the bar counts three', (await bar()).includes('Person 1 of 3'), await bar());
+  check('and the bar counts three', (await bar()).includes('Recipient 1 of 3'), await bar());
 }, {
   setup: () => {
     dialog.showOpenDialog = async () => { const p = picks.shift(); return p ? { canceled: false, filePaths: [p] } : { canceled: true, filePaths: [] }; };

@@ -4,7 +4,7 @@ import { ticked, rowKey } from './merge.js';
 // Which sheet of a workbook with several? → the name, or null (Cancel)
 export function sheetBox(modal, names) {
   const body = document.createElement('div');
-  const text = document.createElement('div'); text.textContent = 'This workbook has more than one sheet. Which one holds the people?';
+  const text = document.createElement('div'); text.textContent = 'This workbook has more than one sheet. Which one holds the recipients?';
   const sel = document.createElement('select'); sel.className = 'field'; sel.style.marginTop = '10px';
   for (const n of names) sel.add(new Option(n, n));
   body.append(text, sel);
@@ -23,7 +23,7 @@ export function photoBox(modal, columns, current, rows = []) {
   const guess = columns.find(c => PHOTO_NAME.test(c)) || columns.find((c, i) => /\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(first(i)));
   sel.value = columns.includes(current) ? current : guess || '';
   body.append(text, sel);
-  const m = modal('Photo from List', body, [['Cancel', false], ['OK', true, true]]);
+  const m = modal('Picture Field', body, [['Cancel', false], ['OK', true, true]]);
   return m.done.then(v => v ? (sel.value || null) : undefined);
 }
 const PHOTO_NAME = /photo|picture|image|pic|រូប/i;
@@ -50,7 +50,7 @@ export function peopleBox(modal, list, off) {
   bar.append(find, bt('Tick all', true), bt('Untick all', false));
   const wrap = document.createElement('div'); wrap.className = 'pp-list'; wrap.append(table);
   body.append(bar, wrap);
-  const m = modal('Choose People', body, [['Cancel', null], ['OK', true, true]], 'people');
+  const m = modal('Edit Recipient List', body, [['Cancel', null], ['OK', true, true]], 'people');
   find.focus();
   return m.done.then(v => v ? items.filter(it => !it.box.checked).map(it => it.key) : null);
 }
@@ -60,7 +60,7 @@ export function peopleBox(modal, list, off) {
 export function problemsBox(modal, problems) {
   if (!problems.length) return Promise.resolve(true);
   const body = document.createElement('div');
-  const text = document.createElement('div'); text.textContent = 'These people will not print quite as designed:';
+  const text = document.createElement('div'); text.textContent = 'These recipients will not print quite as designed:';
   const ul = document.createElement('ul'); ul.className = 'pb-list';
   for (const p of problems) ul.appendChild(document.createElement('li')).textContent = [`Row ${p.row}`, p.name, p.text].filter(Boolean).join(' · ');
   body.append(text, ul);
@@ -88,28 +88,28 @@ export function renderMailBar(bar, doc, mail, ui) {
   };
   const sep = () => el('span', 'mb-sep', '');
   // Insert Field keeps the caret in the text box: the button never takes the focus
-  const field = btn('mb-field', 'field', 'Insert Field', 'Insert a field («Name») at the cursor', (e) => ui.fieldMenu(e.currentTarget), state.field);
+  const field = btn('mb-field', 'field', 'Insert Merge Field', 'Insert a field («Name») at the cursor', (e) => ui.fieldMenu(e.currentTarget), state.field);
   field.insertAdjacentHTML('beforeend', icon('chevDown'));
   field.addEventListener('mousedown', (e) => e.preventDefault());
-  const preview = btn('mb-preview', 'eye', 'Preview', 'Show each person instead of the «blanks»', 'mail-preview', list);
+  const preview = btn('mb-preview', 'eye', 'Preview Results', 'Show each recipient instead of the «fields»', 'mail-preview', list);
   preview.classList.toggle('on', !!(mail && mail.preview));
   preview.setAttribute('aria-pressed', String(!!(mail && mail.preview)));
   const people = list ? ticked(mail.list, m.off) : [], at = Math.min(list ? mail.at : 0, people.length - 1);
-  const prev = btn('mb-prev', 'chevLeft', '', 'Previous person', 'mail-prev', list && at > 0);
-  const next = btn('mb-next', 'chevRight', '', 'Next person', 'mail-next', list && at < people.length - 1);
-  const who = el('span', 'mb-who', !list ? '—' : people.length ? `Person ${at + 1} of ${people.length}` : 'No one is ticked');
+  const prev = btn('mb-prev', 'chevLeft', '', 'Previous recipient', 'mail-prev', list && at > 0);
+  const next = btn('mb-next', 'chevRight', '', 'Next recipient', 'mail-next', list && at < people.length - 1);
+  const who = el('span', 'mb-who', !list ? '—' : people.length ? `Recipient ${at + 1} of ${people.length}` : 'No recipients ticked');
   const first = el('span', 'mb-name', people.length ? mail.list.rows[people[at]][0] : '');
   const name = el('span', 'mb-list', mail && mail.error ? mail.error : 'Mailing list: ' + m.list.split(/[\\/]/).pop() + (m.sheet ? ' · ' + m.sheet : ''));
   name.title = m.list;
   bar.classList.toggle('bad', !!(mail && mail.error));
   bar.replaceChildren(
-    btn('mb-select', 'mlist', 'Select List', 'Choose the Excel or CSV list', 'mail-select'),
-    btn('mb-people', 'people', 'Choose People', 'Tick the people to print', 'mail-people', list),
+    btn('mb-select', 'mlist', 'Select Recipients', 'Choose the Excel or CSV list of recipients', 'mail-select'),
+    btn('mb-people', 'people', 'Edit Recipient List', 'Tick the recipients to print', 'mail-people', list),
     field,
-    btn('mb-photo', 'photo', 'Photo from List', "Take the selected picture's photo from a column of the list", 'mail-photo', state.photo),
+    btn('mb-photo', 'photo', 'Picture Field', "Fill the selected picture from a column of the list", 'mail-photo', state.photo),
     sep(), preview, prev, who, next, first,
     sep(),
-    btn('mb-print', 'print', 'Print All', 'Print everyone ticked', 'print', list),
+    btn('mb-print', 'print', 'Merge to Printer', 'Print every ticked recipient', 'print', list),
     btn('mb-remove', 'remove', 'Remove List', 'Forget the list; the «blanks» become plain text', 'mail-remove', list || !!(mail && mail.error)),
     name);
 }

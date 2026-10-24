@@ -12,7 +12,7 @@ run(async (t, check) => {
   await t.ready(null);
   const dir = t.ctx.tmp, f = (...n) => path.join(dir, ...n), J = JSON.stringify;
   const app = (code) => t.js(`(() => { const A = window.__bohpumApp, S = A.state; return ${code}; })()`);
-  const item = () => Menu.getApplicationMenu().items.find(i => i.label === 'Mailings').submenu.items.find(i => i.label === 'Photo from List…');
+  const item = () => Menu.getApplicationMenu().items.find(i => i.label === 'Mailings').submenu.items.find(i => i.label === 'Picture Field…');
   const solid = (w, h) => { const b = Buffer.alloc(w * h * 4, 200); return nativeImage.createFromBitmap(b, { width: w, height: h }); };
   const khmer = f('រូបថត'), lst = f('list');
   fs.mkdirSync(khmer); fs.mkdirSync(lst);
@@ -79,7 +79,7 @@ run(async (t, check) => {
   check('one undo step', await app('S.hi') === before + 1, await app('S.hi'));
   await t.sleep(200);
   const panel = await t.js('document.getElementById("props") ? document.getElementById("props").textContent : document.body.textContent');
-  check('the Picture panel says Photo from list: Photo', panel.includes('Photo from list: Photo'));
+  check('the Picture panel says Photo from list: Photo', panel.includes('Picture field: Photo'));
 
   // greyed out
   await pick(a, b);

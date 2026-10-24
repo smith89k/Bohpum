@@ -13,7 +13,7 @@ run(async (t, check) => {
   await t.ready(null);
   const dir = t.ctx.tmp, f = (n) => path.join(dir, n), J = JSON.stringify;
   const app = (code) => t.js(`(() => { const A = window.__bohpumApp, S = A.state; return ${code}; })()`);
-  const preview = () => Menu.getApplicationMenu().items.find(i => i.label === 'Mailings').submenu.items.find(i => i.label === 'Preview');
+  const preview = () => Menu.getApplicationMenu().items.find(i => i.label === 'Mailings').submenu.items.find(i => i.label === 'Preview Results');
   const solid = (w, h) => nativeImage.createFromBitmap(Buffer.alloc(w * h * 4, 200), { width: w, height: h });
   fs.writeFileSync(f('dara.png'), solid(40, 30).toPNG());
   fs.writeFileSync(f('mony.jpg'), solid(40, 30).toJPEG(90));
@@ -40,10 +40,10 @@ run(async (t, check) => {
   await t.waitFor(`(document.querySelector('#page-holder .kobj[data-id=${J(ids.img)}] img') || {}).src?.startsWith('data:image/')`);
   const first = { text: await stageText(), img: (await stageImg() || '').slice(0, 11), bar: await bar() };
   await t.sleep(300);
-  check('Preview shows the person: name, photo, menu ticked', first.text === P1 && first.img === 'data:image/' && first.bar.includes('Person 1 of 3') && first.bar.includes(P1) && preview().checked, first);
+  check('Preview shows the person: name, photo, menu ticked', first.text === P1 && first.img === 'data:image/' && first.bar.includes('Recipient 1 of 3') && first.bar.includes(P1) && preview().checked, first);
   await t.click('#mailbar .mb-next');
   const second = { text: await stageText(), bar: await bar() };
-  check('▶ shows the second person', second.text === P2 && second.bar.includes('Person 2 of 3') && second.bar.includes(P2), second);
+  check('▶ shows the second person', second.text === P2 && second.bar.includes('Recipient 2 of 3') && second.bar.includes(P2), second);
   await t.waitFor(`document.querySelector('#page-list .pthumb .kt').textContent === ${J(P2)}`).catch(() => {});
   const thumb = await t.js(`document.querySelector('#page-list .pthumb .kt').textContent`);
   check('thumbnails follow', thumb === P2, thumb);
@@ -66,7 +66,7 @@ run(async (t, check) => {
   await t.click('#mailbar .mb-next');
   const third = await t.js(`(() => { const el = document.querySelector('#page-holder .kobj[data-id=${J(ids.img)}]'); return { img: !!el.querySelector('img'), text: el.textContent, empty: !!el.querySelector('.kimg-empty'), next: document.querySelector('#mailbar .mb-next').disabled, bar: document.getElementById('mailbar').textContent }; })()`);
   check('no photo → empty frame', !third.img && third.text === '' && third.empty && (await stageText()) === P3, third);
-  check('▶ is off at the last person', third.next && third.bar.includes('Person 3 of 3'), third);
+  check('▶ is off at the last person', third.next && third.bar.includes('Recipient 3 of 3'), third);
 
   // shrink to fit (Khmer OS Siemreap lines are tall: at 14 pt even a short name needs more than a 40 × 8 mm box)
   const LONG = 'សុខសុភាពចាន់ដារាកែវមុនីរតនាវិសាលសម្បត្តិ'.repeat(3).slice(0, 60);

@@ -50,7 +50,7 @@ run(async (t, check) => {
   const who = await t.js(`(() => { const s = [...document.querySelectorAll('#pd-side select.big')].filter(x => x.id !== 'pd-printer')[0];
     return { k: s.dataset.k, v: s.value, label: s.getAttribute('aria-label'), titles: [...s.options].map(o => o.querySelector('b').textContent) }; })()`);
   check('Who is at the top, Everyone ticked chosen', who.k === 'who' && who.v === 'all' && who.label === 'Who' &&
-    J(who.titles) === J(['Everyone ticked', 'Only the person showing', 'No one (the design with blanks)']), who);
+    J(who.titles) === J(['Print All Records', 'Print Current Record', 'Print the Design']), who);
 
   // Who is for this time only
   await set('who', 'one');
@@ -65,7 +65,7 @@ run(async (t, check) => {
   const tiles = await t.js('[...document.querySelectorAll(".pr-order .tile")].map(x => x.querySelector("span").textContent + (x.classList.contains("on") ? " *" : ""))');
   const side = { slots: await slots(), info: await info() };
   check('many per sheet, people side by side', J(side.slots.slice(0, 3)) === J([P1, P2, P3]) && side.slots.length === 3 && side.info.startsWith('1 sheet ·') &&
-    J(tiles) === J(['A full sheet of each person', 'Different people side by side *']), { side, tiles });
+    J(tiles) === J(['A full sheet of each recipient', 'Different recipients side by side *']), { side, tiles });
 
   await set('order', 'repeat');
   const full = { info: await info(), s1: await slots() };
@@ -161,7 +161,7 @@ run(async (t, check) => {
   await t.js('(window.__bohpumApp.cmd("print"), 1)');
   await built(60000).catch(() => {});
   const big = await t.js(`(() => { const g = window.__gap; clearInterval(window.__tick); return { ms: Math.round(performance.now() - g.t0), max: Math.round(g.max), info: document.getElementById('pd-info').textContent,
-    progress: [...g.seen].filter(s => /^Preparing \\d+ of 300 people…$/.test(s)).length }; })()`);
+    progress: [...g.seen].filter(s => /^Preparing \\d+ of 300 recipients…$/.test(s)).length }; })()`);
   check('300 people stay responsive', big.ms < 60000 && big.max < 1000 && big.progress >= 2 && big.info.startsWith('30 sheets ·'), big);
   // Save as PDF: "Preparing the pages…" shows (a frame is drawn) before the pages are put together
   fakePdf = true;

@@ -66,7 +66,7 @@ run(async (t, check) => {
 
   makeXlsx(f('head-only.xlsx'), { sheets: [{ name: 'S', rows: [['Name']] }] });
   makeXlsx(f('blank-head.xlsx'), { sheets: [{ name: 'S', rows: [['', ''], ['a', 'b']] }] });
-  check('empty list', (await parse('head-only.xlsx')).threw === 'This list has no people in it');
+  check('empty list', (await parse('head-only.xlsx')).threw === 'This list has no recipients in it');
   check('header row blank', (await parse('blank-head.xlsx')).threw === 'The first row should hold the column names.');
 
   fs.writeFileSync(f('semi.csv'), 'Name;Title\r\n"Sok, Dara";"He said ""hi"""\r\n');

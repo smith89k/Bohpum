@@ -160,7 +160,7 @@ function xlsxGrid(files, wanted, locale) {
     return { name: s.getAttribute('name'), path: target.startsWith('/') ? target.slice(1) : 'xl/' + target };
   });
   const sheet = sheets.find(s => s.name === wanted) || sheets[0];
-  if (!sheet || !files[sheet.path]) throw new Error('This list has no people in it');
+  if (!sheet || !files[sheet.path]) throw new Error('This list has no recipients in it');
   const shared = files['xl/sharedStrings.xml'] ? all(xml(files['xl/sharedStrings.xml']), 'si').map(itemText) : [];
   const numFmts = {}, xfs = [];
   if (files['xl/styles.xml']) {
@@ -199,7 +199,7 @@ export function parseList(r, { sheet } = {}) {
   } else { table = csvRows(r.text || ''); nums = table.map((_, i) => i + 1); }
   const blank = (row) => row.every(c => !String(c ?? '').trim());
   const keep = table.map((row, i) => i).filter(i => i > 0 && !blank(table[i])), body = keep.map(i => table[i]);
-  if (!body.length) throw new Error('This list has no people in it');
+  if (!body.length) throw new Error('This list has no recipients in it');
   if (blank(table[0])) throw new Error('The first row should hold the column names.');
   let width = table[0].length; while (!String(table[0][width - 1] ?? '').trim()) width--;
   const seen = {}, columns = Array.from({ length: width }, (_, i) => {

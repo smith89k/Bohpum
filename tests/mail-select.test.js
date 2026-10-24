@@ -33,7 +33,7 @@ run(async (t, check) => {
   check('seven menus', menus === 'File Edit Insert Arrange Mailings View Help', menus);
 
   const all = mailings().submenu.items.filter(i => i.type !== 'separator').map(i => i.label);
-  check('menu greyed out without a list', J(live()) === J(['Select List…']) && J(all) === J(['Select List…', 'Choose People…', 'Insert Field', 'Photo from List…', 'Preview', 'Remove List']), { live: live(), all });
+  check('menu greyed out without a list', J(live()) === J(['Select Recipients…']) && J(all) === J(['Select Recipients…', 'Edit Recipient List…', 'Insert Merge Field', 'Picture Field…', 'Preview Results', 'Remove List']), { live: live(), all });
   check('a publication without a list has no bar and no merge', await barHidden() && await app('S.doc.merge === undefined && S.mail === null'));
 
   // Select List with two sheets
@@ -49,18 +49,18 @@ run(async (t, check) => {
   check('chosen sheet is kept', st.merge.list === f('two.xlsx') && st.merge.sheet === 'Staff' && J(st.merge.off) === '[]' && J(st.cols) === J(['Who', 'Role', 'Photo']), st);
   const bar = await t.js('document.querySelector("#mailbar .mb-list").textContent');
   check('bar shows the list and the publication is dirty', !(await barHidden()) && bar === 'Mailing list: two.xlsx · Staff' && st.dirty, { bar, st });
-  check('menu is live with a list', J(live()) === J(['Select List…', 'Choose People…', 'Preview', 'Remove List']), live());
+  check('menu is live with a list', J(live()) === J(['Select Recipients…', 'Edit Recipient List…', 'Preview Results', 'Remove List']), live());
 
-  const fieldItems = () => mailings().submenu.items.find(i => i.label === 'Insert Field').submenu.items;
+  const fieldItems = () => mailings().submenu.items.find(i => i.label === 'Insert Merge Field').submenu.items;
   check('Insert Field lists the columns, greyed unless editing text', J(fieldItems().map(i => i.label)) === J(['Who', 'Role', 'Photo']) && fieldItems().every(i => !i.enabled), fieldItems().map(i => i.label));
   await app('(A.cmd("tool-text"), 1)');
   const box = await app('(() => { const o = S.doc.pages[0].objects.find(o => o.type === "box"); return o && o.id; })()');
   await app(`(A.startEditing(${J(box)}), 1)`);
   await t.sleep(300);
-  check('Insert Field is live while editing text', mailings().submenu.items.find(i => i.label === 'Insert Field').enabled && fieldItems().every(i => i.enabled) && fieldItems().length === 3);
+  check('Insert Field is live while editing text', mailings().submenu.items.find(i => i.label === 'Insert Merge Field').enabled && fieldItems().every(i => i.enabled) && fieldItems().length === 3);
   await app('(A.finishEditing(), 1)');
   await t.sleep(300);
-  check('Insert Field is greyed again after editing', !mailings().submenu.items.find(i => i.label === 'Insert Field').enabled && fieldItems().every(i => !i.enabled));
+  check('Insert Field is greyed again after editing', !mailings().submenu.items.find(i => i.label === 'Insert Merge Field').enabled && fieldItems().every(i => !i.enabled));
 
   // saved and reopened
   const merged = f('merged.bpum'), other = f('other.bpum');
@@ -91,14 +91,14 @@ run(async (t, check) => {
   const late = await app('({ err: S.mail && S.mail.error, list: S.mail && S.mail.list, merge: !!S.doc.merge, pages: S.doc.pages.length, dirty: S.dirty })');
   check('Later leaves the design on screen and the problem in words', late.err && !late.list && late.merge && late.pages > 0 && !late.dirty &&
     !(await barHidden()) && (await barText()).includes('The list was moved or deleted.'), late);
-  check('menu stays greyed without a readable list', J(live()) === J(['Select List…', 'Remove List']), live());
+  check('menu stays greyed without a readable list', J(live()) === J(['Select Recipients…', 'Remove List']), live());
 
   // empty list says so
   const merge0 = await app('S.doc.merge');
   picks = [f('empty.xlsx')];
   await t.js('(window.__bohpumApp.cmd("mail-select"), 1)');
   await t.waitFor('!!document.querySelector("#modal-root .modal")');
-  check('empty list says so', (await modalText()).includes('This list has no people in it'));
+  check('empty list says so', (await modalText()).includes('This list has no recipients in it'));
   await press('OK');
   check('empty list leaves the publication as it was', J(await app('S.doc.merge')) === J(merge0) && !(await app('S.dirty')));
 

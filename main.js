@@ -373,12 +373,12 @@ function buildMenu() {
       { label: 'Lock / Unlock', click: () => send('lock') }
     ]},
     { label: 'Mailings', submenu: [
-      { label: 'Select List…', click: () => send('mail-select') },
-      { label: 'Choose People…', enabled: mailMenu.list, click: () => send('mail-people') },
-      { label: 'Insert Field', enabled: mailMenu.list && mailMenu.field && mailMenu.columns.length > 0, submenu: mailMenu.columns.map((c, i) => ({ label: c.replace(/&/g, '&&'), enabled: mailMenu.field, click: () => send('mail-field-' + i) })) },
-      { label: 'Photo from List…', enabled: mailMenu.list && mailMenu.photo, click: () => send('mail-photo') },
+      { label: 'Select Recipients…', click: () => send('mail-select') },
+      { label: 'Edit Recipient List…', enabled: mailMenu.list, click: () => send('mail-people') },
+      { label: 'Insert Merge Field', enabled: mailMenu.list && mailMenu.field && mailMenu.columns.length > 0, submenu: mailMenu.columns.map((c, i) => ({ label: c.replace(/&/g, '&&'), enabled: mailMenu.field, click: () => send('mail-field-' + i) })) },
+      { label: 'Picture Field…', enabled: mailMenu.list && mailMenu.photo, click: () => send('mail-photo') },
       { type: 'separator' },
-      { label: 'Preview', type: 'checkbox', checked: mailMenu.preview, enabled: mailMenu.list, click: () => send('mail-preview') },
+      { label: 'Preview Results', type: 'checkbox', checked: mailMenu.preview, enabled: mailMenu.list, click: () => send('mail-preview') },
       { type: 'separator' },
       { label: 'Remove List', enabled: mailMenu.list || mailMenu.error, click: () => send('mail-remove') }
     ]},

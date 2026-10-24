@@ -50,12 +50,12 @@ run(async (t, check) => {
   await select();
   await openPrint();
   const first = await tileOn();
-  check('with a list, Print opens on Different people side by side', noList === 'repeat' && first === 'Different people side by side', { noList, first });
+  check('with a list, Print opens on Different people side by side', noList === 'repeat' && first === 'Different recipients side by side', { noList, first });
   await set('order', 'repeat');
   await closePrint();
   await openPrint();
   const kept = { tile: await tileOn(), print: await app('S.doc.print') };
-  check('A full sheet of each person is kept for the list only', kept.tile === 'A full sheet of each person' && kept.print.mailOrder === 'repeat' && kept.print.order === 'repeat', kept);
+  check('A full sheet of each person is kept for the list only', kept.tile === 'A full sheet of each recipient' && kept.print.mailOrder === 'repeat' && kept.print.order === 'repeat', kept);
   await set('order', 'sequence');
   await closePrint();
   const both = await app('[S.doc.print.order, S.doc.print.mailOrder]');

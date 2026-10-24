@@ -124,22 +124,23 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
 - **Save As** (Ctrl+Shift+S) can also save a PDF of the publication (every page at page size); the publication keeps its own file
 - File > Export Page as PNG saves the current page as a 300 dpi PNG
 
-**Mailings** (mail merge, as in Publisher: one card or certificate per person)
-- **Select List…** picks an Excel list (`.xlsx`, `.xls`) or a `.csv`: one row per person, the first row holds the column
-  names (a workbook with several sheets asks which one). The publication remembers its list; Bohpum never changes it
-- **Insert Field** ▸ puts a «Name» blank at the cursor in a text box; each person's value takes its font and size. A name
-  too long for its box is shrunk to fit, for that person only
-- **Photo from List…** makes the selected picture a photo field. The column holds each photo's path: in File Explorer,
+**Mailings** (mail merge, with Publisher's words: one card or certificate per recipient)
+- **Select Recipients…** picks an Excel list (`.xlsx`, `.xls`) or a `.csv`: one row per recipient, the first row holds the
+  column names (a workbook with several sheets asks which one). The publication remembers its list; Bohpum never changes it
+- **Insert Merge Field** ▸ puts a «Name» field at the cursor in a text box; each recipient's value takes its font and size.
+  A name too long for its box is shrunk to fit, for that recipient only
+- **Picture Field…** makes the selected picture a picture field. The column holds each photo's path: in File Explorer,
   right-click the photo → **Copy as path**, then paste it in Excel (a bare file name is looked for next to the list)
-- **Preview** shows real people instead of the blanks; the bar above the page steps through them
-- **Choose People…** ticks who gets a copy (search, Tick all / Untick all)
-- **Print** prints everyone ticked: people side by side on a sheet, or a full sheet of each person, and Save as PDF.
-  Before it goes out, a box lists who has a missing photo or a name that doesn't fit (Print anyway / Cancel)
+- **Preview Results** shows real recipients instead of the fields; ◀ Recipient 3 of 40 ▶ steps through them
+- **Edit Recipient List…** ticks who gets a copy (search, Tick all / Untick all)
+- **Merge to Printer** (or Print) opens the Print screen: **Print All Records** (every ticked recipient), **Print Current
+  Record** or **Print the Design**; different recipients side by side on a sheet, or a full sheet of each recipient, and
+  Save as PDF. Before it goes out, a box lists who has a missing photo or a name that doesn't fit (Print anyway / Cancel)
 - **Front and back**: a card with two pages prints a sheet of fronts, then a sheet of the matching backs (turn on
   two-sided printing in Printer Properties)
-- **Remove List** turns the blanks back into plain text
+- **Remove List** turns the fields back into plain text
 - While a publication has a list, the **mail merge toolbar** above the page has all of these as buttons with icons
-  (greyed out when they can't be used now), the person showing with ◀ ▶, and the list's name
+  (greyed out when they can't be used now), the recipient showing with ◀ ▶, and the list's name
 
 **Right-click in File Explorer** (as in Sastra PDF)
 - Right-click one or more `.pub` files → **Convert to Bohpum (.bpum)** (several: "Convert 3 files to Bohpum").
@@ -206,8 +207,8 @@ src/odgImport.js .pub → (LibreOffice flat ODF) → Bohpum document
 src/render.js    Draws objects (shared by editor, thumbnails, print, PDF)
 src/textedit.js  Rich-text editing helpers
 src/print.js     Publisher-style print dialog and sheet layout
-src/merge.js     Mail merge: the list's people and columns, «fields», one person's page filled in (shrunk to fit), everyone
-src/mailings.js  Mailings boxes (sheet, Photo from List, Choose People, problems) and the mail merge toolbar
+src/merge.js     Mail merge: the list's recipients and columns, «fields», one recipient's page filled in (shrunk to fit), everyone
+src/mailings.js  Mailings boxes (sheet, Picture Field, Edit Recipient List, problems) and the mail merge toolbar
 src/model.js     Document model (all sizes in mm)
 src/docfile.js   .pub (via LibreOffice) → document → .bpum text; shared by the editor and the convert window
 src/task.html/.js  The Explorer menu's convert window

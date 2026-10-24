@@ -7,7 +7,7 @@ const { makeXlsx } = require('./make-xlsx');
 
 let picks = [];
 const ODD = 'ឈ្មោះ "A" & <B>';
-const LABELS = ['Select List', 'Choose People', 'Insert Field', 'Photo from List', 'Preview', 'Print All', 'Remove List'];
+const LABELS = ['Select Recipients', 'Edit Recipient List', 'Insert Merge Field', 'Picture Field', 'Preview Results', 'Merge to Printer', 'Remove List'];
 
 run(async (t, check) => {
   await t.ready(null);
@@ -33,14 +33,14 @@ run(async (t, check) => {
   check('with a list: every action is a button, in order', !a.hidden && LABELS.every((l, i) => labels[i] === l) && labels.length === LABELS.length, labels);
   check('every button has an icon and a tooltip', a.buttons.every(x => x.icon && x.title), a.buttons.filter(x => !x.icon || !x.title));
   check('the list name stays on the right', a.list === 'Mailing list: people.xlsx · Staff', a.list);
-  check('Insert Field and Photo from List greyed out with nothing selected', button(a, 'Insert Field').off === true && button(a, 'Photo from List').off === true);
-  check('the others work', ['Select List', 'Choose People', 'Preview', 'Print All', 'Remove List'].every(l => button(a, l).off === false));
+  check('Insert Field and Photo from List greyed out with nothing selected', button(a, 'Insert Merge Field').off === true && button(a, 'Picture Field').off === true);
+  check('the others work', ['Select Recipients', 'Edit Recipient List', 'Preview Results', 'Merge to Printer', 'Remove List'].every(l => button(a, l).off === false));
 
   // a picture selected → Photo from List
   const pic = await t.js(`(async () => { const A = window.__bohpumApp, S = A.state, { makeObject } = await import('./model.js');
     const o = makeObject('image', { x: 120, y: 10, w: 25, h: 30, src: '' }); S.doc.pages[0].objects.push(o);
     S.sel = new Set([o.id]); A.cmd('toggle-master'); A.cmd('toggle-master'); S.sel = new Set([o.id]); A.selectionChanged(); return o.id; })()`);
-  check('Photo from List works with one picture selected', button(await bar(), 'Photo from List').off === false);
+  check('Photo from List works with one picture selected', button(await bar(), 'Picture Field').off === false);
 
   // a text box being typed in → Insert Field opens the columns and puts the field at the caret
   const box = await t.js(`(async () => { const A = window.__bohpumApp, S = A.state, { makeObject } = await import('./model.js');
@@ -48,7 +48,7 @@ run(async (t, check) => {
     S.doc.pages[0].objects.push(o); A.cmd('toggle-master'); A.cmd('toggle-master'); A.startEditing(o.id); return o.id; })()`);
   await t.waitFor('!!window.__bohpumApp.state.editing');
   t.wc.insertText('Hi '); await t.sleep(200);
-  check('Insert Field works while typing in a text box', button(await bar(), 'Insert Field').off === false);
+  check('Insert Field works while typing in a text box', button(await bar(), 'Insert Merge Field').off === false);
   await t.click('#mailbar .mb-field');
   await t.waitFor('getComputedStyle(document.getElementById("ctxmenu")).display !== "none"');
   const items = await t.js('[...document.querySelectorAll("#ctxmenu .mi span")].map(s => s.textContent)');
@@ -64,12 +64,12 @@ run(async (t, check) => {
 
   // Preview toggles, and shows as pressed
   await t.click('#mailbar .mb-preview');
-  check('Preview button turns Preview on and shows pressed', (await app('S.mail.preview')) && button(await bar(), 'Preview').on);
-  check('the person bar is there: Person 1 of 2 · Dara', await t.js('document.getElementById("mailbar").textContent.includes("Person 1 of 2") && document.querySelector("#mailbar .mb-name").textContent === "Dara"'));
+  check('Preview button turns Preview on and shows pressed', (await app('S.mail.preview')) && button(await bar(), 'Preview Results').on);
+  check('the recipient bar is there: Recipient 1 of 2 · Dara', await t.js('document.getElementById("mailbar").textContent.includes("Recipient 1 of 2") && document.querySelector("#mailbar .mb-name").textContent === "Dara"'));
   await t.click('#mailbar .mb-next');
   check('▶ goes to the next person', await t.js('document.querySelector("#mailbar .mb-name").textContent === "Mony"'));
   await t.click('#mailbar .mb-preview');
-  check('Preview button turns it off again', !(await app('S.mail.preview')) && button(await bar(), 'Preview').on === false);
+  check('Preview button turns it off again', !(await app('S.mail.preview')) && button(await bar(), 'Preview Results').on === false);
 
   // Print All opens the Print screen with everyone
   await t.click('#mailbar .mb-print');

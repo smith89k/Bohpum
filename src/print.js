@@ -172,7 +172,7 @@ const bigOptions = (items, value) => '<button><selectedcontent></selectedcontent
 const bigSelect = (attrs, items, value) => `<select class="big" ${attrs}>${bigOptions(items, value)}</select>`;
 // Multiple copies per sheet: the page order as two tiles side by side, each with a sheet of numbered cards
 const ORDER = [['repeat', 'Fill each sheet with one page', '1111'], ['sequence', 'Different pages in sequence', '1234']];
-const ORDER_LIST = { repeat: 'A full sheet of each person', sequence: 'Different people side by side' }; // with a list
+const ORDER_LIST = { repeat: 'A full sheet of each recipient', sequence: 'Different recipients side by side' }; // with a list
 const orderPic = (nums) => `<svg viewBox="0 0 44 56" aria-hidden="true"><rect class="sheet" x="1" y="1" width="42" height="54" rx="2"/>${
   [...nums].map((d, i) => { const x = 6 + (i % 2) * 17, y = 7 + Math.floor(i / 2) * 22;
     return `<rect class="card" x="${x}" y="${y}" width="15" height="19" rx="1.5"/><text x="${x + 7.5}" y="${y + 13.5}">${d}</text>`; }).join('')}</svg>`;
@@ -236,7 +236,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     if (!batch || batch.key !== key) build(key, pages);
     return batch.doc ? { doc: batch.doc, pages: batch.doc.pages.map((_, i) => i), problems: batch.problems } : { doc, pages, problems: [], building: true };
   }
-  const preparing = (done, total) => `Preparing ${done} of ${total} ${total === 1 ? 'person' : 'people'}…`;
+  const preparing = (done, total) => `Preparing ${done} of ${total} ${total === 1 ? 'recipient' : 'recipients'}…`;
   function build(key, pages) {
     const b = batch = { key, text: preparing(0, o.who === 'one' ? 1 : mail.count) };
     mail.build(o.who, pages, (done, total) => {
@@ -250,7 +250,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     }, (err) => {
       if (err === STALE || batch !== b) return;
       console.error('print people', err);
-      b.text = 'Could not prepare the people: ' + (err && err.message || err);
+      b.text = 'Could not prepare the recipients: ' + (err && err.message || err);
       if (back.isConnected) info.textContent = b.text;
     });
   }
@@ -290,9 +290,9 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       <div class="pr-copies">${field('copies', 'Copies', o, 1, '')}<button class="btn" id="pd-props" title="Opens Windows' printing preferences for this printer. Changes there become this printer's defaults.">Printer Properties</button></div>
       <h4>Settings</h4>
       ${mail ? bigSelect('data-k="who" aria-label="Who"', [
-        { v: 'all', icon: 'all', title: 'Everyone ticked', sub: `${mail.count} ${mail.count === 1 ? 'person' : 'people'} from the list` },
-        { v: 'one', icon: 'current', title: 'Only the person showing', sub: 'A full sheet of one person' },
-        { v: 'none', icon: 'custom', title: 'No one (the design with blanks)', sub: 'The fields show their names' }
+        { v: 'all', icon: 'all', title: 'Print All Records', sub: `${mail.count} ticked recipient${mail.count === 1 ? '' : 's'}` },
+        { v: 'one', icon: 'current', title: 'Print Current Record', sub: 'A full sheet of the recipient showing' },
+        { v: 'none', icon: 'custom', title: 'Print the Design', sub: 'No recipients: the fields show their names' }
       ], o.who) : ''}
       ${bigSelect('data-k="pages" aria-label="Pages to print"', [
         { v: 'all', icon: 'all', title: 'Print All Pages', sub: `The whole publication (${n} page${n === 1 ? '' : 's'})` },
@@ -370,7 +370,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     const w = [];
     const lay = currentLayout(), j = job();
     const [sw, sh] = [lay.sw, lay.sh];
-    if (mail && o.who !== 'none' && !mail.count) w.push('No one is ticked. Choose people in the Mailings menu.');
+    if (mail && o.who !== 'none' && !mail.count) w.push('No recipients are ticked. Use Edit Recipient List in the Mailings menu.');
     else if (o.mode !== 'actual') {
       if (!lay.sheets.length || !lay.sheets[0].length) w.push('The page does not fit on this paper. Choose a bigger sheet or landscape.');
       for (const p of (lay.sheets[0] || [])) {

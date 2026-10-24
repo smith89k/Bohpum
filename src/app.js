@@ -1285,7 +1285,7 @@ function imageProps(P, sel) {
   const b = btns(s); b.style.marginTop = '6px';
   b.append(btn('Replace…', () => replaceImage(o)), btn('Original ratio', () => resetRatio(o)));
   if (o.note && !o.src) s.append(Object.assign(document.createElement('div'), { className: 'warn', textContent: o.note }));
-  if (o.mergePhoto) s.append(Object.assign(document.createElement('div'), { className: 'muted', textContent: 'Photo from list: ' + o.mergePhoto }));
+  if (o.mergePhoto) s.append(Object.assign(document.createElement('div'), { className: 'muted', textContent: 'Picture field: ' + o.mergePhoto }));
 }
 
 function lineProps(P, sel) {
@@ -2121,8 +2121,8 @@ async function savePdf(p) {
     if (S.mail && S.mail.list && !(await loadMailList(true, true))) return;
     const mail = mailPeople();
     if (mail) {
-      if (!mail.count) return toast('No one is ticked. Choose people in the Mailings menu.', 6000);
-      const r = await mail.build('all', S.doc.pages.map((_, i) => i), (done, total) => toast(`Preparing ${done} of ${total} ${total === 1 ? 'person' : 'people'}…`));
+      if (!mail.count) return toast('No recipients are ticked. Use Edit Recipient List in the Mailings menu.', 6000);
+      const r = await mail.build('all', S.doc.pages.map((_, i) => i), (done, total) => toast(`Preparing ${done} of ${total} ${total === 1 ? 'recipient' : 'recipients'}…`));
       if (!(await mail.confirm(r.problems))) return;
       doc = r.doc;
       toast('Preparing the pages…'); // the next step takes a moment: let the text show first
