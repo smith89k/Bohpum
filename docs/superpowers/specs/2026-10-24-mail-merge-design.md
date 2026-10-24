@@ -1,6 +1,6 @@
 # Mail merge, as in Publisher — design
 
-Date: 2026-10-24 · Status: draft, waiting for the user's approval (builder check done)
+Date: 2026-10-24 · Status: approved by the user in chat ("yes"), after the builder check
 Asked by the user: "there is no mail merge function" → "like publisher" → cards / certificates, one per person, from an
 Excel list → "photo too" → for photos: "copy file as path in Windows, and paste in Excel. that's it." → after the
 builder check: cards with a front and a back → yes, a sheet of fronts then a sheet of matching backs; a name too long for
