@@ -21,8 +21,8 @@ run(async (t, check) => {
     };
   })()`);
   check('Windows title bar and menu row are gone', bar && bar.overlay && c.y - b.y <= 10, { b, c, overlay: bar && bar.overlay });
-  check('Title row has the logo, six menus and the publication name',
-    bar && bar.brandInTitle && !bar.brandInToolbar && bar.menus.join(' ') === 'File Edit Insert Arrange View Help' && bar.title === 'test-shapes', bar);
+  check('Title row has the logo, seven menus and the publication name',
+    bar && bar.brandInTitle && !bar.brandInToolbar && bar.menus.join(' ') === 'File Edit Insert Arrange Mailings View Help' && bar.title === 'test-shapes', bar);
   check('Title row is a drag area, its menu words are not', bar && bar.region === 'drag' && bar.menuRegion === 'no-drag', bar);
   check('Nothing sits under the window buttons', bar && bar.reserved > 100 && bar.padRight >= bar.reserved, bar);
 

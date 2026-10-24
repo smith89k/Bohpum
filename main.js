@@ -320,6 +320,8 @@ ipcMain.handle('resolve-names', async (_e, groups, choice) => {
   return out;
 });
 
+// What the Mailings menu may do now, sent by the page (src/app.js syncMailMenu) whenever it changes
+let mailMenu = { list: false, columns: [], field: false, photo: false, preview: false };
 function buildMenu() {
   // The menu is never drawn as a row (own title row, menus pop up from it), so the page's keydown
   // handler owns every shortcut; the menu only shows them.
@@ -369,6 +371,16 @@ function buildMenu() {
       { label: 'Group', accelerator: 'CmdOrCtrl+G', ...noReg, click: () => send('group') },
       { label: 'Ungroup', accelerator: 'CmdOrCtrl+Shift+G', ...noReg, click: () => send('ungroup') },
       { label: 'Lock / Unlock', click: () => send('lock') }
+    ]},
+    { label: 'Mailings', submenu: [
+      { label: 'Select List…', click: () => send('mail-select') },
+      { label: 'Choose People…', enabled: mailMenu.list, click: () => send('mail-people') },
+      { label: 'Insert Field', enabled: mailMenu.list && mailMenu.field && mailMenu.columns.length > 0, submenu: mailMenu.columns.map((c, i) => ({ label: c, enabled: mailMenu.field, click: () => send('mail-field-' + i) })) },
+      { label: 'Photo from List…', enabled: mailMenu.list && mailMenu.photo, click: () => send('mail-photo') },
+      { type: 'separator' },
+      { label: 'Preview', type: 'checkbox', checked: mailMenu.preview, enabled: mailMenu.list, click: () => send('mail-preview') },
+      { type: 'separator' },
+      { label: 'Remove List', enabled: mailMenu.list || mailMenu.error, click: () => send('mail-remove') }
     ]},
     { label: 'View', submenu: [
       { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', ...noReg, click: () => send('zoom-in') },
@@ -541,6 +553,13 @@ ipcMain.handle('set-settings', (_e, patch) => { const s = { ...loadSettings(), .
 
 
 ipcMain.on('set-dirty', (_e, v) => { dirty = !!v; });
+ipcMain.on('mail-menu', (e, m) => {
+  if (!win || e.sender !== win.webContents || !m) return;
+  mailMenu = { list: !!m.list, error: !!m.error, columns: (Array.isArray(m.columns) ? m.columns : []).map(String), field: !!m.field, photo: !!m.photo, preview: !!m.preview };
+  buildMenu();
+  const item = Menu.getApplicationMenu().getMenuItemById('theme-' + nativeTheme.themeSource);
+  if (item) item.checked = true; // the rebuilt menu forgot the radio
+});
 ipcMain.on('set-title', (_e, t) => { if (win) win.setTitle(t); });
 ipcMain.on('set-theme', (_e, t) => {
   if (!THEMES.includes(t)) return;

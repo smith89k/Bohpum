@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('api', {
   setTitle: (t) => ipcRenderer.send('set-title', t),
   closeNow: () => ipcRenderer.send('close-now'),
   setTheme: (t) => ipcRenderer.send('set-theme', t),
+  setMailMenu: (state) => ipcRenderer.send('mail-menu', state),
   showMenu: (index, x, y) => ipcRenderer.invoke('show-menu', index, x, y),
   pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return file.path || null; } },
   onMenu: (fn) => ipcRenderer.on('menu', (_e, cmd) => fn(cmd)),

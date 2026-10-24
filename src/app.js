@@ -5,6 +5,8 @@ import { RENDER_CSS } from './renderCss.js';
 import { docFromFodg, bpumText, withDefaults } from './docfile.js';
 import * as TE from './textedit.js';
 import { openPrintDialog, buildOutputHtml } from './print.js';
+import { parseList } from './merge.js';
+import { sheetBox, renderMailBar, mailMenuState } from './mailings.js';
 
 const api = window.api;
 const PXMM = 96 / 25.4;
@@ -14,7 +16,8 @@ const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 6, 8];
 const S = {
   doc: newDoc(210, 297), path: null, dirty: false, page: 0, master: false,
   sel: new Set(), tool: 'select', zoom: 1, editing: null, justCreated: null,
-  hist: [], hi: -1, showGuides: true, settings: {}, savedRange: null, clip: null, space: false
+  hist: [], hi: -1, mail: null, // mail: null | { list, at, preview, photos, error } (not saved; src/mailings.js)
+   showGuides: true, settings: {}, savedRange: null, clip: null, space: false
 };
 window.__bohpum = S; // handy for debugging
 
@@ -99,10 +102,12 @@ function commit() {
   setDirty(true); scheduleThumbs(); updateUndo();
 }
 function restore(i) {
+  const was = mergeKey(); // Select List undone / redone: the list follows
   S.hi = i; S.doc = JSON.parse(S.hist[i]);
   S.page = Math.min(S.page, S.doc.pages.length - 1);
   const ids = new Set(objs().map(o => o.id));
   S.sel = new Set([...S.sel].filter(id => ids.has(id)));
+  if (mergeKey() !== was) { S.mail = null; if (S.doc.merge) loadMailList(false); }
   setDirty(true); renderAll(); updateUndo();
 }
 function undo() { if (S.editing) return finishEditing(); if (S.hi > 0) restore(S.hi - 1); }
@@ -116,7 +121,7 @@ function updateTitle() {
 }
 
 // ---------------------------------------------------------------- rendering
-function renderAll() { renderStage(); renderThumbs(); renderProps(); updateTextbar(); updateStatus(); updateTools(); }
+function renderAll() { renderStage(); renderThumbs(); renderProps(); updateTextbar(); updateStatus(); updateTools(); renderMailBar($('mailbar'), S.doc, S.mail); syncMailMenu(); }
 
 function renderStage() {
   const holder = $('page-holder');
@@ -530,7 +535,7 @@ function onWorkspaceDown(e) {
   startMarquee(e, m);
 }
 
-function selectionChanged() { renderOverlay(); renderProps(); updateTextbar(); updateStatus(); drawRulers(); }
+function selectionChanged() { renderOverlay(); renderProps(); updateTextbar(); updateStatus(); drawRulers(); syncMailMenu(); }
 
 function startPan(e) {
   e.preventDefault();
@@ -803,7 +808,7 @@ function startEditing(id, caretAt) {
   sel.removeAllRanges(); sel.addRange(r);
   kt.addEventListener('paste', onEditPaste);
   kt.addEventListener('input', () => { fixLineHeights(el); });
-  renderOverlay(); updateTextbar(); renderProps(); updateStatus();
+  renderOverlay(); updateTextbar(); renderProps(); updateStatus(); syncMailMenu();
 }
 function finishEditing() {
   if (!S.editing) return;
@@ -825,7 +830,7 @@ function finishEditing() {
   window.getSelection().removeAllRanges();
   paintKeptSelection();
   commit();
-  renderStage(); renderProps(); updateTextbar(); updateStatus();
+  renderStage(); renderProps(); updateTextbar(); updateStatus(); syncMailMenu();
 }
 function editingRoot() {
   if (!S.editing || !pageEl) return null;
@@ -1653,10 +1658,51 @@ function movePage(d) {
 
 // ---------------------------------------------------------------- files
 function loadDoc(doc, path) {
-  S.doc = withDefaults(doc); S.path = path; S.page = 0; S.master = false; S.sel.clear(); S.editing = null;
+  S.doc = withDefaults(doc); S.path = path; S.page = 0; S.master = false; S.sel.clear(); S.editing = null; S.mail = null;
   resetHistory(); setDirty(false);
+  if (S.doc.merge) loadMailList(true);
   renderAll();
   requestAnimationFrame(zoomFit);
+}
+// ---------------------------------------------------------------- mail merge lists (src/merge.js, src/mailings.js)
+const mergeKey = () => S.doc.merge ? JSON.stringify([S.doc.merge.list, S.doc.merge.sheet]) : '';
+let lastMailMenu = '';
+function syncMailMenu() {
+  const m = JSON.stringify(mailMenuState(S.mail, selObjs(), !!S.editing));
+  if (m !== lastMailMenu) { lastMailMenu = m; api.setMailMenu(JSON.parse(m)); }
+}
+// Reads the file the publication points at. A problem is kept in S.mail.error (the bar says it); when asked, a box too.
+async function loadMailList(askIfMissing = true) {
+  const doc = S.doc, m = doc.merge;
+  if (!m) return;
+  let error = null, list = null;
+  const r = await api.readList(m.list);
+  if (r.error) error = r.error;
+  else try { list = parseList(r, { sheet: m.sheet }); } catch (e) { error = e.message; }
+  if (S.doc !== doc || doc.merge !== m) return; // another publication / list while the file was read
+  S.mail = { list, at: 0, preview: false, photos: new Map(), error };
+  renderMailBar($('mailbar'), S.doc, S.mail); syncMailMenu();
+  if (error && askIfMissing && (await choiceBox(error, 'The design still opens and shows its «blanks».', ['Find the list…', 'Later'])) === 0) await selectList(true);
+}
+// Pick a list file (and a sheet) for the publication; keepOff: the same people stay unticked (Find the list…)
+async function selectList(keepOff = false) {
+  finishEditing();
+  const p = await api.pickList();
+  if (!p) return;
+  const r = await api.readList(p);
+  let list;
+  try {
+    if (r.error) throw new Error(r.error);
+    list = parseList(r);
+    if (list.sheets.length > 1) {
+      const sheet = await sheetBox(modal, list.sheets);
+      if (sheet == null) return;
+      if (sheet !== list.sheet) list = parseList(r, { sheet });
+    }
+  } catch (e) { return void choiceBox(e.message, 'Choose another list.', ['OK']); }
+  S.doc.merge = { list: p, sheet: list.sheet, off: keepOff && S.doc.merge ? S.doc.merge.off : [] };
+  S.mail = { list, at: 0, preview: false, photos: new Map(), error: null };
+  commit(); renderAll();
 }
 async function confirmDiscard() {
   if (!S.dirty) return true;
@@ -2097,6 +2143,7 @@ function cmd(c) {
     case 'export-png': return exportPng();
     case 'print': return printDialog();
     case 'page-setup': return pageSetup();
+    case 'mail-select': return selectList();
     case 'undo': return undo();
     case 'redo': return redo();
     case 'cut': return copySel(true);
@@ -2196,7 +2243,7 @@ const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValu
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => drawRulers());
 
 // ---------------------------------------------------------------- title row menus
-const MENU_KEYS = { f: 0, e: 1, i: 2, a: 3, v: 4, h: 5 }; // Alt+F File, Alt+E Edit … (main.js menu order)
+const MENU_KEYS = { f: 0, e: 1, i: 2, a: 3, m: 4, v: 5, h: 6 }; // Alt+F File, Alt+E Edit … (main.js menu order)
 const FILE_KEYS = { n: 'new', o: 'open', p: 'print' };    // Ctrl+letter; Ctrl+S / Ctrl+Shift+S below
 function openMenu(i) {
   const b = document.querySelector(`#menus [data-menu="${i}"]`);

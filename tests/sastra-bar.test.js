@@ -45,7 +45,7 @@ run(async (t, check) => {
   await t.sleep(400);
   const m2 = await geo();
   check('F restores the panels', m2.pages && m2.props && m2.status && m2.label === 'Maximize' && !m2.on, m2);
-  const view = Menu.getApplicationMenu().items[4].submenu.items.map(i => i.label);
+  const view = Menu.getApplicationMenu().items.find(i => i.label === 'View').submenu.items.map(i => i.label);
   check('View menu has Maximize Page Area and Theme', view.includes('Maximize Page Area') && view.includes('Theme'), view);
 
   // ---- Theme
