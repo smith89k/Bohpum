@@ -1,6 +1,6 @@
 // Preview: the page, the thumbnails and the bar show one person at a time (photos too) without touching the design;
 // editing shows the design; a value too long for its box shrinks (to 60 % at most); Remove List keeps what was shown.
-const { dialog, Menu, nativeImage } = require('electron');
+const { dialog, Menu, nativeImage, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { run } = require('./harness');
@@ -116,6 +116,35 @@ run(async (t, check) => {
   await t.waitFor('!!(window.__bohpumApp.state.mail && window.__bohpumApp.state.mail.list)');
   const back = await app(`(() => { const [b, i] = S.doc.pages[0].objects; return { field: b.html.includes('data-field="merge"'), photo: i.mergePhoto, src: i.src, merge: !!S.doc.merge, bar: document.getElementById('mailbar').hidden }; })()`);
   check('one Ctrl+Z brings the list, the field and the photo field back', back.field && back.photo === 'Photo' && back.src === '' && back.merge && !back.bar, back);
+
+  // Fit height measures the design, not the person (whose text is shrunk in a box too small for it)
+  const tiny = await app(`(() => { const o = { ...S.doc.pages[0].objects[0], id: 'tiny', x: 110, y: 10, w: 90, h: 5 }; S.doc.pages[0].objects.push(o); A.cmd('toggle-master'); A.cmd('toggle-master'); return o.id; })()`);
+  const fitH = async () => {
+    await app(`(S.sel = new Set([${J(tiny)}]), A.selectionChanged(), 1)`);
+    await t.js(`[...document.querySelectorAll('#props .btn')].find(b => b.textContent === 'Fit height to text').click()`);
+    await t.sleep(200);
+    const h = await app(`S.doc.pages[0].objects.find(o => o.id === ${J(tiny)}).h`);
+    await app(`(S.doc.pages[0].objects.find(o => o.id === ${J(tiny)}).h = 5, A.cmd('toggle-master'), A.cmd('toggle-master'), 1)`);
+    return h;
+  };
+  const hOff = await fitH();
+
+  // photos main can't give: asked for once, never again (a failed call, then an answer without the cell)
+  let calls = 0, mode = 'throw';
+  ipcMain.removeHandler('mail-photos');
+  ipcMain.handle('mail-photos', async () => { calls++; if (mode === 'throw') throw new Error('no photos today'); return {}; });
+  await app('(A.cmd("mail-preview"), 1)');
+  await t.sleep(1200);
+  const frame = () => t.js(`!!document.querySelector('#page-holder .kobj[data-id=${J(ids.img)}] img')`);
+  const failed = { calls, img: await frame() };
+  check('a failed photo call is made once, the frame stays empty', failed.calls === 1 && !failed.img, failed);
+  const hOn = { h: await fitH(), shown: await t.js(`document.querySelector('#page-holder .kobj[data-id="tiny"] .kt').style.fontSize`) };
+  check('Fit height with Preview on measures the design', hOn.h === hOff && hOff > 5 && hOn.shown !== '12pt', { hOff, hOn });
+  mode = 'empty';
+  await t.click('#mailbar .mb-next');
+  await t.sleep(1200);
+  const unanswered = { calls, img: await frame() };
+  check('a cell main does not answer is asked for once', unanswered.calls === 2 && !unanswered.img, unanswered);
 }, {
   setup: () => {
     dialog.showOpenDialog = async () => { const p = picks.shift(); return p ? { canceled: false, filePaths: [p] } : { canceled: true, filePaths: [] }; };

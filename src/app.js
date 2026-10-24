@@ -16,7 +16,7 @@ const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 6, 8];
 const S = {
   doc: newDoc(210, 297), path: null, dirty: false, page: 0, master: false,
   sel: new Set(), tool: 'select', zoom: 1, editing: null, justCreated: null,
-  hist: [], hi: -1, mail: null, // mail: null | { list, at, preview, photos, error } (not saved; src/mailings.js)
+  hist: [], hi: -1, mail: null, // mail: null | { list, at, preview, photos, asking, error } (not saved; src/mailings.js)
    showGuides: true, settings: {}, savedRange: null, clip: null, space: false
 };
 window.__bohpum = S; // handy for debugging
@@ -1546,11 +1546,11 @@ function distribute(axis) {
 function fitHeight() {
   const sel = selObjs().filter(o => o.type === 'box');
   for (const o of sel) {
-    const el = pageEl.querySelector(`.kcontent > .kobj[data-id="${o.id}"] .kt`);
-    if (!el) continue;
-    const k = pxPerMm();
+    // the design's text, not a person's (Preview): measured on the stage (zoomed) or off-screen at 100 %
+    const h = withDesignKt(o, (el) => el.getBoundingClientRect().height / (pageEl.contains(el) ? pxPerMm() : PXMM));
+    if (h == null) continue;
     const pad = o.pad || { t: 0, b: 0 };
-    o._h = round2(el.getBoundingClientRect().height / k + pad.t + pad.b + 0.5);
+    o._h = round2(h + pad.t + pad.b + 0.5);
   }
   setProp(o => { if (o._h) o.h = o._h; delete o._h; });
 }
@@ -1696,7 +1696,12 @@ function syncMailMenu() {
   const m = JSON.stringify(mailMenuState(S.mail, selObjs(), !!S.editing));
   if (m !== lastMailMenu) { lastMailMenu = m; api.setMailMenu(JSON.parse(m)); }
 }
-function renderBar() { renderMailBar($('mailbar'), S.doc, S.mail, cmd); }
+function renderBar() { clampAt(); renderMailBar($('mailbar'), S.doc, S.mail, cmd); }
+// the person showing stays within the ticked people when the list or the ticks change (renderAll draws the bar)
+function clampAt() {
+  const m = S.mail;
+  if (m && m.list && S.doc.merge) m.at = Math.max(0, Math.min(m.at, ticked(m.list, S.doc.merge.off).length - 1));
+}
 
 // Preview: the row of the person showing (ticked people only), or null
 function shownRow() {
@@ -1717,20 +1722,22 @@ function viewDoc() {
 }
 // one object as the page shows it (while dragging and resizing)
 function shownObj(o) { const row = shownRow(); return row ? fillPage(S.doc, { objects: [o], hideMaster: true }, fillCtx(row)).page.objects[0] : o; }
-// the person's photos, read once (S.mail.photos); the page is drawn again when they come
-const asking = new Set();
+// the person's photos, read once (S.mail.photos); the page is drawn again when they come. A cell main didn't answer
+// (or a failed call) is kept as unreadable, so it is never asked for again
 function askPhotos(row) {
   const m = S.mail, cols = [...fieldsIn(S.doc).photo].map(c => m.list.columns.indexOf(c)).filter(i => i >= 0);
-  const cells = [...new Set(cols.map(i => String(row[i] ?? '')))].filter(c => !m.photos.has(c) && !asking.has(c));
+  const cells = [...new Set(cols.map(i => String(row[i] ?? '')))].filter(c => !m.photos.has(c) && !m.asking.has(c));
   if (!cells.length) return;
-  cells.forEach(c => asking.add(c));
-  api.mailPhotos(cells, S.doc.merge.list).then((res) => { for (const c of cells) if (res && res[c]) m.photos.set(c, res[c]); }, () => {}).finally(() => {
-    cells.forEach(c => asking.delete(c));
+  cells.forEach(c => m.asking.add(c));
+  api.mailPhotos(cells, S.doc.merge.list).catch((e) => { console.error('mail-photos', e); return {}; }).then((res) => {
+    for (const c of cells) m.photos.set(c, res && res[c] || (c.trim() ? { unreadable: c } : { empty: true }));
+    cells.forEach(c => m.asking.delete(c));
     if (S.mail === m && shownRow()) { if (!S.editing) renderStage(); renderThumbs(); } // a box being edited stays as it is
   });
 }
 function stepPerson(d) {
   if (!S.mail || !S.mail.list || !S.doc.merge) return;
+  clampAt();
   const n = ticked(S.mail.list, S.doc.merge.off).length, at = Math.max(0, Math.min(n - 1, S.mail.at + d));
   if (at === S.mail.at) return;
   finishEditing();
@@ -1780,7 +1787,7 @@ async function loadMailList(askIfMissing = true) {
     if (m.sheet && list.sheet !== m.sheet) { list = null; error = `The sheet «${m.sheet}» is no longer in this list.`; }
   } catch (e) { error = e.message; }
   if (mergeKey() !== key) return; // another list was chosen (or none) while the file was read
-  S.mail = { list, at: 0, preview: false, photos: new Map(), error };
+  S.mail = { list, at: 0, preview: false, photos: new Map(), asking: new Set(), error };
   renderBar(); syncMailMenu(); renderStage();
   if (error && askIfMissing && (await choiceBox(error, 'The design still opens and shows its «blanks».', ['Find the list…', 'Later'])) === 0) await selectList(true);
 }
@@ -1801,7 +1808,7 @@ async function selectList(keepOff = false) {
     }
   } catch (e) { return void choiceBox(e.message, 'Choose another list.', ['OK']); }
   S.doc.merge = { list: p, sheet: list.sheet, off: keepOff && S.doc.merge ? S.doc.merge.off : [] };
-  S.mail = { list, at: 0, preview: false, photos: new Map(), error: null };
+  S.mail = { list, at: 0, preview: false, photos: new Map(), asking: new Set(), error: null };
   commit(); renderAll();
 }
 // Photo from List: which column fills the selected picture
