@@ -162,7 +162,9 @@ const ICON = {
   actual: '<path d="M5 3h14v18H5z"/><path d="M7 5h10v14H7z" fill="currentColor" stroke="none"/>',
   paper: '<path d="M6 3h12v18H6z"/>',
   portrait: '<path d="M7 3h10v18H7z"/><path d="M10 7h4"/>',
-  landscape: '<path d="M3 7h18v10H3z"/><path d="M7 10h4"/>'
+  landscape: '<path d="M3 7h18v10H3z"/><path d="M7 10h4"/>',
+  undo: '<path d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',   // as the editor's toolbar
+  redo: '<path d="M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>'
 };
 const svg = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`;
 // Big Publisher-style dropdown (a real <select>): items [{ v, icon, title, sub }]; the closed box shows the
@@ -271,6 +273,27 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       top: k[0] === 't' ? m : k[0] === 'b' ? sh - doc.pageH - m : (sh - doc.pageH) / 2
     };
   }
+  // Undo / Redo of the page's position (dragged, the pad, typed in Top / Left): Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z and the
+  // buttons by the pad. Its own steps, not the publication's. A new paper or orientation starts afresh (the old spots
+  // were on other paper).
+  let posHist = [], posAt = -1;
+  const posNow = () => ({ left: o.left, top: o.top });
+  function posRecord() {
+    const p = posNow(), last = posHist[posAt];
+    if (last && Math.abs(last.left - p.left) < 1e-6 && Math.abs(last.top - p.top) < 1e-6) return;
+    posHist = posHist.slice(0, posAt + 1); posHist.push(p); posAt = posHist.length - 1;
+    showPosUndo();
+  }
+  function posGo(d) {
+    if (o.mode !== 'single' || !posHist[posAt + d]) return;
+    posAt += d; Object.assign(o, posHist[posAt]); update();
+  }
+  function showPosUndo() {
+    const u = side.querySelector('#pd-undo'), r = side.querySelector('#pd-redo');
+    if (u) u.disabled = posAt <= 0;
+    if (r) r.disabled = posAt >= posHist.length - 1;
+  }
+
   // Light the pad cell that matches the current position (none when the card is somewhere else)
   function markPad() {
     side.querySelectorAll('#pd-pos [data-pos]').forEach(b => {
@@ -280,7 +303,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   }
 
   function renderSide() {
-    if (o.mode === 'single') ensurePos();
+    if (o.mode === 'single') { ensurePos(); if (!posHist.length) { posHist = [posNow()]; posAt = 0; } }
     const [sw, sh] = sheetSize(o.sheet, o.orient);
     const g = gridInfo(doc, o, sw, sh);
     const n = doc.pages.length, actual = o.mode === 'actual';
@@ -306,7 +329,8 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
         { v: 'actual', icon: 'actual', title: 'Page size = paper size', sub: `Print on ${round(doc.pageW)} × ${round(doc.pageH)} mm paper` }
       ], o.mode)}
       ${o.mode === 'single' ? `<div class="pr-box pr-pos">${field('top', 'Top')}${field('left', 'Left')}
-        <div class="pos-pad" id="pd-pos" role="group" aria-label="Snap to">${PAD.map(([k, t]) => `<button data-pos="${k}" title="${t}" aria-label="${t}"></button>`).join('')}</div></div>` : ''}
+        <div class="pos-pad" id="pd-pos" role="group" aria-label="Snap to">${PAD.map(([k, t]) => `<button data-pos="${k}" title="${t}" aria-label="${t}"></button>`).join('')}</div>
+        <div class="pos-undo"><button class="btn" id="pd-undo" title="Undo move (Ctrl+Z)">${svg('undo')}Undo</button><button class="btn" id="pd-redo" title="Redo move (Ctrl+Y)">${svg('redo')}Redo</button></div></div>` : ''}
       ${o.mode === 'grid' ? `<div class="pr-box">
         <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
         ${mail && o.who === 'one' ? '' : `<div class="pr-order" role="radiogroup" aria-label="Page order">${ORDER.map(([v, label, nums]) => `<label class="tile${o.order === v ? ' on' : ''}">
@@ -335,13 +359,16 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
         if (inp.type === 'checkbox') target[k] = inp.checked;
         else if (inp.type === 'number') { const v = parseFloat(inp.value); target[k] = isNaN(v) ? 0 : v; }
         else target[k] = inp.value;
-        if (k === 'sheet' || k === 'orient') { o.left = null; o.top = null; }
+        if (k === 'sheet' || k === 'orient') { o.left = null; o.top = null; posHist = []; posAt = -1; }
         if (k === 'mode') sheetNo = 0;
         if (inp.tagName === 'SELECT' || inp.type === 'checkbox' || inp.type === 'radio') update(); else { renderPreview(); renderWarn(); markPad(); }
         if (inp.type === 'radio') side.querySelector(`input[name="${inp.name}"]:checked`).focus(); // arrows keep moving between the tiles
       });
+      if (inp.dataset.k === 'left' || inp.dataset.k === 'top') inp.addEventListener('change', posRecord);   // one step per typed value
     });
-    side.querySelectorAll('#pd-pos [data-pos]').forEach(b => b.onclick = () => { Object.assign(o, padPos(b.dataset.pos)); update(); });
+    side.querySelectorAll('#pd-pos [data-pos]').forEach(b => b.onclick = () => { Object.assign(o, padPos(b.dataset.pos)); posRecord(); update(); });
+    const undoBtn = side.querySelector('#pd-undo');
+    if (undoBtn) { undoBtn.onclick = () => posGo(-1); side.querySelector('#pd-redo').onclick = () => posGo(1); showPosUndo(); }
     side.querySelector('#pd-printer').addEventListener('change', (e) => { printer = e.target.value; saveSettings({ printer }); });
     side.querySelector('#pd-props').onclick = () => { if (printer) api.printerPrefs(printer); };
     fillPrinters();
@@ -503,6 +530,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     const r = sheet.getBoundingClientRect();
     const k = r.width / sw;
     const sx = e.clientX, sy = e.clientY, ol = o.left, ot = o.top;
+    sheet.querySelector('.slot').classList.add('moving');   // its light box (app.css), also if the mouse runs ahead
     const move = (ev) => {
       let nl = ol + (ev.clientX - sx) / k, nt = ot + (ev.clientY - sy) / k;
       if (!ev.altKey) { nl = Math.round(nl * 2) / 2; nt = Math.round(nt * 2) / 2; }
@@ -518,7 +546,10 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       const L = side.querySelector('[data-k="left"]'), T = side.querySelector('[data-k="top"]');
       if (L) L.value = round(nl); if (T) T.value = round(nt);
     };
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); renderWarn(); markPad(); };
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      sheet.querySelector('.slot').classList.remove('moving'); renderWarn(); markPad(); posRecord();
+    };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   }
 
@@ -547,6 +578,10 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     const z = (e.ctrlKey || e.metaKey) && !e.altKey && { '0': 'fit', '=': 'in', '+': 'in', '-': 'out' }[e.key];
     if (z) { e.preventDefault(); e.stopPropagation(); setZoom(z === 'fit' ? 'fit' : scaleNow() * (z === 'in' ? 1.25 : 0.8)); return; }
     const typing = e.target.matches && e.target.matches('input[type=number], input[type=text], input:not([type]), textarea, select');
+    const lk = e.key.toLowerCase();   // (while typing in a box, Ctrl+Z is the box's own)
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !typing && (lk === 'z' || lk === 'y')) {
+      e.preventDefault(); e.stopPropagation(); posGo(lk === 'y' || e.shiftKey ? 1 : -1); return;
+    }
     if (e.key === ' ' && overPrev && !typing) { e.preventDefault(); e.stopPropagation(); setSpace(true); }
   };
   const onKeyUp = (e) => { if (e.key === ' ') setSpace(false); };

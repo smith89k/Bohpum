@@ -144,9 +144,7 @@ function renderStage() {
   pg.querySelectorAll('.kcontent > .kobj').forEach(el => {
     const o = getObj(el.dataset.id);
     if (!o) return void el.classList.add('from-master'); // Preview puts the filled master objects in the page's layer
-    if (o.locked) el.classList.add('locked');
-    if (typesIn(o)) el.classList.add('typein');
-    if (o.type === 'box' && o.shape === 'none' && (!o.fill || o.fill === 'none') && (!o.stroke || o.stroke === 'none')) el.classList.add('empty-frame');
+    markObjEl(el, o);
   });
   markMissingFields(pg);
   const guides = document.createElement('div'); guides.id = 'guides'; pg.append(guides);
@@ -163,6 +161,13 @@ function renderStage() {
 function markMissingFields(root) {
   const cols = S.mail && S.mail.list && S.mail.list.columns;
   root.querySelectorAll('.kt [data-field="merge"]').forEach(s => s.toggleAttribute('data-missing', !!cols && !cols.includes(s.dataset.col)));
+}
+// The editor's marks on a frame: locked; typein = a text box (the I-beam inside, a click types there); and empty-frame =
+// no line, fill or shape (a text box without a border: light dots under the mouse and while it is moved, app.css)
+function markObjEl(el, o) {
+  if (o.locked) el.classList.add('locked');
+  if (typesIn(o)) el.classList.add('typein');
+  if (o.type === 'box' && o.shape === 'none' && (!o.fill || o.fill === 'none') && (!o.stroke || o.stroke === 'none')) el.classList.add('empty-frame');
 }
 
 function updateObjEl(o) {
@@ -597,11 +602,12 @@ function startMove(e, m0) {
       // Ctrl+drag = copy
       const copies = cloneObjects(moving);
       objs().push(...copies);
-      copies.forEach(c => pageEl.querySelector('.kcontent').append(renderObject(shownObj(c))));
+      copies.forEach(c => { const el = renderObject(shownObj(c)); markObjEl(el, c); pageEl.querySelector('.kcontent').append(el); });
       S.sel = new Set(copies.map(c => c.id));
       moving = copies; orig = moving.map(o => ({ o, x: o.x, y: o.y })); copied = true;
     }
     if (!targets) targets = snapTargets(new Set(moving.map(o => o.id)));
+    if (!moved) moving.forEach(o => { const el = pageEl.querySelector(`.kcontent > .kobj[data-id="${o.id}"]`); if (el) el.classList.add('moving'); });
     moved = true;
     const m = mmFromEvent(ev);
     let dx = m.x - m0.x, dy = m.y - m0.y;
@@ -619,6 +625,7 @@ function startMove(e, m0) {
     renderOverlay(); showSnapLines(lines); drawRulers(); updateStatus();
   }, () => {
     showSnapLines([]);
+    pageEl.querySelectorAll('.kobj.moving').forEach(el => el.classList.remove('moving'));
     if (moved) { commit(); renderProps(); }
   });
 }

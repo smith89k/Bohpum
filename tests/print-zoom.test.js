@@ -11,11 +11,13 @@ run(async (t, check) => {
   await t.click('select[data-k="mode"]'); await t.click('select[data-k="mode"] option[value="grid"]');
   await t.sleep(300);
 
+  // outline: the light box a page gets under the mouse / while dragged (.moving), measured on screen
   const z = () => t.js(`(() => { const s = document.querySelector('.pv-scroll'), sh = s.querySelector('.sheet'), bar = document.querySelector('.pv-zoom'), slot = sh.querySelector('.slot');
     const zoom = parseFloat(sh.style.zoom), r = slot.getBoundingClientRect();
+    const had = slot.classList.contains('moving'); slot.classList.add('moving'); const outline = parseFloat(getComputedStyle(slot).outlineWidth) * zoom; if (!had) slot.classList.remove('moving');
     return { zoom, pct: bar.querySelector('.pct').textContent, fitOn: bar.querySelector('[data-z="fit"]').classList.contains('on'), slider: +bar.querySelector('input').value,
       scrollX: s.scrollWidth > s.clientWidth + 1, scrollY: s.scrollHeight > s.clientHeight + 1, left: s.scrollLeft, top: s.scrollTop,
-      outline: parseFloat(getComputedStyle(slot).outlineWidth) * zoom, slot: { x: r.left, y: r.top } }; })()`);
+      outline, slot: { x: r.left, y: r.top } }; })()`);
   const z0 = await z();
   check('The preview opens fitted to the sheet: zoom bar with Fit sheet on, no scroll bars',
     z0.fitOn && z0.pct === Math.round(z0.zoom * 100) + '%' && !z0.scrollX && !z0.scrollY, z0);

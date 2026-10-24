@@ -1,7 +1,8 @@
 // Makes every icon from the two source pictures (pnpm run icons; run it again after changing either picture):
 //   build/logo.png       → build/icon.ico (16–256) + icon.png (the app: exe, installer, windows, Explorer menu item),
 //                          explorer-menu/Assets/* (the Windows 11 menu package), build/appx/* (the Microsoft Store
-//                          package's logos), src/img/logo.png (title row, welcome)
+//                          package's logos, and its app icon without a plate: UNPLATED below), src/img/logo.png (title
+//                          row, welcome)
 //   build/bpum-file.png  → build/bpum.ico (.bpum files in Explorer), src/img/bpum-file.png (the convert window),
 //                          build/appx/BpumFile.png (the Store package's .bpum and .pub file types)
 // The pictures come cut out of a green background: their body is 94–99 % opaque and the edge has faint lime specks,
@@ -11,10 +12,15 @@ const fs = require('fs'), path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const ICO = [16, 20, 24, 32, 40, 48, 64, 128, 256];
+// The Store app's icon at the sizes "Open with", the taskbar and Start ask for. Without them Windows shrinks the 44 px
+// one and puts it on a plate (a box behind the icon). lightunplated: the same, for a light taskbar. electron-builder
+// sees the targetsize names and makes the package's resources.pri, so Windows finds them.
+const UNPLATED = Object.fromEntries([16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256].flatMap(s =>
+  ['unplated', 'lightunplated'].map(f => [`build/appx/Square44x44Logo.targetsize-${s}_altform-${f}.png`, s])));
 const JOBS = [
   { src: 'build/logo.png', ico: 'build/icon.ico', png: { 'build/icon.png': 256, 'explorer-menu/Assets/Square44x44Logo.png': 44,
     'explorer-menu/Assets/Square150x150Logo.png': 150, 'explorer-menu/Assets/StoreLogo.png': 50, 'src/img/logo.png': 128,
-    'build/appx/StoreLogo.png': 50, 'build/appx/Square44x44Logo.png': 44, 'build/appx/Square150x150Logo.png': 150 } },
+    'build/appx/StoreLogo.png': 50, 'build/appx/Square44x44Logo.png': 44, 'build/appx/Square150x150Logo.png': 150, ...UNPLATED } },
   { src: 'build/bpum-file.png', ico: 'build/bpum.ico', png: { 'src/img/bpum-file.png': 120, 'build/appx/BpumFile.png': 256 } }
 ];
 
