@@ -595,7 +595,8 @@ function withHiddenWindow(html, fn) {
     const w = new BrowserWindow({ show: false, width: 1200, height: 1600, webPreferences: { offscreen: false } });
     w.loadFile(tmp).then(async () => {
       try {
-        await w.webContents.executeJavaScript('document.fonts.ready.then(()=>new Promise(r=>setTimeout(r,150)))');
+        // the fonts, and every picture decoded (a PDF of many 1600 px photos must not catch one half drawn)
+        await w.webContents.executeJavaScript('document.fonts.ready.then(()=>Promise.all([...document.images].map(i=>i.decode().catch(()=>{})))).then(()=>new Promise(r=>setTimeout(r,150)))');
         const r = await fn(w);
         resolve(r);
       } catch (e) { reject(e); }

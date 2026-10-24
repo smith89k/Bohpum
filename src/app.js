@@ -5,8 +5,8 @@ import { RENDER_CSS } from './renderCss.js';
 import { docFromFodg, bpumText, withDefaults } from './docfile.js';
 import * as TE from './textedit.js';
 import { openPrintDialog, buildOutputHtml } from './print.js';
-import { parseList, fieldHtml, fieldsIn, ticked, fillPage } from './merge.js';
-import { sheetBox, photoBox, peopleBox, renderMailBar, mailMenuState } from './mailings.js';
+import { parseList, fieldHtml, fieldsIn, ticked, fillPage, mergedDoc } from './merge.js';
+import { sheetBox, photoBox, peopleBox, problemsBox, renderMailBar, mailMenuState } from './mailings.js';
 
 const api = window.api;
 const PXMM = 96 / 25.4;
@@ -1722,18 +1722,41 @@ function viewDoc() {
 }
 // one object as the page shows it (while dragging and resizing)
 function shownObj(o) { const row = shownRow(); return row ? fillPage(S.doc, { objects: [o], hideMaster: true }, fillCtx(row)).page.objects[0] : o; }
-// the person's photos, read once (S.mail.photos); the page is drawn again when they come. A cell main didn't answer
-// (or a failed call) is kept as unreadable, so it is never asked for again
+// the photo cells of one person
+const photoCells = (row) => [...new Set([...fieldsIn(S.doc).photo].map(c => S.mail.list.columns.indexOf(c)).filter(i => i >= 0).map(i => String(row[i] ?? '')))];
+// photos are read once into S.mail.photos; a cell already being read is waited for (S.mail.asking: cell → promise).
+// A cell main didn't answer (or a failed call) is kept as unreadable, so it is never asked for again
+function fetchPhotos(cells) {
+  const m = S.mail, todo = cells.filter(c => !m.photos.has(c) && !m.asking.has(c));
+  if (todo.length) {
+    const p = api.mailPhotos(todo, S.doc.merge.list).catch((e) => { console.error('mail-photos', e); return {}; }).then((res) => {
+      for (const c of todo) m.photos.set(c, res && res[c] || (c.trim() ? { unreadable: c } : { empty: true }));
+      todo.forEach(c => m.asking.delete(c));
+    });
+    todo.forEach(c => m.asking.set(c, p));
+  }
+  return Promise.all(cells.map(c => m.asking.get(c)));
+}
+// the person showing's photos; the page is drawn again when they come
 function askPhotos(row) {
-  const m = S.mail, cols = [...fieldsIn(S.doc).photo].map(c => m.list.columns.indexOf(c)).filter(i => i >= 0);
-  const cells = [...new Set(cols.map(i => String(row[i] ?? '')))].filter(c => !m.photos.has(c) && !m.asking.has(c));
+  const m = S.mail, cells = photoCells(row).filter(c => !m.photos.has(c) && !m.asking.has(c));
   if (!cells.length) return;
-  cells.forEach(c => m.asking.add(c));
-  api.mailPhotos(cells, S.doc.merge.list).catch((e) => { console.error('mail-photos', e); return {}; }).then((res) => {
-    for (const c of cells) m.photos.set(c, res && res[c] || (c.trim() ? { unreadable: c } : { empty: true }));
-    cells.forEach(c => m.asking.delete(c));
+  fetchPhotos(cells).then(() => {
     if (S.mail === m && shownRow()) { if (!S.editing) renderStage(); renderThumbs(); } // a box being edited stays as it is
   });
+}
+// The people who print: everyone ticked, or the person showing (Preview on or off), filled in by merge.js.
+// null without a list that could be read.
+function mailPeople() {
+  const m = S.mail;
+  if (!S.doc.merge || !m || !m.list) return null;
+  clampAt();
+  const people = ticked(m.list, S.doc.merge.off), ctx = { list: m.list, photos: m.photos, fetchPhotos };
+  return {
+    count: people.length,
+    build: (who, pageIdxs, onProgress) => mergedDoc(S.doc, who === 'one' ? people.slice(m.at, m.at + 1) : people, pageIdxs, ctx, onProgress),
+    confirm: (problems) => problemsBox(modal, problems)
+  };
 }
 function stepPerson(d) {
   if (!S.mail || !S.mail.list || !S.doc.merge) return;
@@ -1787,7 +1810,7 @@ async function loadMailList(askIfMissing = true) {
     if (m.sheet && list.sheet !== m.sheet) { list = null; error = `The sheet «${m.sheet}» is no longer in this list.`; }
   } catch (e) { error = e.message; }
   if (mergeKey() !== key) return; // another list was chosen (or none) while the file was read
-  S.mail = { list, at: 0, preview: false, photos: new Map(), asking: new Set(), error };
+  S.mail = { list, at: 0, preview: false, photos: new Map(), asking: new Map(), error };
   renderBar(); syncMailMenu(); renderStage();
   if (error && askIfMissing && (await choiceBox(error, 'The design still opens and shows its «blanks».', ['Find the list…', 'Later'])) === 0) await selectList(true);
 }
@@ -1808,7 +1831,7 @@ async function selectList(keepOff = false) {
     }
   } catch (e) { return void choiceBox(e.message, 'Choose another list.', ['OK']); }
   S.doc.merge = { list: p, sheet: list.sheet, off: keepOff && S.doc.merge ? S.doc.merge.off : [] };
-  S.mail = { list, at: 0, preview: false, photos: new Map(), asking: new Set(), error: null };
+  S.mail = { list, at: 0, preview: false, photos: new Map(), asking: new Map(), error: null };
   commit(); renderAll();
 }
 // Choose People: tick who gets a copy; the unticked are kept by their row's content
@@ -2045,19 +2068,31 @@ function pageSetup() {
   S.sel.clear(); renderProps(); renderOverlay();
   toast('Page size and margins are in the panel on the right.');
 }
-// Save As → PDF: every page at page size. The publication's own file, name and unsaved state don't change.
+// Save As → PDF: every page at page size (with a list: everyone ticked, after the problems box). The publication's own
+// file, name and unsaved state don't change.
 async function savePdf(p) {
-  const lay = { sw: S.doc.pageW, sh: S.doc.pageH, sheets: S.doc.pages.map((_, i) => [{ pi: i, x: 0, y: 0 }]) };
-  const html = buildOutputHtml(S.doc, lay);
+  let doc = S.doc;
+  const mail = mailPeople();
+  if (mail) {
+    if (!mail.count) return toast('No one is ticked. Choose people in the Mailings menu.', 6000);
+    const r = await mail.build('all', S.doc.pages.map((_, i) => i), (done, total) => toast(`Preparing ${done} of ${total} ${total === 1 ? 'person' : 'people'}…`));
+    if (!(await mail.confirm(r.problems))) return;
+    doc = r.doc;
+  }
+  const lay = { sw: doc.pageW, sh: doc.pageH, sheets: doc.pages.map((_, i) => [{ pi: i, x: 0, y: 0 }]) };
+  const html = buildOutputHtml(doc, lay, { sharePics: doc !== S.doc });
   try {
     await api.writePdf({ html, widthMm: lay.sw, heightMm: lay.sh, path: p });
     toast('Saved ' + p.split(/[\\/]/).pop());
   } catch (err) { toast('Could not save the PDF: ' + (err && err.message || err), 6000); }
 }
+// Export Page as PNG: the page as it shows (with Preview on, the person showing)
 async function exportPng() {
   finishEditing();
+  const row = shownRow();
+  if (row) await fetchPhotos(photoCells(row));
   const lay = { sw: S.doc.pageW, sh: S.doc.pageH, sheets: [[{ pi: S.master ? 0 : S.page, x: 0, y: 0 }]] };
-  const html = buildOutputHtml(S.doc, lay);
+  const html = buildOutputHtml(viewDoc(), lay);
   const p = await api.exportPng({ html, widthMm: lay.sw, heightMm: lay.sh, dpi: 300, defaultName: `${S.doc.name || 'page'}-${S.page + 1}.png` });
   if (p) toast('Exported ' + p);
 }
@@ -2066,7 +2101,7 @@ function printDialog() {
   openPrintDialog({
     doc: S.doc, pageIndex: S.page, api, settings: S.settings, toast,
     saveSettings: async (patch) => { S.settings = await api.setSettings(patch); },
-    onDocChange: () => { commit(); }
+    onDocChange: () => { commit(); }, mail: mailPeople()
   });
 }
 

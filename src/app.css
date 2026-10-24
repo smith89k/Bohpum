@@ -301,6 +301,9 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .people th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 600; }
 .people th, .people td { padding: 4px 10px; border-bottom: 1px solid var(--line); }
 .people tr[hidden] { display: none; }
+.modal.problems { width: min(640px, calc(100vw - 32px)); }
+.problems .pb-list { margin: 10px 0 0; padding: 0; list-style: none; max-height: calc(12 * 1.7em); overflow: auto; border: 1px solid var(--line); border-radius: 5px; font-size: 13px; line-height: 1.7em; }
+.problems .pb-list li { padding: 0 10px; border-bottom: 1px solid var(--line); }
 .modal-back { position: fixed; inset: 0; background: var(--backdrop); display: flex; align-items: center; justify-content: center; z-index: 50; }
 .modal { background: var(--surface); border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.3); max-width: calc(100vw - 40px); max-height: calc(100vh - 40px); display: flex; flex-direction: column; overflow: hidden; }
 .modal-h { padding: 18px 24px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }

@@ -55,6 +55,19 @@ export function peopleBox(modal, list, off) {
   return m.done.then(v => v ? items.filter(it => !it.box.checked).map(it => it.key) : null);
 }
 
+// Before printing or saving: the people with a missing photo, a column gone or text too long, one line each
+// ("Row 5 · សុខ ដារា · photo not found: C:\Photos\dara.jpg") → true (Print anyway) or false (Cancel). None → true.
+export function problemsBox(modal, problems) {
+  if (!problems.length) return Promise.resolve(true);
+  const body = document.createElement('div');
+  const text = document.createElement('div'); text.textContent = 'These people will not print quite as designed:';
+  const ul = document.createElement('ul'); ul.className = 'pb-list';
+  for (const p of problems) ul.appendChild(document.createElement('li')).textContent = [`Row ${p.row}`, p.name, p.text].filter(Boolean).join(' · ');
+  body.append(text, ul);
+  const m = modal('Before printing', body, [['Cancel', false], ['Print anyway', true, true]], 'problems');
+  return m.done.then(v => !!v);
+}
+
 // The slim bar above the page: ◀ Person 3 of 40 ▶, that person's first value, Preview, Choose people, the list's file;
 // or what is wrong with the list. Its buttons send commands (app.js cmd).
 export function renderMailBar(bar, doc, mail, cmd) {

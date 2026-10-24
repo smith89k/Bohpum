@@ -67,10 +67,29 @@ function cropMarks(sheetEl, x, y, w, h) {
   }
 }
 
+// sharePics: each picture (data URL) is written once, after the sheets, and a small script puts it in place: 300
+// cards with the same 1 MB picture stay a small file. The pages carry a tiny stand-in that names the picture.
+const PIC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7#bohpum-pic-';
+function sharedPics(doc) {
+  const pics = new Map(), seen = new Map();
+  const ref = (u) => { if (!pics.has(u)) pics.set(u, pics.size); return PIC + pics.get(u); };
+  const obj = (o) => {
+    if (!seen.has(o)) seen.set(o, o.type === 'image' && /^data:/.test(o.src || '') ? { ...o, src: ref(o.src) }
+      : o.type === 'box' && /^data:/.test(o.fillImage || '') ? { ...o, fillImage: ref(o.fillImage) } : o);
+    return seen.get(o);
+  };
+  const out = { ...doc, pages: doc.pages.map(p => ({ ...p, objects: p.objects.map(obj) })), master: doc.master && { ...doc.master, objects: doc.master.objects.map(obj) } };
+  return { doc: out, script: !pics.size ? '' : `<script>(() => { const P = ${JSON.stringify([...pics.keys()]).replace(/</g, '\\u003c')};
+for (const e of document.querySelectorAll('[src*="#bohpum-pic-"], [href*="#bohpum-pic-"]')) { const a = e.hasAttribute('src') ? 'src' : 'href', v = e.getAttribute(a); e.setAttribute(a, P[+v.slice(v.indexOf('#bohpum-pic-') + 12)]); }
+})()</script>` };
+}
+
 // Build a standalone HTML document for the hidden print window.
 // portraitPaper: a landscape sheet goes out as portrait paper with the content turned 90° (its top along
 // the paper's left edge, the way drivers print landscape), so no printer driver turns it a second time.
-export function buildOutputHtml(doc, lay, { crop = false, nudge = { x: 0, y: 0 }, portraitPaper = false } = {}) {
+export function buildOutputHtml(doc, lay, { crop = false, nudge = { x: 0, y: 0 }, portraitPaper = false, sharePics = false } = {}) {
+  let script = '';
+  if (sharePics) ({ doc, script } = sharedPics(doc));
   const turn = portraitPaper && lay.sw > lay.sh;
   const pw = turn ? lay.sh : lay.sw, ph = turn ? lay.sw : lay.sh;
   const host = document.createElement('div');
@@ -100,7 +119,7 @@ html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust
 .sheet-out { position: relative; width: ${pw}mm; height: ${ph}mm; overflow: hidden; break-after: page; page-break-after: always; }
 .sheet-out:last-child { break-after: auto; page-break-after: auto; }
 .sheet-turn { position: absolute; left: 0; top: 0; width: ${lay.sw}mm; height: ${lay.sh}mm; transform-origin: 0 0; transform: translateY(${lay.sw}mm) rotate(-90deg); }
-</style></head><body>${body}</body></html>`;
+</style></head><body>${body}${script}</body></html>`;
 }
 
 // ---------------- dialog ----------------
@@ -128,19 +147,22 @@ const bigOptions = (items, value) => '<button><selectedcontent></selectedcontent
 const bigSelect = (attrs, items, value) => `<select class="big" ${attrs}>${bigOptions(items, value)}</select>`;
 // Multiple copies per sheet: the page order as two tiles side by side, each with a sheet of numbered cards
 const ORDER = [['repeat', 'Fill each sheet with one page', '1111'], ['sequence', 'Different pages in sequence', '1234']];
+const ORDER_LIST = { repeat: 'A full sheet of each person', sequence: 'Different people side by side' }; // with a list
 const orderPic = (nums) => `<svg viewBox="0 0 44 56" aria-hidden="true"><rect class="sheet" x="1" y="1" width="42" height="54" rx="2"/>${
   [...nums].map((d, i) => { const x = 6 + (i % 2) * 17, y = 7 + Math.floor(i / 2) * 22;
     return `<rect class="card" x="${x}" y="${y}" width="15" height="19" rx="1.5"/><text x="${x + 7.5}" y="${y + 13.5}">${d}</text>`; }).join('')}</svg>`;
 // The 3×3 position pad: snap points 10 mm from the paper edges, or centred
 const PAD = [['tl', 'Top left'], ['tc', 'Top centre'], ['tr', 'Top right'], ['ml', 'Middle left'], ['mc', 'Centre'], ['mr', 'Middle right'], ['bl', 'Bottom left'], ['bc', 'Bottom centre'], ['br', 'Bottom right']];
 
-export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, toast, onDocChange }) {
+// mail: null, or a list's people: { count, build(who, pageIdxs, onProgress) → Promise<{ doc, problems }>,
+// confirm(problems) → Promise<boolean> (the problems box) }
+export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, toast, onDocChange, mail = null }) {
   const small = doc.pageW * 2 <= 210 || doc.pageH * 2 <= 297;
   const o = Object.assign({
     sheet: 'A4', orient: 'portrait', mode: small ? 'single' : 'actual',
     left: null, top: null,
-    marginT: 10, marginL: 10, marginR: 10, marginB: 10, gapX: 0, gapY: 0, center: true, order: 'repeat',
-    crop: false, pages: 'all', range: '', copies: 1
+    marginT: 10, marginL: 10, marginR: 10, marginB: 10, gapX: 0, gapY: 0, center: true, order: mail ? 'sequence' : 'repeat',
+    crop: false, pages: 'all', range: '', copies: 1, ...(mail ? { who: 'all' } : {})
   }, clone(doc.print || {}));
   const nudge = Object.assign({ x: 0, y: 0 }, settings.printNudge || {});
   let sheetNo = 0;
@@ -166,7 +188,37 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   </div>`;
   document.getElementById('modal-root').append(back);
   const side = back.querySelector('#pd-side'), prev = back.querySelector('#pd-prev'), info = back.querySelector('#pd-info');
-  const printBtn = back.querySelector('[data-a="print"]');
+  const printBtn = back.querySelector('[data-a="print"]'), pdfBtn = back.querySelector('[data-a="pdf"]');
+
+  // What prints: the design, or with a list the people filled in (built once per Who + pages, in the background;
+  // until then the preview shows the design and Print / Save as PDF wait)
+  const STALE = new Error('stale');
+  let batch = null;
+  function job() {
+    const pages = parsePages(o, doc.pages.length, pageIndex);
+    if (!mail || o.who === 'none') return { doc, pages, problems: [] };
+    const key = o.who + ' ' + pages.join();
+    if (!batch || batch.key !== key) build(key, pages);
+    return batch.doc ? { doc: batch.doc, pages: batch.doc.pages.map((_, i) => i), problems: batch.problems } : { doc, pages, problems: [], building: true };
+  }
+  const preparing = (done, total) => `Preparing ${done} of ${total} ${total === 1 ? 'person' : 'people'}…`;
+  function build(key, pages) {
+    const b = batch = { key, text: preparing(0, o.who === 'one' ? 1 : mail.count) };
+    mail.build(o.who, pages, (done, total) => {
+      if (batch !== b || !back.isConnected) throw STALE; // settings changed or the screen closed: stop building this one
+      b.text = preparing(done, total);
+      if (!sending) info.textContent = b.text;
+    }).then((r) => {
+      if (batch !== b || !back.isConnected) return;
+      b.doc = r.doc; b.problems = r.problems;
+      renderPreview(); renderWarn();
+    }, (err) => {
+      if (err === STALE || batch !== b) return;
+      console.error('print people', err);
+      b.text = 'Could not prepare the people: ' + (err && err.message || err);
+      if (back.isConnected) info.textContent = b.text;
+    });
+  }
 
   // A labelled number box (label above, unit inside)
   const field = (key, label, obj = o, step = 0.5, unit = 'mm') => `<label class="pf"><span>${label}</span><span class="numf"><input type="number" step="${step}" data-k="${key}" data-o="${obj === nudge ? 'n' : 'o'}" value="${round(obj[key])}">${unit ? `<em>${unit}</em>` : ''}</span></label>`;
@@ -202,6 +254,11 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       <select class="big" id="pd-printer" aria-label="Printer"></select>
       <div class="pr-copies">${field('copies', 'Copies', o, 1, '')}<button class="btn" id="pd-props" title="Opens Windows' printing preferences for this printer. Changes there become this printer's defaults.">Printer Properties</button></div>
       <h4>Settings</h4>
+      ${mail ? bigSelect('data-k="who" aria-label="Who"', [
+        { v: 'all', icon: 'all', title: 'Everyone ticked', sub: `${mail.count} ${mail.count === 1 ? 'person' : 'people'} from the list` },
+        { v: 'one', icon: 'current', title: 'Only the person showing', sub: 'A full sheet of one person' },
+        { v: 'none', icon: 'custom', title: 'No one (the design with blanks)', sub: 'The fields show their names' }
+      ], o.who) : ''}
       ${bigSelect('data-k="pages" aria-label="Pages to print"', [
         { v: 'all', icon: 'all', title: 'Print All Pages', sub: `The whole publication (${n} page${n === 1 ? '' : 's'})` },
         { v: 'current', icon: 'current', title: 'Print Current Page', sub: `Page ${pageIndex + 1}` },
@@ -217,8 +274,8 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
         <div class="pos-pad" id="pd-pos" role="group" aria-label="Snap to">${PAD.map(([k, t]) => `<button data-pos="${k}" title="${t}" aria-label="${t}"></button>`).join('')}</div></div>` : ''}
       ${o.mode === 'grid' ? `<div class="pr-box">
         <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
-        <div class="pr-order" role="radiogroup" aria-label="Page order">${ORDER.map(([v, label, nums]) => `<label class="tile${o.order === v ? ' on' : ''}">
-          <input type="radio" name="pd-order" data-k="order" value="${v}" ${o.order === v ? 'checked' : ''}>${orderPic(nums)}<span>${label}</span></label>`).join('')}</div>
+        ${mail && o.who === 'one' ? '' : `<div class="pr-order" role="radiogroup" aria-label="Page order">${ORDER.map(([v, label, nums]) => `<label class="tile${o.order === v ? ' on' : ''}">
+          <input type="radio" name="pd-order" data-k="order" value="${v}" ${o.order === v ? 'checked' : ''}>${orderPic(nums)}<span>${mail ? ORDER_LIST[v] : label}</span></label>`).join('')}</div>`}
         <div class="grid2">${field('marginT', 'Top')}${field('marginL', 'Left')}${field('marginB', 'Bottom')}${field('marginR', 'Right')}${field('gapX', 'Gap ↔')}${field('gapY', 'Gap ↕')}</div>
       </div>` : ''}
       ${bigSelect(`data-k="sheet" aria-label="Paper"${actual ? ' disabled' : ''}`,
@@ -263,14 +320,20 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       : printers.map(p => ({ v: p.name, icon: 'printer', title: p.displayName, sub: p.isDefault ? 'Default printer' : 'Printer' }));
     sel.innerHTML = bigOptions(items, none ? '' : printer);
     sel.disabled = none; props.disabled = none;
-    printBtn.disabled = sending || none || !printer;
+    syncButtons();
+  }
+  function syncButtons() {
+    const wait = !!job().building;
+    printBtn.disabled = sending || wait || !printers || !printers.length || !printer;
+    pdfBtn.disabled = sending || wait;
   }
 
   function renderWarn() {
     const w = [];
-    const lay = currentLayout();
+    const lay = currentLayout(), j = job();
     const [sw, sh] = [lay.sw, lay.sh];
-    if (o.mode !== 'actual') {
+    if (mail && o.who !== 'none' && !mail.count) w.push('No one is ticked. Choose people in the Mailings menu.');
+    else if (o.mode !== 'actual') {
       if (!lay.sheets.length || !lay.sheets[0].length) w.push('The page does not fit on this paper. Choose a bigger sheet or landscape.');
       for (const p of (lay.sheets[0] || [])) {
         if (p.x < -0.01 || p.y < -0.01 || p.x + doc.pageW > sw + 0.01 || p.y + doc.pageH > sh + 0.01) { w.push('Part of the page is outside the paper.'); break; }
@@ -279,12 +342,14 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     }
     side.querySelector('#pd-warn').innerHTML = w.map(t => `<div class="warn">${t}</div>`).join('');
     const n = lay.sheets.length;
-    if (!sending) info.textContent = `${n} sheet${n === 1 ? '' : 's'} · ${round(sw)} × ${round(sh)} mm · prints at 100% (actual size)`;
+    if (!sending) info.textContent = j.building ? batch.text : `${n} sheet${n === 1 ? '' : 's'} · ${round(sw)} × ${round(sh)} mm · prints at 100% (actual size)`;
+    syncButtons();
   }
 
+  // the person showing alone: a full sheet of them
   function currentLayout() {
-    const pages = parsePages(o, doc.pages.length, pageIndex);
-    return layout(doc, o, pages);
+    const j = job();
+    return layout(j.doc, mail && o.who === 'one' ? { ...o, order: 'repeat' } : o, j.pages);
   }
 
   // Zoom, like Publisher's print preview: 'fit' shows the whole sheet; a number is the size against real size
@@ -315,12 +380,12 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
       sheet.append(np);
     }
     sheetNo = Math.min(sheetNo, Math.max(0, lay.sheets.length - 1));
-    const placements = lay.sheets[sheetNo] || [];
+    const placements = lay.sheets[sheetNo] || [], shown = job().doc;
     for (const p of placements) {
       const slot = document.createElement('div');
       slot.className = 'slot' + (o.mode === 'single' ? ' drag' : '');
       Object.assign(slot.style, { left: p.x + 'mm', top: p.y + 'mm', width: doc.pageW + 'mm', height: doc.pageH + 'mm' });
-      const pg = renderPage(doc, doc.pages[p.pi]);
+      const pg = renderPage(shown, shown.pages[p.pi]);
       slot.append(pg);
       sheet.append(slot);
       if (o.crop && o.mode !== 'actual') cropMarks(sheet, p.x, p.y, doc.pageW, doc.pageH);
@@ -434,6 +499,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   prev.addEventListener('pointerleave', () => { overPrev = false; });
   const setSpace = (on) => { space = on; const s = scroller(); if (s) s.classList.toggle('grab', on); };
   const onKey = (e) => {
+    if (back !== back.parentNode.lastElementChild) return; // the problems box on top has the keys
     if (e.key === 'Escape' && !pickerOpen(e)) { e.stopPropagation(); if (!sending) keepAndClose(); return; }
     const z = (e.ctrlKey || e.metaKey) && !e.altKey && { '0': 'fit', '=': 'in', '+': 'in', '-': 'out' }[e.key];
     if (z) { e.preventDefault(); e.stopPropagation(); setZoom(z === 'fit' ? 'fit' : scaleNow() * (z === 'in' ? 1.25 : 0.8)); return; }
@@ -446,22 +512,28 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   window.addEventListener('resize', onResize);
 
   back.querySelector('[data-a="close"]').onclick = keepAndClose;
-  back.querySelector('[data-a="pdf"]').onclick = async () => {
-    const lay = currentLayout(); if (!lay.sheets.length) return toast('Nothing to print with these settings.');
+  // with a list: who has a missing photo, a column gone … → Print anyway or Cancel (the screen stays)
+  const checked = (j) => !j.problems.length || mail.confirm(j.problems);
+  pdfBtn.onclick = async () => {
+    const lay = currentLayout(), j = job(); if (j.building) return;
+    if (!lay.sheets.length) return toast('Nothing to print with these settings.');
+    if (!(await checked(j))) return;
     persist();
-    const html = buildOutputHtml(doc, lay, { crop: o.crop && o.mode !== 'actual', nudge: { x: 0, y: 0 } });
+    const html = buildOutputHtml(j.doc, lay, { crop: o.crop && o.mode !== 'actual', nudge: { x: 0, y: 0 }, sharePics: j.doc !== doc });
     close();
     const p = await api.exportPdf({ html, widthMm: lay.sw, heightMm: lay.sh, defaultName: (doc.name || 'publication') + (o.mode === 'actual' ? '' : '-' + o.sheet) + '.pdf' });
     if (p) toast('Saved ' + p);
   };
   // Print: straight to the chosen printer, no Windows dialog
   printBtn.onclick = async () => {
-    const lay = currentLayout(); if (!lay.sheets.length) return toast('Nothing to print with these settings.');
+    const lay = currentLayout(), j = job(); if (j.building) return;
+    if (!lay.sheets.length) return toast('Nothing to print with these settings.');
     if (!printer || sending) return;
+    if (!(await checked(j)) || sending) return;
     persist();
     saveSettings({ printer });
     const actual = o.mode === 'actual';
-    const html = buildOutputHtml(doc, lay, { crop: o.crop && !actual, nudge: actual ? { x: 0, y: 0 } : nudge, portraitPaper: !actual });
+    const html = buildOutputHtml(j.doc, lay, { crop: o.crop && !actual, nudge: actual ? { x: 0, y: 0 } : nudge, portraitPaper: !actual, sharePics: j.doc !== doc });
     const name = ((printers || []).find(p => p.name === printer) || {}).displayName || printer;
     sending = true;
     back.querySelectorAll('.modal-f .btn').forEach(b => b.disabled = true);

@@ -1,6 +1,5 @@
 // Bohpum – mail merge: a list (Excel or csv) becomes columns and rows of text, formatted the way Excel shows them.
 import { renderObject, fixLineHeights } from './render.js';
-import { clone } from './model.js';
 
 const BUILTIN = { 1: '0', 2: '0.00', 3: '#,##0', 4: '#,##0.00', 9: '0%', 10: '0.00%', 11: '0.00E+00', 15: 'd-mmm-yy', 16: 'd-mmm', 17: 'mmm-yy', 18: 'h:mm AM/PM',
   19: 'h:mm:ss AM/PM', 20: 'h:mm', 21: 'h:mm:ss', 37: '#,##0 ;(#,##0)', 38: '#,##0 ;(#,##0)', 39: '#,##0.00;(#,##0.00)', 40: '#,##0.00;(#,##0.00)',
@@ -190,15 +189,16 @@ function xlsxGrid(files, wanted, locale) {
 }
 
 export function parseList(r, { sheet } = {}) {
-  let sheets = [], name = '', table;
+  let sheets = [], name = '', table, nums;
   if (r.kind === 'xlsx') {
     const g = xlsxGrid(r.files, sheet, r.locale || navigator.language);
     sheets = g.sheets; name = g.sheet;
     // the names must sit in row 1; rows are only kept in their place by number
     table = !g.grid.length ? [] : g.grid[0][0] === 1 ? g.grid.map(x => x[1]) : [[], ...g.grid.map(x => x[1])];
-  } else table = csvRows(r.text || '');
+    nums = !g.grid.length ? [] : g.grid[0][0] === 1 ? g.grid.map(x => x[0]) : [1, ...g.grid.map(x => x[0])];
+  } else { table = csvRows(r.text || ''); nums = table.map((_, i) => i + 1); }
   const blank = (row) => row.every(c => !String(c ?? '').trim());
-  const body = table.slice(1).filter(row => !blank(row));
+  const keep = table.map((row, i) => i).filter(i => i > 0 && !blank(table[i])), body = keep.map(i => table[i]);
   if (!body.length) throw new Error('This list has no people in it');
   if (blank(table[0])) throw new Error('The first row should hold the column names.');
   let width = table[0].length; while (!String(table[0][width - 1] ?? '').trim()) width--;
@@ -207,7 +207,8 @@ export function parseList(r, { sheet } = {}) {
     seen[h] = (seen[h] || 0) + 1;
     return seen[h] > 1 ? `${h} (${seen[h]})` : h;
   });
-  return { sheets, sheet: name, columns, rows: body.map(row => Array.from({ length: width }, (_, i) => String(row[i] ?? ''))) };
+  // rowNos: each person's row number in Excel (the names are row 1), for the problems box
+  return { sheets, sheet: name, columns, rows: body.map(row => Array.from({ length: width }, (_, i) => String(row[i] ?? ''))), rowNos: keep.map(i => nums[i]) };
 }
 
 // ---- fields in text: «Name» is one piece (contenteditable=false) that carries its column name
@@ -237,7 +238,8 @@ export function ticked(list, off = []) {
 }
 
 // a new page for one person: the master's objects in front (the copy hides the master), fields → values, photos in
-// their frames (none → an empty frame), boxes with fields shrunk to fit. Problems in plain words.
+// their frames (none → an empty frame), boxes with fields shrunk to fit. Problems in plain words. Objects without
+// fields are the design's own (shared, never copied: 300 people share one embedded picture).
 const photoProblem = (r) => r && r.missing ? 'photo not found: ' + r.missing : r && r.unreadable ? "photo can't be read: " + r.unreadable : 'no photo';
 export function fillPage(doc, page, { columns, row, photos }) {
   const problems = new Set(), value = (col) => {
@@ -246,7 +248,7 @@ export function fillPage(doc, page, { columns, row, photos }) {
     return i < 0 ? null : String(row[i] ?? '');
   };
   const master = !page.hideMaster && doc.master ? doc.master.objects : [];
-  const objects = clone([...master, ...page.objects]).map(o => {
+  const objects = [...master, ...page.objects].map(o => {
     if (o.type === 'image' && o.mergePhoto) {
       const cell = value(o.mergePhoto), r = cell == null ? null : photos.get(cell);
       if (r && r.url) return { ...o, src: r.url, note: null };
@@ -298,4 +300,25 @@ export function fitText(o) {
     }
     return { o: x, fits: false };
   } finally { host.remove(); }
+}
+
+// Everyone (people: row indexes) on the chosen pages of the design: person 1's pages, person 2's … Photos are read
+// 20 people at a time, and the page gets a turn every 10 people so the window keeps responding. onProgress(done, total)
+// may throw to stop. problems: { row: Excel row number, name: first column, text }.
+export async function mergedDoc(doc, people, pageIdxs, { list, photos, fetchPhotos }, onProgress) {
+  const cols = [...fieldsIn(doc).photo].map(c => list.columns.indexOf(c)).filter(i => i >= 0);
+  const pages = [], problems = [];
+  await document.fonts.ready; // fitText measures with the real fonts
+  for (let k = 0; k < people.length; k++) {
+    if (k % 20 === 0) await fetchPhotos([...new Set(people.slice(k, k + 20).flatMap(r => cols.map(i => String(list.rows[r][i] ?? ''))))]);
+    if (k % 10 === 0) { if (onProgress) onProgress(k, people.length); await new Promise(r => setTimeout(r)); }
+    const row = list.rows[people[k]], seen = new Set();
+    for (const pi of pageIdxs) {
+      const r = fillPage(doc, doc.pages[pi], { columns: list.columns, row, photos });
+      pages.push(r.page);
+      for (const text of r.problems) if (!seen.has(text)) { seen.add(text); problems.push({ row: list.rowNos[people[k]], name: row[0], text }); }
+    }
+  }
+  if (onProgress) onProgress(people.length, people.length);
+  return { doc: { ...doc, pages }, problems };
 }
