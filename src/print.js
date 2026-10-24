@@ -56,6 +56,30 @@ export function layout(doc, o, pageIdxs) {
   return { sw, sh, sheets, grid: g };
 }
 
+// Front and back: units are the pairs of pages within each person (an odd last page has no back). A sheet of
+// fronts, then a sheet of the matching backs, each back mirrored across the edge the sheet turns on.
+export function layoutDuplex(doc, o, pageIdxs, perPerson) {
+  const [sw, sh] = sheetSize(o.sheet, o.orient);
+  const g = gridInfo(doc, o, sw, sh);
+  if (!g.slots.length) return { sw, sh, sheets: [], grid: g };
+  const longEdgeMirrorsX = (sw <= sh) === (o.flip !== 'short');
+  const mirror = (s) => longEdgeMirrorsX ? { x: sw - s.x - doc.pageW, y: s.y } : { x: s.x, y: sh - s.y - doc.pageH };
+  const units = [];
+  for (let b = 0; b < pageIdxs.length; b += perPerson)
+    for (let i = 0; i < perPerson; i += 2) units.push({ front: pageIdxs[b + i], back: i + 1 < perPerson ? pageIdxs[b + i + 1] : null });
+  const sheets = [];
+  const pair = (chunk, slotOf) => {
+    sheets.push(chunk.map((u, k) => ({ pi: u.front, ...slotOf(k) })));
+    if (chunk.some(u => u.back != null)) sheets.push(chunk.flatMap((u, k) => u.back == null ? [] : [{ pi: u.back, ...mirror(slotOf(k)) }]));
+  };
+  if (o.order === 'sequence') {
+    for (let i = 0; i < units.length; i += g.slots.length) pair(units.slice(i, i + g.slots.length), k => g.slots[k]);
+  } else {
+    for (const u of units) pair(g.slots.map(() => u), k => g.slots[k]);
+  }
+  return { sw, sh, sheets, grid: g };
+}
+
 function cropMarks(sheetEl, x, y, w, h) {
   const L = 4, off = 1.5, t = 0.15;
   const add = (l, tp, ww, hh) => { const d = document.createElement('div'); d.className = 'kcrop'; Object.assign(d.style, { left: l + 'mm', top: tp + 'mm', width: ww + 'mm', height: hh + 'mm' }); sheetEl.append(d); };
@@ -162,7 +186,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     sheet: 'A4', orient: 'portrait', mode: small ? 'single' : 'actual',
     left: null, top: null,
     marginT: 10, marginL: 10, marginR: 10, marginB: 10, gapX: 0, gapY: 0, center: true, order: mail ? 'sequence' : 'repeat',
-    crop: false, pages: 'all', range: '', copies: 1
+    crop: false, pages: 'all', range: '', copies: 1, ...(mail ? { flip: 'long' } : {})
   }, clone(doc.print || {}));
   if (mail) o.who = 'all'; // Who is for this time only: never saved with the publication
   const kept = () => { const { who, ...k } = o; return k; };
@@ -278,6 +302,9 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
         <label class="chk"><input type="checkbox" data-k="center" ${o.center ? 'checked' : ''}> Center the block on the sheet</label>
         ${mail && o.who === 'one' ? '' : `<div class="pr-order" role="radiogroup" aria-label="Page order">${ORDER.map(([v, label, nums]) => `<label class="tile${o.order === v ? ' on' : ''}">
           <input type="radio" name="pd-order" data-k="order" value="${v}" ${o.order === v ? 'checked' : ''}>${orderPic(nums)}<span>${mail ? ORDER_LIST[v] : label}</span></label>`).join('')}</div>`}
+        ${mail && perPerson() >= 2 ? `<label class="chk"><input type="checkbox" data-k="duplex" ${duplexOn() ? 'checked' : ''}> Front and back</label>
+        ${duplexOn() ? `<label class="pf pr-sub"><span>Flip on:</span><select class="field" data-k="flip"><option value="long"${o.flip === 'short' ? '' : ' selected'}>Long edge</option><option value="short"${o.flip === 'short' ? ' selected' : ''}>Short edge</option></select></label>
+        <div class="muted">Turn on two-sided printing in Printer Properties.</div>` : ''}` : ''}
         <div class="grid2">${field('marginT', 'Top')}${field('marginL', 'Left')}${field('marginB', 'Bottom')}${field('marginR', 'Right')}${field('gapX', 'Gap ↔')}${field('gapY', 'Gap ↕')}</div>
       </div>` : ''}
       ${bigSelect(`data-k="sheet" aria-label="Paper"${actual ? ' disabled' : ''}`,
@@ -351,8 +378,13 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   // the person showing alone: a full sheet of them
   function currentLayout() {
     const j = job();
-    return layout(j.doc, mail && o.who === 'one' ? { ...o, order: 'repeat' } : o, j.pages);
+    const lo = mail && o.who === 'one' ? { ...o, order: 'repeat' } : o;
+    return duplexOn() ? layoutDuplex(j.doc, lo, j.pages, perPerson()) : layout(j.doc, lo, j.pages);
   }
+  // Front and back: with a list, in grid mode, when each person has 2 or more pages. On by default for exactly 2
+  // (until the choice is saved with the publication).
+  const perPerson = () => parsePages(o, doc.pages.length, pageIndex).length;
+  const duplexOn = () => !!mail && o.mode === 'grid' && perPerson() >= 2 && (o.duplex ?? perPerson() === 2);
 
   // Zoom, like Publisher's print preview: 'fit' shows the whole sheet; a number is the size against real size
   // (1 = 100 %). It stays while settings change, so a new gap can be checked at the same spot.
