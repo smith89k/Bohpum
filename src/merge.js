@@ -3,7 +3,11 @@
 const BUILTIN = { 1: '0', 2: '0.00', 3: '#,##0', 4: '#,##0.00', 9: '0%', 10: '0.00%', 11: '0.00E+00', 15: 'd-mmm-yy', 16: 'd-mmm', 17: 'mmm-yy', 18: 'h:mm AM/PM',
   19: 'h:mm:ss AM/PM', 20: 'h:mm', 21: 'h:mm:ss', 37: '#,##0 ;(#,##0)', 38: '#,##0 ;(#,##0)', 39: '#,##0.00;(#,##0.00)', 40: '#,##0.00;(#,##0.00)',
   45: 'mm:ss', 48: '##0.0E+0' };
-const plain = (v) => String(+v.toPrecision(10));
+// Excel keeps 15 significant digits; a whole number below 1e15 never goes into exponent form
+const plain = (v) => String(+v.toPrecision(15));
+const r15 = (v) => +v.toPrecision(15);
+// round half up on the decimal digits, the way Excel does (2.675 -> 2.68)
+const roundTo = (v, n) => { v = r15(v); return String(v).includes('e') ? v : Number(Math.round(Number(v + 'e' + n)) + 'e-' + n); };
 const letters = (i) => { let s = ''; for (i++; i; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; };
 const UNSUPPORTED = new Error('format');
 const litText = (toks) => toks.map(c => typeof c === 'string' ? c : c.lit).join('');
@@ -65,10 +69,10 @@ function formatDate(v, toks, { date1904, locale }) {
 }
 
 function formatNumber(v, toks, sign) {
-  v = Math.abs(v) * 100 ** toks.filter(c => c === '%').length;
+  const raw = v; v = r15(Math.abs(v) * 100 ** toks.filter(c => c === '%').length);
   const isPh = (c) => typeof c === 'string' && '#0?,.'.includes(c);
   const start = toks.findIndex(isPh);
-  if (start < 0) return litText(toks);
+  if (start < 0) return litText(toks.map(c => c === '@' ? { lit: plain(Math.abs(raw)) } : c)); // @ shows the value as it is
   let end = start; while (isPh(toks[end])) end++;
   const [ip, dp = ''] = toks.slice(start, end).join('').split('.');
   let exp = null;
@@ -80,9 +84,9 @@ function formatNumber(v, toks, sign) {
   const minInt = (ip.match(/[0?]/g) || []).length, minDec = (dp.match(/0/g) || []).length;
   let s, tail = '';
   if (exp) {
-    const [m, e] = v.toExponential(dp.length).split('e'), n = +e;
+    const [m, e] = r15(v).toExponential(dp.length).split('e'), n = +e;
     s = m; tail = 'E' + (n < 0 ? '-' : exp.plus ? '+' : '') + String(Math.abs(n)).padStart(exp.n, '0');
-  } else s = v.toFixed(dp.length);
+  } else s = roundTo(v, dp.length).toFixed(dp.length);
   let [i, d = ''] = s.split('.');
   while (d.length > minDec && d.endsWith('0')) d = d.slice(0, -1);
   i = i.padStart(minInt, '0');
@@ -105,6 +109,11 @@ export function formatCell(v, code, { date1904 = false, locale = 'en' } = {}) {
     let sec = secs[0];
     if (secs.length >= 2 && v < 0) sec = secs[1];
     else if (secs.length >= 3 && v === 0) sec = secs[2];
+    const text = sec.filter(c => typeof c === 'string').join(''), g = text.search(/general/i);
+    if (g >= 0) { // General inside a section: the plain value with the section's literals
+      const at = sec.findIndex((c, i) => typeof c === 'string' && /^general$/i.test(sec.slice(i, i + 7).join('')));
+      return litText(sec.slice(0, at)) + plain(secs.length >= 2 && v < 0 ? -v : v) + litText(sec.slice(at + 7));
+    }
     if (/[dmyhs]/i.test(sec.filter(c => typeof c === 'string').join(''))) return formatDate(v, sec, opts);
     return formatNumber(v, sec, v < 0 && secs.length < 2);
   } catch (e) {

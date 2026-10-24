@@ -42,6 +42,15 @@ run(async (t, check) => {
   check('negative section', await fmt(-5, '0;(0)', en) === '(5)');
   check('plain 0 code', await fmt(7, '0', en) === '7');
   check('weird code falls back', await fmt(3, '[Red][<10]0;0', en) === '3');
+  check('rounds like Excel: 2.675', await fmt(2.675, '0.00', en) === '2.68');
+  check('rounds like Excel: 19.995', await fmt(19.995, '#,##0.00', en) === '20.00');
+  check('rounds like Excel: percent', await fmt(0.285, '0%', en) === '29%');
+  check('negative with thousands', await fmt(-1234, '#,##0', en) === '-1,234');
+  check('General keeps a phone number whole', await fmt(85512345678, 'General', en) === '85512345678');
+  check('General keeps 15 digits', await fmt(1 / 3, 'General', en) === '0.333333333333333');
+  check('@ on a number', await fmt(12.5, '@', en) === '12.5');
+  check('General with text', await fmt(12, 'General\" kg\"', en) === '12 kg');
+  check('General with a locale tag', await fmt(12, '[$-409]General', en) === '12');
   check('General long number', await fmt(0.1 + 0.2, 'General', en) === '0.3');
 
   // through a real file: a styled date and a number, and a text cell that looks like a number
