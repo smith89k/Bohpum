@@ -198,10 +198,12 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .kpage.editor.master-mode { background-image: linear-gradient(45deg, rgba(183,121,31,.05) 25%, transparent 25%, transparent 75%, rgba(183,121,31,.05) 75%); background-size: 6mm 6mm; }
 .kpage.editor .kobj { cursor: move; }
 .kpage.editor .kobj.locked { cursor: default; }
-.kpage.editor .kobj.typein { cursor: text; }
+/* Bohpum draws its own I-beam (dark, white outline): Windows' default one inverts, which comes out white on the white page */
+.kpage.editor { --ibeam: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='24' viewBox='0 0 16 24' fill='none' stroke-linecap='round'%3E%3Cpath d='M5 3.5h6M8 3.5v17M5 20.5h6' stroke='white' stroke-width='3.2'/%3E%3Cpath d='M5 3.5h6M8 3.5v17M5 20.5h6' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E") 8 12, text; }
+.kpage.editor .kobj.typein { cursor: var(--ibeam); }
 .kpage.editor .kobj.typein.edge { cursor: move; }
-.kpage.editor .kobj.editing { cursor: text; z-index: 5; }
-.kpage.editor .kobj.editing .kt { cursor: text; }
+.kpage.editor .kobj.editing { cursor: var(--ibeam); z-index: 5; }
+.kpage.editor .kobj.editing .kt { cursor: var(--ibeam); }
 .kpage.editor .kbox.empty-frame::before { content: ""; position: absolute; inset: 0; outline: 0.15mm dashed rgba(0,0,0,.25); pointer-events: none; }
 .tool-create #page-holder, .tool-create .kpage.editor .kobj { cursor: crosshair; }
 .kpage.editor .kt[contenteditable="true"] { outline: none; caret-color: var(--accent); }

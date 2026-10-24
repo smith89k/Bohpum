@@ -32,7 +32,9 @@ run(async (t, check) => {
   };
   const T = await rect(ids.text), mid = { x: (T.l + T.r) / 2, y: (T.t + T.b) / 2 };
 
-  check('over a text box: the I-beam', (await pointer(mid.x, mid.y)) === 'text');
+  // Bohpum's own I-beam (black, white outline): Windows' default one inverts, and comes out white on the white page
+  const ibeam = (c) => /^url\("data:image\/svg\+xml,.*"\) 8 12, text$/.test(c);
+  check('over a text box: the I-beam, Bohpum\'s own dark one', ibeam(await pointer(mid.x, mid.y)), await pointer(mid.x, mid.y));
   check('on its edge: the move arrow', (await pointer(T.l + 2, mid.y)) === 'move' && (await pointer(mid.x, T.b - 2)) === 'move');
   const R = await rect(ids.rect), L = await rect(ids.locked), G = await rect(ids.g1);
   check('a shape keeps the move arrow', (await pointer((R.l + R.r) / 2, (R.t + R.b) / 2)) === 'move');
@@ -58,6 +60,8 @@ run(async (t, check) => {
   await press((T1.l + T1.r) / 2, T1.b - 12);
   const end = await state();
   check('a click below the words starts typing at the end', end.editing === ids.text && end.focus && end.caret !== null, end);
+  const typing = await t.js(`getComputedStyle(document.querySelector('#workspace .kobj.editing .kt')).cursor`);
+  check('while typing: the same dark I-beam', ibeam(typing), typing);
   t.wc.insertText('!'); await t.sleep(150);
   await app('(A.finishEditing(), 1)'); await t.sleep(200);
   const typed2 = await app(`S.doc.pages[0].objects.find(o => o.id === ${J(ids.text)}).html.replace(/<[^>]+>/g, '')`);
