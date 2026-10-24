@@ -97,6 +97,7 @@ run(async (t, check) => {
   await t.sleep(300);
   check('problems before printing', J(lines) === J([`Row 3 · ${P2} · photo not found: ${f('gone.jpg')}`]) && cancelled.jobs === 0 && cancelled.open && !cancelled.box &&
     jobs.length === 1 && J(jobs[0].sheets) === J([[P1, P2, P3]]), { lines, cancelled, jobs: jobs.map(j => j.sheets) });
+  check('copies come out collated', jobs[0].opts.collate === true, jobs[0].opts);
 
   // Save as PDF from the print screen: the hidden window waits for every photo
   await openPrint();
@@ -191,8 +192,27 @@ run(async (t, check) => {
   await until(() => pdfs.length === n0 + 1, 120000).catch(() => {});
   const q = pdfs[n0], r10 = q ? { bytes: q.bytes, sheets: q.sheets.length, logos: q.imgs.filter(i => i.len === logo.length && i.ok).length, all: q.imgs.every(i => i.ok && i.decoded), logo: logo.length } : null;
   check('a picture used on every card is in the file once', r10 && r10.logo > 1e6 && r10.bytes < 5e6 && r10.sheets === 300 && r10.logos === 300 && r10.all, r10);
+
+  // R14: 300 different 800 px photos in the 25 × 30 mm frame come as 355 px (30 mm at 300 dpi), so the file stays small
+  for (let i = 0; i < 300; i++) {
+    const b = Buffer.alloc(800 * 600 * 4);
+    for (let p = 0, k = 0; p < 800 * 600; p++, k += 4) { const x = p % 800, y = (p / 800) | 0; b[k] = (x ^ y) + i; b[k + 1] = (x * 3 + y + i * 7) & 255; b[k + 2] = (y * 2 - x) & 255; b[k + 3] = 255; }
+    fs.writeFileSync(f(`face${i}.jpg`), nativeImage.createFromBitmap(b, { width: 800, height: 600 }).toJPEG(90));
+  }
+  makeXlsx(f('faces.xlsx'), { sheets: [{ name: 'S', rows: [['Name', 'Photo'], ...Array.from({ length: 300 }, (_, i) => ['Face ' + (i + 1), f(`face${i}.jpg`)])] }] });
+  picks = [f('faces.xlsx')];
+  await t.js('(window.__bohpumApp.cmd("mail-select"), 1)');
+  await t.waitFor('window.__bohpumApp.state.mail && window.__bohpumApp.state.mail.list && window.__bohpumApp.state.mail.list.rows[0][0] === "Face 1"');
+  saves = [f('faces.pdf')];
+  const n1 = pdfs.length;
+  await t.js('(window.__bohpumApp.cmd("save-as"), 1)');
+  await until(() => pdfs.length === n1 + 1, 180000).catch(() => {});
+  const fq = pdfs[n1], faces = fq && fq.imgs.filter(i => i.len !== logo.length);
+  const sides = faces ? [...new Set(faces.map(i => Math.max(i.w, i.h)))] : null;
+  const r14 = fq && { bytes: fq.bytes, sheets: fq.sheets.length, faces: faces.length, distinct: new Set(faces.map(i => i.len + ' ' + i.w)).size, sides, all: faces.every(i => i.ok && i.decoded) };
+  check('300 different photos: each 355 px on its long side, the file under 40 MB', r14 && r14.sheets === 300 && r14.faces === 300 && J(r14.sides) === '[355]' && r14.bytes < 40e6 && r14.all, r14);
 }, {
-  timeout: 300000,
+  timeout: 480000,
   setup: () => {
     dialog.showOpenDialog = async () => { const p = picks.shift(); return p ? { canceled: false, filePaths: [p] } : { canceled: true, filePaths: [] }; };
     dialog.showSaveDialog = async () => { const p = saves.shift(); return p ? { canceled: false, filePath: p } : { canceled: true }; };
@@ -207,7 +227,7 @@ run(async (t, check) => {
         HTMLImageElement.prototype.decode = function () { return d.call(this).then((v) => { done.add(this); return v; }); }; })()`).catch(() => {}));
       const look = () => wc.executeJavaScript(`(() => ({
         sheets: [...document.querySelectorAll('.sheet-out')].map(s => [...s.querySelectorAll('.kt')].map(k => k.textContent)),
-        imgs: [...document.images].map(i => ({ ok: i.complete && i.naturalWidth > 0, decoded: !!window.__decoded && window.__decoded.has(i), len: i.src.length })) }))()`).then(d => ({ ...d, bytes: fs.statSync(fileURLToPath(wc.getURL())).size }));
+        imgs: [...document.images].map(i => ({ ok: i.complete && i.naturalWidth > 0, decoded: !!window.__decoded && window.__decoded.has(i), len: i.src.length, w: i.naturalWidth, h: i.naturalHeight })) }))()`).then(d => ({ ...d, bytes: fs.statSync(fileURLToPath(wc.getURL())).size }));
       wc.print = (opts, cb) => { look().then(d => { jobs.push({ opts, ...d }); cb(true, ''); }, (err) => cb(false, String(err))); };
       const toPdf = wc.printToPDF.bind(wc);
       wc.printToPDF = async (opts) => { pdfs.push(await look()); return fakePdf ? Buffer.from('%PDF-1.4\n%%EOF\n') : toPdf(opts); };

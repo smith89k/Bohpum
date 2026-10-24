@@ -375,7 +375,7 @@ function buildMenu() {
     { label: 'Mailings', submenu: [
       { label: 'Select List…', click: () => send('mail-select') },
       { label: 'Choose People…', enabled: mailMenu.list, click: () => send('mail-people') },
-      { label: 'Insert Field', enabled: mailMenu.list && mailMenu.field && mailMenu.columns.length > 0, submenu: mailMenu.columns.map((c, i) => ({ label: c, enabled: mailMenu.field, click: () => send('mail-field-' + i) })) },
+      { label: 'Insert Field', enabled: mailMenu.list && mailMenu.field && mailMenu.columns.length > 0, submenu: mailMenu.columns.map((c, i) => ({ label: c.replace(/&/g, '&&'), enabled: mailMenu.field, click: () => send('mail-field-' + i) })) },
       { label: 'Photo from List…', enabled: mailMenu.list && mailMenu.photo, click: () => send('mail-photo') },
       { type: 'separator' },
       { label: 'Preview', type: 'checkbox', checked: mailMenu.preview, enabled: mailMenu.list, click: () => send('mail-preview') },
@@ -530,7 +530,7 @@ ipcMain.handle('pick-images', async () => {
   });
 });
 
-// Mail merge lists: the page parses what list.js returns (see src/mail/)
+// Mail merge lists: the page parses what list.js returns (see src/merge.js)
 ipcMain.handle('pick-list', async () => {
   const r = await dialog.showOpenDialog(win, { title: 'Choose a list', properties: ['openFile'], defaultPath: startIn('lastListDir'),
     filters: [{ name: 'Lists', extensions: ['xlsx', 'xls', 'csv'] }] });
@@ -538,7 +538,8 @@ ipcMain.handle('pick-list', async () => {
   rememberDir('lastListDir', r.filePaths[0]);
   return r.filePaths[0];
 });
-ipcMain.handle('read-list', async (_e, p) => {
+ipcMain.handle('read-list', async (e, p) => {
+  if (!win || e.sender !== win.webContents || typeof p !== 'string' || !/\.(xlsx|xls|csv)$/i.test(p)) return { error: lists.BAD };
   const res = await lists.readList(p, { convertXls: (f) => {
     const r = chooseReader();
     if (r.need) return Promise.reject(Object.assign(new Error('no reader'), { code: 'NO_XLS_READER' }));   // never downloads here
@@ -547,13 +548,13 @@ ipcMain.handle('read-list', async (_e, p) => {
   return { ...res, locale: app.getSystemLocale() };
 });
 
-// Photos for the cells of a photo column → { cell: { url } | { missing: path tried } | { empty: true } }
-ipcMain.handle('mail-photos', async (e, cells, listPath) => {
+// Photos for the cells of a photo column, at most maxPx on the long side → { cell: { url } | { missing: path tried } | { empty: true } }
+ipcMain.handle('mail-photos', async (e, cells, listPath, maxPx) => {
   if (!win || e.sender !== win.webContents) return {};
-  const out = {};
+  const out = Object.create(null); // a cell may be called "__proto__"
   for (const cell of Array.isArray(cells) ? cells : []) {
     const c = String(cell == null ? '' : cell);
-    if (!(c in out)) out[c] = await lists.photoResult(c, String(listPath));
+    if (!Object.hasOwn(out, c)) out[c] = await lists.photoResult(c, String(listPath), maxPx);
   }
   return out;
 });
@@ -653,7 +654,7 @@ ipcMain.handle('print-html', async (_e, { html, sheet, widthMm, heightMm, copies
   const pageSize = named ? sheet : { width: Math.round(+widthMm * 1000), height: Math.round(+heightMm * 1000) };
   return withHiddenWindow(html, (w) => new Promise((resolve) => {
     w.webContents.print({
-      silent: true, deviceName, printBackground: true, landscape: false,
+      silent: true, deviceName, printBackground: true, landscape: false, collate: true,
       copies: Math.min(999, Math.max(1, copies | 0)),
       margins: { marginType: 'none' }, pageSize, scaleFactor: 100
     }, (ok, reason) => resolve({ ok, reason }));

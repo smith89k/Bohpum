@@ -183,14 +183,22 @@ const PAD = [['tl', 'Top left'], ['tc', 'Top centre'], ['tr', 'Top right'], ['ml
 // confirm(problems) → Promise<boolean> (the problems box) }
 export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, toast, onDocChange, mail = null }) {
   const small = doc.pageW * 2 <= 210 || doc.pageH * 2 <= 297;
+  const saved = clone(doc.print || {});
   const o = Object.assign({
     sheet: 'A4', orient: 'portrait', mode: small ? 'single' : 'actual',
     left: null, top: null,
-    marginT: 10, marginL: 10, marginR: 10, marginB: 10, gapX: 0, gapY: 0, center: true, order: mail ? 'sequence' : 'repeat',
+    marginT: 10, marginL: 10, marginR: 10, marginB: 10, gapX: 0, gapY: 0, center: true, order: 'repeat',
     crop: false, pages: 'all', range: '', copies: 1, ...(mail ? { flip: 'long' } : {})
-  }, clone(doc.print || {}));
-  if (mail) o.who = 'all'; // Who is for this time only: never saved with the publication
-  const kept = () => { const { who, ...k } = o; return k; };
+  }, saved);
+  // with a list the order is its own (mailOrder, people side by side at first); order stays the one without a list
+  if (mail) { o.order = saved.mailOrder || 'sequence'; o.who = 'all'; } // Who is for this time only: never saved with the publication
+  const kept = () => {
+    const { who, ...k } = o;
+    if (!mail) return k;
+    k.mailOrder = o.order;
+    if ('order' in saved) k.order = saved.order; else delete k.order;
+    return k;
+  };
   const nudge = Object.assign({ x: 0, y: 0 }, settings.printNudge || {});
   let sheetNo = 0;
   let printers = null;                     // null until Windows has listed them
@@ -549,15 +557,26 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   back.querySelector('[data-a="close"]').onclick = keepAndClose;
   // with a list: who has a missing photo, a column gone … → Print anyway or Cancel (the screen stays)
   const checked = (j) => !j.problems.length || mail.confirm(j.problems);
-  // the people's pages are put together in one step that takes a moment: say so first, and let it show
+  // the people's pages are put together in one step that takes a moment: say so first, and let it show.
+  // null when that fails (said in a toast; the screen works again)
   async function outputHtml(j, lay, opts) {
-    if (j.doc !== doc) {
-      sending = true;
-      back.querySelectorAll('.modal-f .btn').forEach(b => b.disabled = true);
-      info.textContent = 'Preparing the pages…';
-      await new Promise(r => requestAnimationFrame(() => setTimeout(r)));
+    try {
+      if (j.doc !== doc) {
+        sending = true;
+        back.querySelectorAll('.modal-f .btn').forEach(b => b.disabled = true);
+        info.textContent = 'Preparing the pages…';
+        await new Promise(r => requestAnimationFrame(() => setTimeout(r)));
+      }
+      return buildOutputHtml(j.doc, lay, { ...opts, sharePics: j.doc !== doc });
+    } catch (err) {
+      console.error('print output', err);
+      toast('Could not prepare the pages: ' + (err && err.message || err), 6000);
+      return null;
+    } finally {
+      sending = false;
+      back.querySelector('[data-a="close"]').disabled = false;
+      renderWarn();
     }
-    return buildOutputHtml(j.doc, lay, { ...opts, sharePics: j.doc !== doc });
   }
   pdfBtn.onclick = async () => {
     const lay = currentLayout(), j = job(); if (j.building || sending) return;
@@ -565,6 +584,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     if (!(await checked(j)) || sending) return;
     persist();
     const html = await outputHtml(j, lay, { crop: o.crop && o.mode !== 'actual', nudge: { x: 0, y: 0 } });
+    if (html == null) return;
     close();
     const p = await api.exportPdf({ html, widthMm: lay.sw, heightMm: lay.sh, defaultName: (doc.name || 'publication') + (o.mode === 'actual' ? '' : '-' + o.sheet) + '.pdf' });
     if (p) toast('Saved ' + p);
@@ -579,11 +599,13 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     saveSettings({ printer });
     const actual = o.mode === 'actual';
     const html = await outputHtml(j, lay, { crop: o.crop && !actual, nudge: actual ? { x: 0, y: 0 } : nudge, portraitPaper: !actual });
+    if (html == null) return;
     const name = ((printers || []).find(p => p.name === printer) || {}).displayName || printer;
     sending = true;
     back.querySelectorAll('.modal-f .btn').forEach(b => b.disabled = true);
     info.textContent = `Sending to ${name}…`;
-    const r = await api.printHtml({ html, sheet: actual ? null : o.sheet, widthMm: lay.sw, heightMm: lay.sh, copies: Math.max(1, o.copies | 0), deviceName: printer });
+    const r = await api.printHtml({ html, sheet: actual ? null : o.sheet, widthMm: lay.sw, heightMm: lay.sh, copies: Math.max(1, o.copies | 0), deviceName: printer })
+      .catch((err) => ({ ok: false, reason: err && err.message || String(err) }));
     close();
     const n = lay.sheets.length;
     if (r && r.ok) toast(`Sent ${n} sheet${n === 1 ? '' : 's'} to ${name}`);

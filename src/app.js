@@ -1724,16 +1724,31 @@ function viewDoc() {
 function shownObj(o) { const row = shownRow(); return row ? fillPage(S.doc, { objects: [o], hideMaster: true }, fillCtx(row)).page.objects[0] : o; }
 // the photo cells of one person
 const photoCells = (row) => [...new Set([...fieldsIn(S.doc).photo].map(c => S.mail.list.columns.indexOf(c)).filter(i => i >= 0).map(i => String(row[i] ?? '')))];
-// photos are read once into S.mail.photos; a cell already being read is waited for (S.mail.asking: cell → promise).
-// A cell main didn't answer (or a failed call) is kept as unreadable, so it is never asked for again
+// the pixels each cell's photo needs: the largest frame of a column it is in, at 300 dpi, never above 1600
+function photoPx(cells) {
+  const cols = new Map(), want = new Set(cells), px = new Map(), { columns, rows } = S.mail.list;
+  for (const o of [...S.doc.pages.flatMap(p => p.objects), ...(S.doc.master ? S.doc.master.objects : [])])
+    if (o.type === 'image' && o.mergePhoto) cols.set(o.mergePhoto, Math.max(cols.get(o.mergePhoto) || 0, Math.min(1600, Math.ceil(Math.max(o.w, o.h) / 25.4 * 300))));
+  for (const [col, n] of cols) {
+    const i = columns.indexOf(col);
+    if (i >= 0) for (const r of rows) { const c = String(r[i] ?? ''); if (want.has(c)) px.set(c, Math.max(px.get(c) || 0, n)); }
+  }
+  return px;
+}
+// photos are read once into S.mail.photos (again if a frame grew); a cell already being read is waited for
+// (S.mail.asking: cell → promise). A cell main didn't answer (or a failed call) is kept as unreadable until Print or
+// Save As PDF reads the list again
 function fetchPhotos(cells) {
-  const m = S.mail, todo = cells.filter(c => !m.photos.has(c) && !m.asking.has(c));
-  if (todo.length) {
-    const p = api.mailPhotos(todo, S.doc.merge.list).catch((e) => { console.error('mail-photos', e); return {}; }).then((res) => {
-      for (const c of todo) m.photos.set(c, res && res[c] || (c.trim() ? { unreadable: c } : { empty: true }));
-      todo.forEach(c => m.asking.delete(c));
+  const m = S.mail, px = photoPx(cells), size = (c) => px.get(c) || 1600;
+  const todo = cells.filter(c => !m.asking.has(c) && (!m.photos.has(c) || m.photos.get(c).url && m.photos.get(c).px < size(c)));
+  const sizes = new Map();
+  for (const c of todo) sizes.set(size(c), [...(sizes.get(size(c)) || []), c]);
+  for (const [n, group] of sizes) {
+    const p = api.mailPhotos(group, S.doc.merge.list, n).catch((e) => { console.error('mail-photos', e); return {}; }).then((res) => {
+      for (const c of group) m.photos.set(c, res && Object.hasOwn(res, c) ? { ...res[c], px: n } : c.trim() ? { unreadable: c } : { empty: true });
+      group.forEach(c => m.asking.delete(c));
     });
-    todo.forEach(c => m.asking.set(c, p));
+    group.forEach(c => m.asking.set(c, p));
   }
   return Promise.all(cells.map(c => m.asking.get(c)));
 }
@@ -1799,9 +1814,11 @@ function removeList() {
   commit(); renderAll();
 }
 // Reads the file the publication points at. A problem is kept in S.mail.error (the bar says it); when asked, a box too.
-async function loadMailList(askIfMissing = true) {
+// again: Print and Save As PDF read it once more (edited in Excel, a photo put in place): the person showing, Preview
+// and the photos found stay, the others are asked again. → whether the list could be read
+async function loadMailList(askIfMissing = true, again = false) {
   const m = S.doc.merge, key = mergeKey();
-  if (!m) return;
+  if (!m) return false;
   let error = null, list = null;
   const r = await api.readList(m.list);
   if (r.error) error = r.error;
@@ -1809,12 +1826,19 @@ async function loadMailList(askIfMissing = true) {
     list = parseList(r, { sheet: m.sheet });
     if (m.sheet && list.sheet !== m.sheet) { list = null; error = `The sheet «${m.sheet}» is no longer in this list.`; }
   } catch (e) { error = e.message; }
-  if (mergeKey() !== key) return; // another list was chosen (or none) while the file was read
-  S.mail = { list, at: 0, preview: false, photos: new Map(), asking: new Map(), error };
+  if (mergeKey() !== key) return false; // another list was chosen (or none) while the file was read
+  const old = again && !error && S.mail;
+  if (old) {
+    old.list = list;
+    for (const [c, r] of old.photos) if (!r.url) old.photos.delete(c);
+    clampAt(); renderThumbs();
+  } else S.mail = { list, at: 0, preview: false, photos: new Map(), asking: new Map(), error };
   renderBar(); syncMailMenu(); renderStage();
   if (error && askIfMissing && (await choiceBox(error, 'The design still opens and shows its «blanks».', ['Find the list…', 'Later'])) === 0) await selectList(true);
+  return !error;
 }
-// Pick a list file (and a sheet) for the publication; keepOff: the same people stay unticked (Find the list…)
+// Pick a list file (and a sheet) for the publication; keepOff: the same people stay unticked (Find the list…, or the
+// same file and sheet chosen again)
 async function selectList(keepOff = false) {
   finishEditing();
   const p = await api.pickList();
@@ -1830,7 +1854,8 @@ async function selectList(keepOff = false) {
       if (sheet !== list.sheet) list = parseList(r, { sheet });
     }
   } catch (e) { return void choiceBox(e.message, 'Choose another list.', ['OK']); }
-  S.doc.merge = { list: p, sheet: list.sheet, off: keepOff && S.doc.merge ? S.doc.merge.off : [] };
+  const same = S.doc.merge && S.doc.merge.list.toLowerCase() === p.toLowerCase() && S.doc.merge.sheet === list.sheet;
+  S.doc.merge = { list: p, sheet: list.sheet, off: (keepOff || same) && S.doc.merge ? S.doc.merge.off : [] };
   S.mail = { list, at: 0, preview: false, photos: new Map(), asking: new Map(), error: null };
   commit(); renderAll();
 }
@@ -2076,6 +2101,8 @@ async function savePdf(p) {
   pdfBusy = true;
   try {
     let doc = S.doc;
+    if (S.mail && S.mail.error) return toast(S.mail.error + ' The PDF was not saved.', 6000);
+    if (S.mail && S.mail.list && !(await loadMailList(true, true))) return;
     const mail = mailPeople();
     if (mail) {
       if (!mail.count) return toast('No one is ticked. Choose people in the Mailings menu.', 6000);
@@ -2102,8 +2129,15 @@ async function exportPng() {
   const p = await api.exportPng({ html, widthMm: lay.sw, heightMm: lay.sh, dpi: 300, defaultName: `${S.doc.name || 'page'}-${S.page + 1}.png` });
   if (p) toast('Exported ' + p);
 }
-function printDialog() {
+// With a list, the list as it is now (read again); a list that can't be read prints the design with «blanks», said first
+let printOpening = false;
+async function printDialog() {
   finishEditing();
+  if (printOpening) return;
+  printOpening = true;
+  try { if (S.mail && S.mail.list && !(await loadMailList(true, true))) return; }
+  finally { printOpening = false; }
+  if (S.mail && S.mail.error) toast(S.mail.error + ' The fields print as «blanks».', 6000);
   openPrintDialog({
     doc: S.doc, pageIndex: S.page, api, settings: S.settings, toast,
     saveSettings: async (patch) => { S.settings = await api.setSettings(patch); },

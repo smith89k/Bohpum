@@ -37,6 +37,11 @@ run(async (t, check) => {
 
   const ipc = await t.js(`window.api.readList(${JSON.stringify(f('bom.csv'))})`);
   check('IPC adds the locale', ipc.kind === 'csv' && typeof ipc.locale === 'string' && ipc.locale.length > 0, ipc);
+  fs.copyFileSync(f('bom.csv'), f('UP.CSV'));
+  check('IPC reads .CSV in capitals', (await t.js(`window.api.readList(${JSON.stringify(f('UP.CSV'))})`)).kind === 'csv');
+  fs.writeFileSync(f('notes.txt'), 'Name,Age\nAnn,3\n');
+  const refused = await Promise.all([f('notes.txt'), f('two.xlsx.exe'), f('noext')].map(p => t.js(`window.api.readList(${JSON.stringify(p)})`)));
+  check('IPC refuses a file that is not .xlsx, .xls or .csv', refused.every(r => JSON.stringify(r) === JSON.stringify({ error: "This file isn't an Excel list Bohpum can read." })), refused);
   const ipcXlsx = await t.js(`window.api.readList(${JSON.stringify(f('two.xlsx'))})`);
   check('IPC reads an xlsx', ipcXlsx.kind === 'xlsx' && ipcXlsx.files['xl/sharedStrings.xml'].includes('សុខ ដារា'));
   dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f('two.xlsx')] });

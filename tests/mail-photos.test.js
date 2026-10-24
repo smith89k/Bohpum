@@ -31,6 +31,14 @@ run(async (t, check) => {
   const size = (url) => t.js(`new Promise(res => { const i = new Image(); i.onload = () => res([i.naturalWidth, i.naturalHeight]); i.onerror = () => res(null); i.src = ${J(url)}; })`);
   const big = (await photos([f('big.jpg'), f('small.png')]));
   check('big photo is scaled to 1600 px', J(await size(big[f('big.jpg')].url)) === '[1600,1200]' && J(await size(big[f('small.png')].url)) === '[300,300]', big && Object.keys(big));
+  // a smaller frame asks for fewer pixels; each size is its own copy in main's cache
+  const at = async (px) => J(await size((await t.js(`window.api.mailPhotos(${J([f('big.jpg')])}, ${J(path.join(lst, 'people.xlsx'))}, ${px})`))[f('big.jpg')].url));
+  const sizes = [await at(355), await at(1600), await at(355), await at(5000)];
+  check('maxPx: 355 px, 1600 px, 355 px again, never above 1600', J(sizes) === J(['[355,266]', '[1600,1200]', '[355,266]', '[1600,1200]']), sizes);
+
+  // cells named like Object's own keys are answered like any other
+  const own = await t.js(`window.api.mailPhotos(['constructor', '__proto__', 'toString'], ${J(path.join(lst, 'people.xlsx'))}).then(r => ['constructor', '__proto__', 'toString'].map(c => Object.hasOwn(r, c) && r[c].missing))`);
+  check('cells called constructor, __proto__, toString', J(own) === J(['constructor', '__proto__', 'toString'].map(c => path.join(lst, c))), own);
 
   // only pictures are opened; device paths are refused; corrupt files are unreadable
   fs.writeFileSync(f('secret.txt'), 'top secret'); fs.writeFileSync(f('win.ini'), '[fonts]'); fs.writeFileSync(f('bad.jpg'), require('crypto').randomBytes(500));

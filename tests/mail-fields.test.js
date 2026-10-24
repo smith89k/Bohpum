@@ -29,8 +29,8 @@ run(async (t, check) => {
   };
   const choose = async (file) => {
     picks = [file];
-    await t.js('(window.__bohpumApp.cmd("mail-select"), 1)');
-    await t.waitFor(`!!(window.__bohpumApp.state.mail && window.__bohpumApp.state.mail.list && window.__bohpumApp.state.doc.merge.list === ${J(file)})`);
+    await t.js('(window.__oldMail = window.__bohpumApp.state.mail, window.__bohpumApp.cmd("mail-select"), 1)'); // the same file again: wait for it to be read
+    await t.waitFor(`!!(window.__bohpumApp.state.mail && window.__bohpumApp.state.mail !== window.__oldMail && window.__bohpumApp.state.mail.list && window.__bohpumApp.state.doc.merge.list === ${J(file)})`);
   };
   makeXlsx(f('l.xlsx'), { sheets: [{ name: 'S', rows: [['Name', ODD], ['Dara', 'x']] }] });
   makeXlsx(f('o.xlsx'), { sheets: [{ name: 'S', rows: [['Other'], ['x']] }] });
@@ -94,7 +94,8 @@ run(async (t, check) => {
   // odd column name: save and reopen
   await choose(f('l.xlsx'));
   const id3 = await newBox();
-  check('Insert Field menu shows the odd column', menu().submenu.items[1].label === ODD, menu().submenu.items.map(i => i.label));
+  // Windows menus take & as the next letter's underline: && shows one &
+  check('Insert Field menu shows the odd column, its & doubled', menu().submenu.items[1].label === 'ឈ្មោះ "A" && <B>', menu().submenu.items.map(i => i.label));
   await app('(A.cmd("mail-field-1"), 1)');
   await t.sleep(200);
   await app('(A.finishEditing(), 1)');

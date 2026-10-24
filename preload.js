@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('api', {
   pickImages: () => ipcRenderer.invoke('pick-images'),
   pickList: () => ipcRenderer.invoke('pick-list'),
   readList: (p) => ipcRenderer.invoke('read-list', p),
-  mailPhotos: (cells, listPath) => ipcRenderer.invoke('mail-photos', cells, listPath),
+  mailPhotos: (cells, listPath, maxPx) => ipcRenderer.invoke('mail-photos', cells, listPath, maxPx),
   appInfo: () => ipcRenderer.invoke('app-info'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSettings: (patch) => ipcRenderer.invoke('set-settings', patch),

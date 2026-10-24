@@ -60,17 +60,20 @@ function listError(err) {
   return BAD;
 }
 
+// never the sync calls: a list or photo on a \\server that doesn't answer must not stop the main process
+const exists = (p) => fs.promises.stat(p).then(() => true, () => false);
+
 // opts.convertXls(p) → the .xlsx bytes of an old .xls (LibreOffice); it rejects with code 'NO_XLS_READER' when there is none
 async function readList(p, opts = {}) {
   try {
     const ext = path.extname(p).toLowerCase();
-    if (ext === '.csv') return { kind: 'csv', text: csvText(fs.readFileSync(p)) };
+    if (ext === '.csv') return { kind: 'csv', text: csvText(await fs.promises.readFile(p)) };
     if (ext === '.xls') {
-      if (!fs.existsSync(p)) return { error: listError({ code: 'ENOENT' }) };
+      if (!(await exists(p))) return { error: listError({ code: 'ENOENT' }) };
       if (!opts.convertXls) return { error: NO_XLS };
       return xlsxResult(await opts.convertXls(p));
     }
-    return xlsxResult(fs.readFileSync(p));
+    return xlsxResult(await fs.promises.readFile(p));
   } catch (err) { return { error: listError(err) }; }
 }
 
@@ -84,9 +87,9 @@ function photoTried(cell, listPath) {
   return path.isAbsolute(c) ? c : path.join(path.dirname(listPath), c);
 }
 // … and only if that file is there
-function photoPath(cell, listPath) {
+async function photoPath(cell, listPath) {
   const full = photoTried(cell, listPath);
-  return full && fs.existsSync(full) ? full : null;
+  return full && await exists(full) ? full : null;
 }
 
 const MAX_SIDE = 1600, CACHE_BYTES = 150 * 1024 * 1024;
@@ -123,10 +126,11 @@ function withOrientation(jpeg, o) {
 // Only pictures are ever opened
 const isImage = (p) => Object.prototype.hasOwnProperty.call(MIME, path.extname(p).slice(1).toLowerCase());
 
-// A photo as a data URL; big jpg/png are scaled to 1600 px on the long side, a jpeg keeps its orientation.
-// Cached by path + mtime + size, up to CACHE_BYTES. Throws when the file can't be read or decoded.
-async function photoUrl(p) {
-  const st = await fs.promises.stat(p), key = p + '|' + st.mtimeMs + '|' + st.size;
+// A photo as a data URL; big jpg/png are scaled to maxPx (at most 1600) on the long side, a jpeg keeps its orientation.
+// Cached by path + mtime + size + maxPx, up to CACHE_BYTES. Throws when the file can't be read or decoded.
+async function photoUrl(p, maxPx = MAX_SIDE) {
+  const side = Math.min(MAX_SIDE, Math.max(1, Math.ceil(+maxPx) || MAX_SIDE));
+  const st = await fs.promises.stat(p), key = p + '|' + st.mtimeMs + '|' + st.size + '|' + side;
   if (urls.has(key)) { const u = urls.get(key); urls.delete(key); urls.set(key, u); return u; }
   const ext = path.extname(p).slice(1).toLowerCase();
   let buf = await fs.promises.readFile(p);
@@ -134,8 +138,8 @@ async function photoUrl(p) {
     const { nativeImage } = require('electron');
     const img = nativeImage.createFromBuffer(buf), { width, height } = img.getSize();
     if (!width || !height) throw new Error('not a picture Bohpum can read');
-    if (Math.max(width, height) > MAX_SIDE) {
-      const k = MAX_SIDE / Math.max(width, height);
+    if (Math.max(width, height) > side) {
+      const k = side / Math.max(width, height);
       const small = img.resize({ width: Math.round(width * k), height: Math.round(height * k), quality: 'best' });
       if (ext === 'png') buf = small.toPNG();
       else { const o = exifOrientation(buf); buf = small.toJPEG(90); if (o > 1) buf = withOrientation(buf, o); }
@@ -147,13 +151,13 @@ async function photoUrl(p) {
   return url;
 }
 
-// One cell of a photo column → { url } | { missing: path tried } | { unreadable: path } | { empty: true }
-async function photoResult(cell, listPath) {
+// One cell of a photo column (maxPx: see photoUrl) → { url } | { missing: path tried } | { unreadable: path } | { empty: true }
+async function photoResult(cell, listPath, maxPx) {
   const tried = photoTried(cell, listPath);
   if (!tried) return { empty: true };
-  if (DEVICE.test(tried) || !isImage(tried) || !fs.existsSync(tried)) return { missing: tried };
-  try { return { url: await photoUrl(tried) }; }
+  if (DEVICE.test(tried) || !isImage(tried) || !(await exists(tried))) return { missing: tried };
+  try { return { url: await photoUrl(tried, maxPx) }; }
   catch (err) { console.error('photo', tried, err); return { unreadable: tried }; }
 }
 
-module.exports = { unzipEntries, readList, listError, photoPath, photoTried, photoUrl, photoResult };
+module.exports = { BAD, unzipEntries, readList, listError, photoPath, photoTried, photoUrl, photoResult };
