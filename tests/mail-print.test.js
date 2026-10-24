@@ -1,5 +1,6 @@
 // Printing a list: Who (everyone ticked, the person showing, no one), people side by side or a full sheet each, the
 // problems box before output, PDFs that wait for every photo, File › Save As PDF and Export PNG, 300 people.
+// Who is never saved with the publication.
 const { app, dialog, shell, nativeImage } = require('electron');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -32,6 +33,9 @@ run(async (t, check) => {
   await t.js('(window.__bohpumApp.cmd("mail-select"), 1)');
   await t.waitFor('!!(window.__bohpumApp.state.mail && window.__bohpumApp.state.mail.list)');
   await app('(A.cmd("mail-next"), 1)'); // the person showing: person 2
+  saves = [f('card.bpum')];
+  await t.js('(window.__bohpumApp.cmd("save-as"), 1)');
+  await t.waitFor('!window.__bohpumApp.state.dirty');
 
   const built = (ms = 20000) => t.waitFor('!!document.querySelector(".print-preview .slot") && !document.getElementById("pd-info").textContent.startsWith("Preparing") && !document.getElementById("pd-printer").options[0].textContent.startsWith("Finding")', ms);
   const openPrint = async () => { await t.js('(window.__bohpumApp.cmd("print"), 1)'); await built(); };
@@ -47,6 +51,15 @@ run(async (t, check) => {
     return { k: s.dataset.k, v: s.value, label: s.getAttribute('aria-label'), titles: [...s.options].map(o => o.querySelector('b').textContent) }; })()`);
   check('Who is at the top, Everyone ticked chosen', who.k === 'who' && who.v === 'all' && who.label === 'Who' &&
     J(who.titles) === J(['Everyone ticked', 'Only the person showing', 'No one (the design with blanks)']), who);
+
+  // Who is for this time only
+  await set('who', 'one');
+  await t.key('Escape');
+  await t.waitFor('!document.querySelector(".print-preview")');
+  const after = await app('({ dirty: S.dirty, print: S.doc.print })');
+  await openPrint();
+  const again = await t.js('document.querySelector(\'#pd-side [data-k="who"]\').value');
+  check('Who is not saved: Everyone ticked again, the publication unchanged', !after.dirty && !(after.print && 'who' in after.print) && again === 'all', { after, again });
 
   await set('mode', 'grid');
   const tiles = await t.js('[...document.querySelectorAll(".pr-order .tile")].map(x => x.querySelector("span").textContent + (x.classList.contains("on") ? " *" : ""))');
@@ -93,7 +106,7 @@ run(async (t, check) => {
   await press('Print anyway');
   await until(() => pdfs.length === 1, 30000).catch(() => {});
   const p0 = pdfs[0] || {};
-  check('PDF waits for every photo', p0.imgs && p0.imgs.length === 2 && p0.imgs.every(i => i.ok) && J(p0.sheets) === J([[P1, P2, P3]]), p0.imgs);
+  check('PDF waits for every photo', p0.imgs && p0.imgs.length === 2 && p0.imgs.every(i => i.ok && i.decoded) && J(p0.sheets) === J([[P1, P2, P3]]), p0.imgs);
 
   // File › Save As → PDF: everyone ticked, every page at page size, after the same box
   saves = [f('file.pdf')];
@@ -105,6 +118,28 @@ run(async (t, check) => {
   const bytes = fs.existsSync(f('file.pdf')) ? fs.readFileSync(f('file.pdf')).toString('latin1') : '';
   const pages = (bytes.match(/\/Type\s*\/Page\b/g) || []).length;
   check('File Save As PDF prints everyone', pdfs[1] && J(pdfs[1].sheets) === J([[P1], [P2], [P3]]) && pages === 3 && J(fileLines) === J(lines), { sheets: pdfs[1] && pdfs[1].sheets, pages, fileLines });
+
+  // File › Save As PDF: a failed build says so; a second one while the first is building is ignored
+  const toastText = () => t.js('document.getElementById("toast").textContent');
+  await t.js(`(Object.defineProperty(document.fonts, 'ready', { configurable: true, get: () => Promise.reject(new Error('no fonts today')) }), 1)`);
+  saves = [f('bad.pdf')];
+  await t.js('(window.__bohpumApp.cmd("save-as"), 1)');
+  await t.waitFor('document.getElementById("toast").textContent.startsWith("Could not save")').catch(() => {});
+  const failed = { toast: await toastText(), pdfs: pdfs.length };
+  await t.js(`(Object.defineProperty(document.fonts, 'ready', { configurable: true, get: () => new Promise(r => { window.__go = r; }) }), 1)`);
+  saves = [f('one.pdf'), f('two.pdf')];
+  await t.js('(window.__bohpumApp.cmd("save-as"), 1)');
+  await t.sleep(500);
+  await t.js('(window.__bohpumApp.cmd("save-as"), 1)');
+  await t.sleep(500);
+  const busy = await toastText();
+  await t.js('(delete document.fonts.ready, window.__go(), 1)');
+  await t.waitFor('!!document.querySelector("#modal-root .modal.problems")').catch(() => {});
+  await press('Print anyway').catch(() => {});
+  await until(() => pdfs.length === 3 && fs.existsSync(f('one.pdf')), 30000).catch(() => {});
+  await t.sleep(800);
+  check('Save As PDF: a failed build says so, a second one waits its turn', failed.toast === 'Could not save the PDF: no fonts today' && failed.pdfs === 2 &&
+    busy === 'A PDF is still being prepared.' && pdfs.length === 3 && fs.existsSync(f('one.pdf')) && !fs.existsSync(f('two.pdf')), { failed, busy, pdfs: pdfs.length });
 
   // Export Page as PNG: the person showing
   await app('(A.cmd("mail-preview"), 1)');
@@ -127,7 +162,19 @@ run(async (t, check) => {
   const big = await t.js(`(() => { const g = window.__gap; clearInterval(window.__tick); return { ms: Math.round(performance.now() - g.t0), max: Math.round(g.max), info: document.getElementById('pd-info').textContent,
     progress: [...g.seen].filter(s => /^Preparing \\d+ of 300 people…$/.test(s)).length }; })()`);
   check('300 people stay responsive', big.ms < 60000 && big.max < 1000 && big.progress >= 2 && big.info.startsWith('30 sheets ·'), big);
-  await t.key('Escape');
+  // Save as PDF: "Preparing the pages…" shows (a frame is drawn) before the pages are put together
+  fakePdf = true;
+  saves = [f('many.pdf')];
+  const before = pdfs.length;
+  await t.js(`(() => { const g = window.__out = { max: 0, last: performance.now() }; window.__tick = setInterval(() => { const n = performance.now(); g.max = Math.max(g.max, n - g.last); g.last = n; }, 50);
+    const info = document.getElementById('pd-info');
+    new MutationObserver(() => { if (info.textContent === 'Preparing the pages…' && g.shown == null) { g.shown = Math.max(g.max, performance.now() - g.last); requestAnimationFrame(() => { g.painted = performance.now(); }); } })
+      .observe(info, { childList: true, characterData: true, subtree: true });
+    new MutationObserver(() => { if (!document.querySelector('.print-preview') && g.closed == null) g.closed = performance.now(); }).observe(document.getElementById('modal-root'), { childList: true });
+    document.querySelector('.modal-f [data-a="pdf"]').click(); return 1; })()`);
+  await until(() => pdfs.length === before + 1, 60000).catch(() => {});
+  const out = await t.js('(() => { const g = window.__out; clearInterval(window.__tick); return { shown: g.shown == null ? null : Math.round(g.shown), painted: g.painted != null && g.closed != null && g.painted < g.closed }; })()');
+  check('300 people: Save as PDF says Preparing the pages… at once', out.shown != null && out.shown < 1000 && out.painted && pdfs.length === before + 1 && pdfs[before].sheets.length === 30, out);
 
   // R10: a 1 MB picture in the design and a small photo each: the picture goes into the file once, and every card shows it
   for (let i = 0; i < 300; i++) fs.writeFileSync(f(`p${i}.png`), nativeImage.createFromBitmap(Buffer.alloc(40 * 30 * 4, i % 256), { width: 40, height: 30 }).toPNG());
@@ -138,11 +185,11 @@ run(async (t, check) => {
   const logo = 'data:image/png;base64,' + nativeImage.createFromBitmap(crypto.randomBytes(600 * 450 * 4), { width: 600, height: 450 }).toPNG().toString('base64');
   await t.js(`(async () => { const A = window.__bohpumApp, S = A.state, { makeObject } = await import('./model.js');
     S.doc.pages[0].objects.push(makeObject('image', { x: 60, y: 30, w: 20, h: 15, src: ${J(logo)} })); A.cmd('toggle-master'); A.cmd('toggle-master'); return 1; })()`);
-  fakePdf = true;
   saves = [f('cards.pdf')];
+  const n0 = pdfs.length;
   await t.js('(window.__bohpumApp.cmd("save-as"), 1)');
-  await until(() => pdfs.length === 3, 120000).catch(() => {});
-  const r10 = pdfs[2] ? { bytes: pdfs[2].bytes, sheets: pdfs[2].sheets.length, logos: pdfs[2].imgs.filter(i => i.len === logo.length && i.ok).length, all: pdfs[2].imgs.every(i => i.ok), logo: logo.length } : null;
+  await until(() => pdfs.length === n0 + 1, 120000).catch(() => {});
+  const q = pdfs[n0], r10 = q ? { bytes: q.bytes, sheets: q.sheets.length, logos: q.imgs.filter(i => i.len === logo.length && i.ok).length, all: q.imgs.every(i => i.ok && i.decoded), logo: logo.length } : null;
   check('a picture used on every card is in the file once', r10 && r10.logo > 1e6 && r10.bytes < 5e6 && r10.sheets === 300 && r10.logos === 300 && r10.all, r10);
 }, {
   timeout: 300000,
@@ -155,9 +202,12 @@ run(async (t, check) => {
       if (seen++ === 0) return; // the editor window
       // hidden print / PDF / PNG windows: look at what they would put out
       const wc = w.webContents;
+      // every picture whose decode() has finished (main.js waits for them before printing)
+      wc.on('dom-ready', () => wc.executeJavaScript(`(() => { const d = HTMLImageElement.prototype.decode, done = window.__decoded = new WeakSet();
+        HTMLImageElement.prototype.decode = function () { return d.call(this).then((v) => { done.add(this); return v; }); }; })()`).catch(() => {}));
       const look = () => wc.executeJavaScript(`(() => ({
         sheets: [...document.querySelectorAll('.sheet-out')].map(s => [...s.querySelectorAll('.kt')].map(k => k.textContent)),
-        imgs: [...document.images].map(i => ({ ok: i.complete && i.naturalWidth > 0, len: i.src.length })) }))()`).then(d => ({ ...d, bytes: fs.statSync(fileURLToPath(wc.getURL())).size }));
+        imgs: [...document.images].map(i => ({ ok: i.complete && i.naturalWidth > 0, decoded: !!window.__decoded && window.__decoded.has(i), len: i.src.length })) }))()`).then(d => ({ ...d, bytes: fs.statSync(fileURLToPath(wc.getURL())).size }));
       wc.print = (opts, cb) => { look().then(d => { jobs.push({ opts, ...d }); cb(true, ''); }, (err) => cb(false, String(err))); };
       const toPdf = wc.printToPDF.bind(wc);
       wc.printToPDF = async (opts) => { pdfs.push(await look()); return fakePdf ? Buffer.from('%PDF-1.4\n%%EOF\n') : toPdf(opts); };

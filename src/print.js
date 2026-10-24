@@ -162,8 +162,10 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     sheet: 'A4', orient: 'portrait', mode: small ? 'single' : 'actual',
     left: null, top: null,
     marginT: 10, marginL: 10, marginR: 10, marginB: 10, gapX: 0, gapY: 0, center: true, order: mail ? 'sequence' : 'repeat',
-    crop: false, pages: 'all', range: '', copies: 1, ...(mail ? { who: 'all' } : {})
+    crop: false, pages: 'all', range: '', copies: 1
   }, clone(doc.print || {}));
+  if (mail) o.who = 'all'; // Who is for this time only: never saved with the publication
+  const kept = () => { const { who, ...k } = o; return k; };
   const nudge = Object.assign({ x: 0, y: 0 }, settings.printNudge || {});
   let sheetNo = 0;
   let printers = null;                     // null until Windows has listed them
@@ -482,7 +484,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   function update() { renderSide(); renderPreview(); }
 
   function persist() {
-    doc.print = clone(o);
+    doc.print = clone(kept());
     saveSettings({ printNudge: nudge });
     onDocChange && onDocChange();
   }
@@ -492,7 +494,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   let opened = null, resizeT = 0;
   const onResize = () => { clearTimeout(resizeT); resizeT = setTimeout(renderPreview, 100); }; // re-fit the preview
   const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); document.removeEventListener('keyup', onKeyUp, true); window.removeEventListener('resize', onResize); clearTimeout(resizeT); };
-  const keepAndClose = () => { if (JSON.stringify([o, nudge]) !== opened) persist(); close(); };
+  const keepAndClose = () => { if (JSON.stringify([kept(), nudge]) !== opened) persist(); close(); };
   // Zoom keys as in the editor: Ctrl+0 fits the sheet, Ctrl++ / Ctrl+− zoom; Space + drag over the preview moves it
   let overPrev = false;
   prev.addEventListener('pointerenter', () => { overPrev = true; });
@@ -514,12 +516,22 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   back.querySelector('[data-a="close"]').onclick = keepAndClose;
   // with a list: who has a missing photo, a column gone … → Print anyway or Cancel (the screen stays)
   const checked = (j) => !j.problems.length || mail.confirm(j.problems);
+  // the people's pages are put together in one step that takes a moment: say so first, and let it show
+  async function outputHtml(j, lay, opts) {
+    if (j.doc !== doc) {
+      sending = true;
+      back.querySelectorAll('.modal-f .btn').forEach(b => b.disabled = true);
+      info.textContent = 'Preparing the pages…';
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r)));
+    }
+    return buildOutputHtml(j.doc, lay, { ...opts, sharePics: j.doc !== doc });
+  }
   pdfBtn.onclick = async () => {
-    const lay = currentLayout(), j = job(); if (j.building) return;
+    const lay = currentLayout(), j = job(); if (j.building || sending) return;
     if (!lay.sheets.length) return toast('Nothing to print with these settings.');
-    if (!(await checked(j))) return;
+    if (!(await checked(j)) || sending) return;
     persist();
-    const html = buildOutputHtml(j.doc, lay, { crop: o.crop && o.mode !== 'actual', nudge: { x: 0, y: 0 }, sharePics: j.doc !== doc });
+    const html = await outputHtml(j, lay, { crop: o.crop && o.mode !== 'actual', nudge: { x: 0, y: 0 } });
     close();
     const p = await api.exportPdf({ html, widthMm: lay.sw, heightMm: lay.sh, defaultName: (doc.name || 'publication') + (o.mode === 'actual' ? '' : '-' + o.sheet) + '.pdf' });
     if (p) toast('Saved ' + p);
@@ -533,7 +545,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
     persist();
     saveSettings({ printer });
     const actual = o.mode === 'actual';
-    const html = buildOutputHtml(j.doc, lay, { crop: o.crop && !actual, nudge: actual ? { x: 0, y: 0 } : nudge, portraitPaper: !actual, sharePics: j.doc !== doc });
+    const html = await outputHtml(j, lay, { crop: o.crop && !actual, nudge: actual ? { x: 0, y: 0 } : nudge, portraitPaper: !actual });
     const name = ((printers || []).find(p => p.name === printer) || {}).displayName || printer;
     sending = true;
     back.querySelectorAll('.modal-f .btn').forEach(b => b.disabled = true);
@@ -546,7 +558,7 @@ export function openPrintDialog({ doc, pageIndex, api, settings, saveSettings, t
   };
 
   update();
-  opened = JSON.stringify([o, nudge]); // after update(), which fills in the default position
+  opened = JSON.stringify([kept(), nudge]); // after update(), which fills in the default position
   requestAnimationFrame(renderPreview);
   api.printers().then((list) => {
     printers = list || [];

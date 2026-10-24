@@ -2070,21 +2070,27 @@ function pageSetup() {
 }
 // Save As → PDF: every page at page size (with a list: everyone ticked, after the problems box). The publication's own
 // file, name and unsaved state don't change.
+let pdfBusy = false; // one Save As PDF at a time
 async function savePdf(p) {
-  let doc = S.doc;
-  const mail = mailPeople();
-  if (mail) {
-    if (!mail.count) return toast('No one is ticked. Choose people in the Mailings menu.', 6000);
-    const r = await mail.build('all', S.doc.pages.map((_, i) => i), (done, total) => toast(`Preparing ${done} of ${total} ${total === 1 ? 'person' : 'people'}…`));
-    if (!(await mail.confirm(r.problems))) return;
-    doc = r.doc;
-  }
-  const lay = { sw: doc.pageW, sh: doc.pageH, sheets: doc.pages.map((_, i) => [{ pi: i, x: 0, y: 0 }]) };
-  const html = buildOutputHtml(doc, lay, { sharePics: doc !== S.doc });
+  if (pdfBusy) return toast('A PDF is still being prepared.');
+  pdfBusy = true;
   try {
+    let doc = S.doc;
+    const mail = mailPeople();
+    if (mail) {
+      if (!mail.count) return toast('No one is ticked. Choose people in the Mailings menu.', 6000);
+      const r = await mail.build('all', S.doc.pages.map((_, i) => i), (done, total) => toast(`Preparing ${done} of ${total} ${total === 1 ? 'person' : 'people'}…`));
+      if (!(await mail.confirm(r.problems))) return;
+      doc = r.doc;
+      toast('Preparing the pages…'); // the next step takes a moment: let the text show first
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r)));
+    }
+    const lay = { sw: doc.pageW, sh: doc.pageH, sheets: doc.pages.map((_, i) => [{ pi: i, x: 0, y: 0 }]) };
+    const html = buildOutputHtml(doc, lay, { sharePics: doc !== S.doc });
     await api.writePdf({ html, widthMm: lay.sw, heightMm: lay.sh, path: p });
     toast('Saved ' + p.split(/[\\/]/).pop());
   } catch (err) { toast('Could not save the PDF: ' + (err && err.message || err), 6000); }
+  finally { pdfBusy = false; }
 }
 // Export Page as PNG: the page as it shows (with Preview on, the person showing)
 async function exportPng() {
