@@ -1,4 +1,6 @@
 // Bohpum – mail merge: a list (Excel or csv) becomes columns and rows of text, formatted the way Excel shows them.
+import { renderObject, fixLineHeights } from './render.js';
+import { clone } from './model.js';
 
 const BUILTIN = { 1: '0', 2: '0.00', 3: '#,##0', 4: '#,##0.00', 9: '0%', 10: '0.00%', 11: '0.00E+00', 15: 'd-mmm-yy', 16: 'd-mmm', 17: 'mmm-yy', 18: 'h:mm AM/PM',
   19: 'h:mm:ss AM/PM', 20: 'h:mm', 21: 'h:mm:ss', 37: '#,##0 ;(#,##0)', 38: '#,##0 ;(#,##0)', 39: '#,##0.00;(#,##0.00)', 40: '#,##0.00;(#,##0.00)',
@@ -223,4 +225,77 @@ export function fieldsIn(doc) {
     d.querySelectorAll('span[data-field="merge"]').forEach(s => text.add(s.dataset.col));
   }
   return { text, photo };
+}
+
+// ---- one person: the fields of a page filled with a row's values, photos in their frames, long text shrunk to fit
+export const MIN_SCALE = 0.6;
+
+// the rows that are ticked (Choose People), by index
+export function ticked(list, off = []) {
+  const skip = new Set(off);
+  return list.rows.map((_, i) => i).filter(i => !skip.has(rowKey(list.rows[i])));
+}
+
+// a new page for one person: the master's objects in front (the copy hides the master), fields → values, photos in
+// their frames (none → an empty frame), boxes with fields shrunk to fit. Problems in plain words.
+const photoProblem = (r) => r && r.missing ? 'photo not found: ' + r.missing : r && r.unreadable ? "photo can't be read: " + r.unreadable : 'no photo';
+export function fillPage(doc, page, { columns, row, photos }) {
+  const problems = new Set(), value = (col) => {
+    const i = columns.indexOf(col);
+    if (i < 0) problems.add(`no column «${col}» in the list`);
+    return i < 0 ? null : String(row[i] ?? '');
+  };
+  const master = !page.hideMaster && doc.master ? doc.master.objects : [];
+  const objects = clone([...master, ...page.objects]).map(o => {
+    if (o.type === 'image' && o.mergePhoto) {
+      const cell = value(o.mergePhoto), r = cell == null ? null : photos.get(cell);
+      if (r && r.url) return { ...o, src: r.url, note: null };
+      if (cell != null) problems.add(photoProblem(r));
+      return { ...o, src: '', note: null };
+    }
+    if (o.type !== 'box' || !o.html || !o.html.includes('data-field="merge"')) return o;
+    const d = document.createElement('div');
+    d.innerHTML = o.html;
+    d.querySelectorAll('span[data-field="merge"]').forEach(s => {
+      s.textContent = value(s.dataset.col) ?? '';
+      s.removeAttribute('data-field'); s.removeAttribute('data-col'); s.removeAttribute('contenteditable');
+    });
+    const r = fitText({ ...o, html: d.innerHTML });
+    if (!r.fits) problems.add("the text doesn't fit its box");
+    return r.o;
+  });
+  return { page: { ...page, objects, hideMaster: true }, problems: [...problems] };
+}
+
+// every font size in the box times f (a copy)
+export function scaleText(o, f) {
+  const k = (v) => Math.round(v * f * 100) / 100, d = document.createElement('div');
+  d.innerHTML = o.html || '';
+  d.querySelectorAll('[style]').forEach(el => {
+    const m = /^([\d.]+)(pt|px)$/.exec(el.style.fontSize);
+    if (m) el.style.fontSize = k(+m[1]) + m[2];
+  });
+  return { ...o, size: k(o.size || 12), html: d.innerHTML };
+}
+
+// the box at 100 %, off-screen: does its text stay inside? If not, 95 %, 90 % … down to MIN_SCALE
+export function fitText(o) {
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:-100000px;top:0';
+  document.body.append(host);
+  const fits = (x) => {
+    host.replaceChildren(renderObject(x));
+    fixLineHeights(host);
+    const kt = host.querySelector('.kt'), p = x.pad || { t: 1, r: 1, b: 1, l: 1 }, px = 96 / 25.4;
+    return kt.scrollHeight <= (x.h - p.t - p.b) * px + 0.5 && kt.scrollWidth <= (x.w - p.l - p.r) * px + 0.5;
+  };
+  try {
+    if (fits(o)) return { o, fits: true };
+    let x = o;
+    for (let n = 1; 1 - n * 0.05 >= MIN_SCALE - 1e-9; n++) {
+      x = scaleText(o, Math.round((1 - n * 0.05) * 100) / 100);
+      if (fits(x)) return { o: x, fits: true };
+    }
+    return { o: x, fits: false };
+  } finally { host.remove(); }
 }

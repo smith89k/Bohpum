@@ -47,7 +47,7 @@ run(async (t, check) => {
   await t.waitFor('!!(window.__bohpumApp.state.mail && window.__bohpumApp.state.mail.list)');
   const st = await app('({ merge: S.doc.merge, cols: S.mail.list.columns, dirty: S.dirty })');
   check('chosen sheet is kept', st.merge.list === f('two.xlsx') && st.merge.sheet === 'Staff' && J(st.merge.off) === '[]' && J(st.cols) === J(['Who', 'Role', 'Photo']), st);
-  const bar = await barText();
+  const bar = await t.js('document.querySelector("#mailbar .mb-list").textContent');
   check('bar shows the list and the publication is dirty', !(await barHidden()) && bar === 'Mailing list: two.xlsx · Staff' && st.dirty, { bar, st });
   check('menu is live with a list', J(live()) === J(['Select List…', 'Choose People…', 'Preview', 'Remove List']), live());
 

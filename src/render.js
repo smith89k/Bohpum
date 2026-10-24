@@ -142,6 +142,8 @@ function renderImage(o, el) {
     img.src = o.src; img.draggable = false;
     img.style.objectFit = o.fit === 'fill' ? 'fill' : o.fit;
     el.append(img);
+  } else if (o.mergePhoto) { // a photo field with no photo: printed empty (the editor outlines it)
+    const d = document.createElement('div'); d.className = 'kimg-empty'; el.append(d);
   } else {
     const d = document.createElement('div'); d.className = 'kimg-missing';
     d.textContent = o.note || 'Picture'; el.append(d);

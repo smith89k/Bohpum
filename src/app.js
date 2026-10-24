@@ -5,7 +5,7 @@ import { RENDER_CSS } from './renderCss.js';
 import { docFromFodg, bpumText, withDefaults } from './docfile.js';
 import * as TE from './textedit.js';
 import { openPrintDialog, buildOutputHtml } from './print.js';
-import { parseList, fieldHtml } from './merge.js';
+import { parseList, fieldHtml, fieldsIn, ticked, fillPage } from './merge.js';
 import { sheetBox, photoBox, renderMailBar, mailMenuState } from './mailings.js';
 
 const api = window.api;
@@ -121,12 +121,12 @@ function updateTitle() {
 }
 
 // ---------------------------------------------------------------- rendering
-function renderAll() { renderStage(); renderThumbs(); renderProps(); updateTextbar(); updateStatus(); updateTools(); renderMailBar($('mailbar'), S.doc, S.mail); syncMailMenu(); }
+function renderAll() { renderStage(); renderThumbs(); renderProps(); updateTextbar(); updateStatus(); updateTools(); renderBar(); syncMailMenu(); }
 
 function renderStage() {
   const holder = $('page-holder');
   holder.innerHTML = '';
-  const d = S.doc, page = d.pages[S.page];
+  const d = viewDoc(), page = d.pages[S.page];
   const pg = S.master
     ? renderPage(d, { objects: d.master.objects, bg: page.bg }, { includeMaster: false })
     : renderPage(d, page);
@@ -135,7 +135,7 @@ function renderStage() {
   pg.style.zoom = S.zoom;
   pg.querySelectorAll('.kcontent > .kobj').forEach(el => {
     const o = getObj(el.dataset.id);
-    if (!o) return;
+    if (!o) return void el.classList.add('from-master'); // Preview puts the filled master objects in the page's layer
     if (o.locked) el.classList.add('locked');
     if (o.type === 'box' && o.shape === 'none' && (!o.fill || o.fill === 'none') && (!o.stroke || o.stroke === 'none')) el.classList.add('empty-frame');
   });
@@ -163,7 +163,7 @@ function updateObjEl(o) {
     old.style.left = o.x + 'mm'; old.style.top = o.y + 'mm'; old.style.transform = o.rot ? `rotate(${o.rot}deg)` : '';
     return;
   }
-  const el = renderObject(o);
+  const el = renderObject(shownObj(o));
   el.className = old.className;
   old.replaceWith(el);
   fixLineHeights(el);
@@ -283,17 +283,17 @@ function renderThumbs() {
   if (document.body.classList.contains('page-dragging')) return scheduleThumbs(); // not under a page being dragged
   const list = $('page-list');
   list.innerHTML = '';
-  const W = S.doc.pageW, H = S.doc.pageH;
+  const W = S.doc.pageW, H = S.doc.pageH, v = viewDoc();
   const tw = (pagesWidth - 50) / 130 * Math.min(130, 150 * W / H), th = tw * H / W; // they fill the panel's width
   const mk = (label, page, active, isMaster, onClick) => {
     const t = document.createElement('div'); t.className = 'pthumb' + (active ? ' active' : '') + (isMaster ? ' master' : '');
     const box = document.createElement('div'); box.className = 'tw'; box.style.width = tw + 'px'; box.style.height = th + 'px';
-    const pg = isMaster ? renderPage(S.doc, { objects: S.doc.master.objects }, { includeMaster: false }) : renderPage(S.doc, page);
+    const pg = isMaster ? renderPage(v, { objects: v.master.objects }, { includeMaster: false }) : renderPage(v, page);
     pg.style.zoom = tw / (W * PXMM);
     box.append(pg);
     const n = document.createElement('div'); n.className = 'pn'; n.textContent = label;
     t.append(box, n); t.onclick = onClick;
-    t.dataset.page = isMaster ? 'master' : String(S.doc.pages.indexOf(page));
+    t.dataset.page = isMaster ? 'master' : String(v.pages.indexOf(page));
     t.title = isMaster ? 'Master page' : `Page ${label} – right-click for more`;
     list.append(t);
     fixLineHeights(pg);
@@ -301,7 +301,7 @@ function renderThumbs() {
   // The master page only shows here while it is being edited (Ctrl+M / "Edit master page"), so a
   // one-page card doesn't look like it has two pages
   if (S.master) mk('Master page', null, true, true, () => setMaster(false));
-  S.doc.pages.forEach((p, i) => mk(String(i + 1), p, !S.master && i === S.page, false, () => goPage(i)));
+  v.pages.forEach((p, i) => mk(String(i + 1), p, !S.master && i === S.page, false, () => goPage(i)));
   $('page-count').textContent = S.doc.pages.length;
 }
 
@@ -565,7 +565,7 @@ function startMove(e, m0) {
       // Ctrl+drag = copy
       const copies = cloneObjects(moving);
       objs().push(...copies);
-      copies.forEach(c => pageEl.querySelector('.kcontent').append(renderObject(c)));
+      copies.forEach(c => pageEl.querySelector('.kcontent').append(renderObject(shownObj(c))));
       S.sel = new Set(copies.map(c => c.id));
       moving = copies; orig = moving.map(o => ({ o, x: o.x, y: o.y })); copied = true;
     }
@@ -797,8 +797,12 @@ function startEditing(id, caretAt) {
   const o = getObj(id);
   if (!o || o.type !== 'box' || o.locked) return;
   S.editing = id; S.sel = new Set([id]);
-  const el = pageEl.querySelector(`.kcontent > .kobj[data-id="${id}"]`);
+  let el = pageEl.querySelector(`.kcontent > .kobj[data-id="${id}"]`);
   if (!el) return;
+  if (shownRow()) { // Preview shows a person: the box being edited shows the design (its «fields»)
+    const d = renderObject(o); d.className = el.className; el.replaceWith(d); el = d;
+    markMissingFields(el); fixLineHeights(el);
+  }
   el.classList.add('editing');
   const kt = el.querySelector('.kt');
   kt.contentEditable = 'true';
@@ -898,10 +902,7 @@ function applyText(inline, para, { ls, boxProps } = {}) {
   }
   const boxes = textBoxesSelected();
   if (!boxes.length) return;
-  for (const o of boxes) {
-    const el = pageEl.querySelector(`.kcontent > .kobj[data-id="${o.id}"]`);
-    const k2 = el && el.querySelector('.kt');
-    if (!k2) continue;
+  for (const o of boxes) withDesignKt(o, (k2) => {
     if (inline) {
       TE.ensureParagraphs(k2);
       TE.applyInline(k2, inline, { whole: true });
@@ -912,7 +913,7 @@ function applyText(inline, para, { ls, boxProps } = {}) {
     if (para || ls !== undefined) TE.applyParagraph(k2, para || {}, { whole: true, ls });
     if (boxProps) Object.assign(o, boxProps);
     o.html = TE.sanitizeHtml(k2.innerHTML);
-  }
+  });
   commit(); renderStage(); updateTextbar();
 }
 
@@ -923,11 +924,17 @@ function currentTextStyle() {
   if (kt) return TE.styleAt(kt);
   const b = textBoxesSelected()[0];
   if (!b) return null;
-  const el = pageEl.querySelector(`.kcontent > .kobj[data-id="${b.id}"] .kt`);
-  if (!el) return null;
-  const st = TE.styleAt(el);
-  st.valign = b.valign;
+  const st = withDesignKt(b, (el) => TE.styleAt(el));
+  if (st) st.valign = b.valign;
   return st;
+}
+// A whole selected box's text on the stage, or, while Preview shows a person there (a value, maybe shrunk), the box as
+// designed, off-screen: whole-box formatting reads and changes the design
+function withDesignKt(o, fn) {
+  if (!shownRow()) { const el = pageEl.querySelector(`.kcontent > .kobj[data-id="${o.id}"] .kt`); return el ? fn(el) : null; }
+  const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-100000px;top:0';
+  host.append(renderObject(o)); document.body.append(host); fixLineHeights(host);
+  try { return fn(host.querySelector('.kt')); } finally { host.remove(); }
 }
 
 function updateTextbar() {
@@ -1689,6 +1696,78 @@ function syncMailMenu() {
   const m = JSON.stringify(mailMenuState(S.mail, selObjs(), !!S.editing));
   if (m !== lastMailMenu) { lastMailMenu = m; api.setMailMenu(JSON.parse(m)); }
 }
+function renderBar() { renderMailBar($('mailbar'), S.doc, S.mail, cmd); }
+
+// Preview: the row of the person showing (ticked people only), or null
+function shownRow() {
+  const m = S.mail;
+  if (!m || !m.preview || !m.list || !S.doc.merge) return null;
+  const people = ticked(m.list, S.doc.merge.off);
+  return people.length ? m.list.rows[people[Math.min(m.at, people.length - 1)]] : null;
+}
+const fillCtx = (row) => ({ columns: S.mail.list.columns, row, photos: S.mail.photos });
+// What the page and the thumbnails show: the design, or a copy filled for the person showing. Selection, ids and
+// editing always use S.doc; nothing filled is ever written into it.
+function viewDoc() {
+  const row = shownRow();
+  if (!row) return S.doc;
+  askPhotos(row);
+  const fill = (p) => fillPage(S.doc, p, fillCtx(row)).page, d = S.doc;
+  return { ...d, pages: d.pages.map(fill), master: d.master && { ...d.master, objects: fill({ objects: d.master.objects, hideMaster: true }).objects } };
+}
+// one object as the page shows it (while dragging and resizing)
+function shownObj(o) { const row = shownRow(); return row ? fillPage(S.doc, { objects: [o], hideMaster: true }, fillCtx(row)).page.objects[0] : o; }
+// the person's photos, read once (S.mail.photos); the page is drawn again when they come
+const asking = new Set();
+function askPhotos(row) {
+  const m = S.mail, cols = [...fieldsIn(S.doc).photo].map(c => m.list.columns.indexOf(c)).filter(i => i >= 0);
+  const cells = [...new Set(cols.map(i => String(row[i] ?? '')))].filter(c => !m.photos.has(c) && !asking.has(c));
+  if (!cells.length) return;
+  cells.forEach(c => asking.add(c));
+  api.mailPhotos(cells, S.doc.merge.list).then((res) => { for (const c of cells) if (res && res[c]) m.photos.set(c, res[c]); }, () => {}).finally(() => {
+    cells.forEach(c => asking.delete(c));
+    if (S.mail === m && shownRow()) { if (!S.editing) renderStage(); renderThumbs(); } // a box being edited stays as it is
+  });
+}
+function stepPerson(d) {
+  if (!S.mail || !S.mail.list || !S.doc.merge) return;
+  const n = ticked(S.mail.list, S.doc.merge.off).length, at = Math.max(0, Math.min(n - 1, S.mail.at + d));
+  if (at === S.mail.at) return;
+  finishEditing();
+  S.mail.at = at;
+  renderStage(); renderThumbs(); renderBar();
+}
+function togglePreview() {
+  if (!S.mail || !S.mail.list) return syncMailMenu();
+  finishEditing();
+  S.mail.preview = !S.mail.preview;
+  renderStage(); renderThumbs(); renderProps(); updateTextbar(); renderBar(); syncMailMenu();
+}
+// Remove List: fields become plain text showing their name, photo fields ordinary pictures (the photo showing, if any)
+function removeList() {
+  if (!S.doc.merge) return;
+  finishEditing();
+  const row = shownRow(), m = S.mail;
+  for (const o of [...S.doc.pages.flatMap(p => p.objects), ...(S.doc.master ? S.doc.master.objects : [])]) {
+    if (o.type === 'image' && o.mergePhoto) {
+      const i = row ? m.list.columns.indexOf(o.mergePhoto) : -1, r = i >= 0 && m.photos.get(String(row[i] ?? ''));
+      if (r && r.url) o.src = r.url;
+      delete o.mergePhoto;
+    }
+    if (o.type !== 'box' || !o.html || !o.html.includes('data-field="merge"')) continue;
+    const d = document.createElement('div');
+    d.innerHTML = o.html;
+    d.querySelectorAll('span[data-field="merge"]').forEach(s => {
+      const text = '«' + s.dataset.col + '»';
+      if (!s.getAttribute('style')) return s.replaceWith(text);
+      s.removeAttribute('data-field'); s.removeAttribute('data-col'); s.removeAttribute('contenteditable'); s.textContent = text;
+    });
+    o.html = TE.sanitizeHtml(d.innerHTML);
+  }
+  delete S.doc.merge;
+  S.mail = null;
+  commit(); renderAll();
+}
 // Reads the file the publication points at. A problem is kept in S.mail.error (the bar says it); when asked, a box too.
 async function loadMailList(askIfMissing = true) {
   const m = S.doc.merge, key = mergeKey();
@@ -1702,7 +1781,7 @@ async function loadMailList(askIfMissing = true) {
   } catch (e) { error = e.message; }
   if (mergeKey() !== key) return; // another list was chosen (or none) while the file was read
   S.mail = { list, at: 0, preview: false, photos: new Map(), error };
-  renderMailBar($('mailbar'), S.doc, S.mail); syncMailMenu(); renderStage();
+  renderBar(); syncMailMenu(); renderStage();
   if (error && askIfMissing && (await choiceBox(error, 'The design still opens and shows its «blanks».', ['Find the list…', 'Later'])) === 0) await selectList(true);
 }
 // Pick a list file (and a sheet) for the publication; keepOff: the same people stay unticked (Find the list…)
@@ -2190,6 +2269,10 @@ function cmd(c) {
     case 'page-setup': return pageSetup();
     case 'mail-select': return selectList();
     case 'mail-photo': return photoFromList();
+    case 'mail-preview': return togglePreview();
+    case 'mail-prev': return stepPerson(-1);
+    case 'mail-next': return stepPerson(1);
+    case 'mail-remove': return removeList();
     case 'undo': return undo();
     case 'redo': return redo();
     case 'cut': return copySel(true);
