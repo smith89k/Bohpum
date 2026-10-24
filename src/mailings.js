@@ -17,7 +17,7 @@ export function renderMailBar(bar, doc, mail) {
   bar.hidden = !m;
   if (!m) return bar.replaceChildren();
   const name = document.createElement('span'); name.className = 'mb-list';
-  const file = m.list.split(/[\/]/).pop();
+  const file = m.list.split(/[\\/]/).pop();
   name.textContent = mail && mail.error ? mail.error : 'Mailing list: ' + file + (m.sheet ? ' · ' + m.sheet : '');
   name.title = m.list;
   bar.classList.toggle('bad', !!(mail && mail.error));

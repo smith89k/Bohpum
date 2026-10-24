@@ -1673,13 +1673,16 @@ function syncMailMenu() {
 }
 // Reads the file the publication points at. A problem is kept in S.mail.error (the bar says it); when asked, a box too.
 async function loadMailList(askIfMissing = true) {
-  const doc = S.doc, m = doc.merge;
+  const m = S.doc.merge, key = mergeKey();
   if (!m) return;
   let error = null, list = null;
   const r = await api.readList(m.list);
   if (r.error) error = r.error;
-  else try { list = parseList(r, { sheet: m.sheet }); } catch (e) { error = e.message; }
-  if (S.doc !== doc || doc.merge !== m) return; // another publication / list while the file was read
+  else try {
+    list = parseList(r, { sheet: m.sheet });
+    if (m.sheet && list.sheet !== m.sheet) { list = null; error = `The sheet «${m.sheet}» is no longer in this list.`; }
+  } catch (e) { error = e.message; }
+  if (mergeKey() !== key) return; // another list was chosen (or none) while the file was read
   S.mail = { list, at: 0, preview: false, photos: new Map(), error };
   renderMailBar($('mailbar'), S.doc, S.mail); syncMailMenu();
   if (error && askIfMissing && (await choiceBox(error, 'The design still opens and shows its «blanks».', ['Find the list…', 'Later'])) === 0) await selectList(true);

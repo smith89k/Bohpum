@@ -1,15 +1,20 @@
 // Mailings menu: only Select List… is live without a list; choosing a list (and a sheet) is kept with the publication,
 // read again when it is opened, and followed by undo; a missing or empty list is said in plain words.
-const { dialog, Menu } = require('electron');
+const { dialog, Menu, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { run } = require('./harness');
 const { makeXlsx } = require('./make-xlsx');
 
-let picks = [], saves = [];
+let picks = [], saves = [], readDelay = 0;
 
 run(async (t, check) => {
   await t.ready();
+  ipcMain.removeHandler('read-list');
+  ipcMain.handle('read-list', async (_e, p) => { // as main.js, but a test can make it slow
+    if (readDelay) await new Promise(r => setTimeout(r, readDelay));
+    return { ...(await require('../list.js').readList(p)), locale: 'en-GB' };
+  });
   const dir = t.ctx.tmp, f = (n) => path.join(dir, n), J = JSON.stringify;
   const app = (code) => t.js(`(() => { const A = window.__bohpumApp, S = A.state; return ${code}; })()`);
   const modalText = () => t.js('document.getElementById("modal-root").textContent');
@@ -43,7 +48,7 @@ run(async (t, check) => {
   const st = await app('({ merge: S.doc.merge, cols: S.mail.list.columns, dirty: S.dirty })');
   check('chosen sheet is kept', st.merge.list === f('two.xlsx') && st.merge.sheet === 'Staff' && J(st.merge.off) === '[]' && J(st.cols) === J(['Who', 'Role', 'Photo']), st);
   const bar = await barText();
-  check('bar shows the list and the publication is dirty', !(await barHidden()) && bar.includes('two.xlsx') && bar.includes('Staff') && st.dirty, { bar, st });
+  check('bar shows the list and the publication is dirty', !(await barHidden()) && bar === 'Mailing list: two.xlsx · Staff' && st.dirty, { bar, st });
   check('menu is live with a list', J(live()) === J(['Select List…', 'Choose People…', 'Preview', 'Remove List']), live());
 
   const fieldItems = () => mailings().submenu.items.find(i => i.label === 'Insert Field').submenu.items;
@@ -96,6 +101,44 @@ run(async (t, check) => {
   check('empty list says so', (await modalText()).includes('This list has no people in it'));
   await press('OK');
   check('empty list leaves the publication as it was', J(await app('S.doc.merge')) === J(merge0) && !(await app('S.dirty')));
+
+  // a sheet that is gone from the file is a problem, not a quiet fallback
+  makeXlsx(f('c.xlsx'), { sheets: [{ name: 'People', rows: [['Name'], ['P']] }, { name: 'Staff', rows: [['Who'], ['S']] }] });
+  await t.js(`window.__bohpumApp.openFile(${J(other)})`);
+  await t.waitFor(`window.__bohpumApp.state.path === ${J(other)}`);
+  picks = [f('c.xlsx')];
+  await t.js('(window.__bohpumApp.cmd("mail-select"), 1)');
+  await t.waitFor('!!document.querySelector("#modal-root select")');
+  await t.js('(() => { const s = document.querySelector("#modal-root select"); s.value = "Staff"; s.dispatchEvent(new Event("change")); })()');
+  await press('OK');
+  await t.waitFor('!!(window.__bohpumApp.state.mail && window.__bohpumApp.state.mail.list)');
+  const sheetFile = f('sheet.bpum'); saves = [sheetFile];
+  await t.js('window.__bohpumApp.cmd("save-as")');
+  await t.waitFor('!window.__bohpumApp.state.dirty');
+  makeXlsx(f('c.xlsx'), { sheets: [{ name: 'People', rows: [['Name'], ['P']] }] });
+  await t.js(`window.__bohpumApp.openFile(${J(other)})`);
+  await t.waitFor(`window.__bohpumApp.state.path === ${J(other)}`);
+  await t.js(`window.__bohpumApp.openFile(${J(sheetFile)})`);
+  await t.waitFor('!!document.querySelector("#modal-root .modal")');
+  const noSheet = 'The sheet «Staff» is no longer in this list.';
+  const gone2 = await t.js('[...document.querySelectorAll("#modal-root .modal-f .btn")].map(b => b.textContent)');
+  check('a sheet gone from the list asks Find the list… / Later', (await modalText()).includes(noSheet) && J(gone2) === J(['Find the list…', 'Later']), gone2);
+  await press('Later');
+  await t.sleep(200);
+  check('the bar says the sheet is gone', await app('S.mail.error') === noSheet && !(await app('S.mail.list')) && (await barText()) === noSheet, await barText());
+
+  // undo while the list is still being read must not lose it
+  fs.renameSync(f('moved.xlsx'), f('two.xlsx'));
+  readDelay = 1200;
+  await t.js(`window.__bohpumApp.openFile(${J(merged)})`);
+  await t.waitFor(`window.__bohpumApp.state.path === ${J(merged)}`);
+  await t.js('window.__bohpumApp.cmd("page-add")');
+  await t.js('window.__bohpumApp.cmd("undo")');
+  readDelay = 0;
+  await t.waitFor('!!(window.__bohpumApp.state.mail && window.__bohpumApp.state.mail.list)');
+  check('undo during the first read still ends with the list', await app('S.mail.list.rows.length === 2 && !S.mail.error'));
+
+  await t.js('window.__bohpumApp.state.dirty = false');
 
   // undo Select list
   await t.js(`window.__bohpumApp.openFile(${J(other)})`);

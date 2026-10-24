@@ -321,7 +321,7 @@ ipcMain.handle('resolve-names', async (_e, groups, choice) => {
 });
 
 // What the Mailings menu may do now, sent by the page (src/app.js syncMailMenu) whenever it changes
-let mailMenu = { list: false, columns: [], field: false, photo: false, preview: false };
+let mailMenu = { list: false, error: false, columns: [], field: false, photo: false, preview: false };
 function buildMenu() {
   // The menu is never drawn as a row (own title row, menus pop up from it), so the page's keydown
   // handler owns every shortcut; the menu only shows them.
