@@ -1,7 +1,7 @@
 {
   "name": "bohpum",
   "productName": "Bohpum",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Bohpum (បោះពុម្ព) - desktop publishing app that opens Microsoft Publisher .pub files",
   "main": "main.js",
   "author": "Sunnguon TAING",

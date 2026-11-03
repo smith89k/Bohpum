@@ -10,6 +10,14 @@ const KINDS = Object.freeze(['new', 'improved', 'fixed', 'removed']); // the win
 const N = (version, date, notes) => Object.freeze({ version, date, notes: Object.freeze(notes.map(([kind, text]) => Object.freeze({ kind, text }))) });
 
 const NOTES = Object.freeze([
+  N('0.3.1', '2026-11-03', [
+    ['new', 'Tables have their own Table section on the right: insert or delete rows and columns, merge and unmerge cells, make columns or rows the same size, and change the cell colour, border, inner space and where the text sits.'],
+    ['new', 'Click in a cell to change that cell, drag across cells to change several, or press Whole table to change them all.'],
+    ['new', 'Pictures can be cropped: press Crop and drag the black bars on the edges. Reset crop brings the cut part back.'],
+    ['new', 'Pictures also get Brightness, Contrast, Recolour (Grayscale, Black & white, Washout), Rotate 90° and Flip, and Reset picture undoes them all.'],
+    ['fixed', 'Tables in Publisher files no longer show as a missing picture. They open as tables with their own column widths and row heights.'],
+    ['fixed', 'A table can be moved by dragging its edge, even while you are typing in it.']
+  ]),
   N('0.3.0', '2026-10-24', [
     ['new', 'Mail merge, as in Publisher: Mailings › Select Recipients picks an Excel or CSV list, and Bohpum makes one card or certificate for each recipient. Khmer names work.'],
     ['new', 'Insert Merge Field puts a «Name» field in a text box. A name too long for its box gets a little smaller, for that recipient only.'],

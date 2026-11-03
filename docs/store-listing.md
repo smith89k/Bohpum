@@ -23,6 +23,16 @@ Your files stay on your computer. Bohpum has no account, no ads and sends nothin
 (Partner Center: the submission › Store listings › English › What's new in this version; up to 1500 characters.
 Newest first; the app's own What's new window is src/notes.js.)
 
+### 0.3.1
+
+- Tables have their own Table section: insert or delete rows and columns, merge and unmerge cells, make columns or
+  rows the same size, and change the cell colour, border, inner space and where the text sits.
+- Click in a cell to change that cell, drag across cells to change several, or press Whole table to change them all.
+- Crop pictures: press Crop and drag the black bars on the edges. Reset crop brings the cut part back.
+- Pictures also get Brightness, Contrast, Recolour (Grayscale, Black & white, Washout), Rotate 90° and Flip.
+- Tables in Publisher files no longer show as a missing picture; they keep their column widths and row heights.
+- A table can be moved by dragging its edge, even while you are typing in it.
+
 ### 0.3.0
 
 - Mail merge, as in Publisher: Mailings › Select Recipients picks an Excel or CSV list, and Bohpum makes one card or
