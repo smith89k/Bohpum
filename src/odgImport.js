@@ -368,6 +368,14 @@ function convertShape(el, styles, ctx, groupId) {
       // frames that auto-grow: make sure min height respected
       const minH = toMm(attr(tb, 'fo', 'min-height')); if (minH && minH > o.h) o.h = r2(minH);
       out.push(o);
+    } else if (tbl) {
+      // a Publisher table comes with a fallback picture of itself (a StarView metafile no browser shows): keep the table.
+      // Its borders and colours are on its cells; the frame's style is the file's default shape look (often a solid
+      // theme colour), which LibreOffice and Publisher don't paint behind a table, so the box stays clear.
+      const o = makeObject('box', { ...geo, shape: 'none', groupId });
+      o.pad = { t: 0, r: 0, b: 0, l: 0 };
+      o.html = tableHtml(tbl, baseText, basePara, styles);
+      out.push(o);
     } else if (imgs.length) {
       let src = null, note = null;
       for (const im of imgs) {
@@ -382,11 +390,6 @@ function convertShape(el, styles, ctx, groupId) {
       out.push(o);
       if (textInImg) { const t = makeObject('box', { ...geo, groupId }); t.html = textOf(imgs[0]); out.push(t); }
       if (!src) ctx.warnings.add('Some pictures are WMF/EMF and cannot be shown; re-insert them as PNG or JPG.');
-    } else if (tbl) {
-      const o = makeObject('box', { ...geo, shape: 'none', groupId });
-      applyGraphic(o, gs.g, styles, true); o.pad = { t: 0, r: 0, b: 0, l: 0 };
-      o.html = tableHtml(tbl, baseText, basePara, styles);
-      out.push(o);
     } else if (objEl) {
       const o = makeObject('image', { ...geo, src: '', note: 'Embedded object', groupId });
       out.push(o); ctx.warnings.add('Embedded OLE objects were replaced by placeholders.');
