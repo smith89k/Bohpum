@@ -541,7 +541,14 @@ function onWorkspaceDown(e) {
   if (t.classList.contains('uguide')) { e.preventDefault(); return startGuideDrag(e, t.dataset.axis, +t.dataset.i); }
   if (S.editing) {
     const ed = pageEl.querySelector('.kobj.editing');
-    if (ed && ed.contains(t)) return;
+    if (ed && ed.contains(t)) {
+      // its edge still moves it (a table fills its box, so it is nearly always being typed in): typing stops
+      const eo = getObj(S.editing), em = mmFromEvent(e);
+      if (!eo || eo.locked || !onEdge(eo, em)) return;
+      e.preventDefault(); finishEditing();
+      S.sel = new Set([eo.id]); selectionChanged();
+      return startMove(e, em);
+    }
     finishEditing();
   }
   const m = mmFromEvent(e);
