@@ -417,6 +417,14 @@ function convertShape(el, styles, ctx, groupId) {
         const href = attr(im, 'xlink', 'href'); if (!src && href && /^data:/.test(href)) { src = href; break; }
       }
       const o = makeObject('image', { ...geo, src: src || '', note, groupId });
+      // the picture's own settings (see render.js): brightness, contrast, colour mode, mirroring
+      const pg = gs.g, lim = (v) => Math.max(-100, Math.min(100, Math.round(parseFloat(v))));
+      if (parseFloat(pg['draw:luminance'])) o.bright = lim(pg['draw:luminance']);
+      if (parseFloat(pg['draw:contrast'])) o.contrast = lim(pg['draw:contrast']);
+      const mode = { greyscale: 'gray', mono: 'bw', watermark: 'washout' }[pg['draw:color-mode']];
+      if (mode) o.recolor = mode;
+      if (/horizontal/.test(pg['style:mirror'] || '')) o.flipH = true;
+      if (/vertical/.test(pg['style:mirror'] || '')) o.flipV = true;
       const st = gs.g['draw:stroke'];
       if (st && st !== 'none') { o.stroke = gs.g['svg:stroke-color'] || '#000'; o.strokeW = r2(toMm(gs.g['svg:stroke-width']) || 0.1); }
       const textInImg = kids(imgs[0]).some(c => c.localName === 'p');

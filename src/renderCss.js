@@ -5,6 +5,8 @@ export const RENDER_CSS = `
 .klayer { position: absolute; inset: 0; }
 .kobj { position: absolute; box-sizing: border-box; transform-origin: 50% 50%; }
 .kobj > svg.kshape { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.kimg > .kimg-clip { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; }
+.kimg-clip > img { position: absolute; display: block; max-width: none; pointer-events: none; user-select: none; }
 .kimg > img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; pointer-events: none; user-select: none; }
 .kimg .kimg-missing { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
   font: 9pt sans-serif; color: #8a5a00; background: repeating-linear-gradient(45deg, #fff6e0, #fff6e0 2mm, #ffeec4 2mm, #ffeec4 4mm); outline: 0.2mm dashed #d39b00; }

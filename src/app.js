@@ -1,6 +1,6 @@
 // Bohpum – editor
 import { newDoc, newPage, makeObject, uid, clone, round2, bbox, corners, PAGE_PRESETS, DEFAULT_FONT } from './model.js';
-import { renderObject, renderPage, fixLineHeights } from './render.js';
+import { renderObject, renderPage, fixLineHeights, hasCrop } from './render.js';
 import { RENDER_CSS } from './renderCss.js';
 import { docFromFodg, bpumText, withDefaults } from './docfile.js';
 import * as TE from './textedit.js';
@@ -208,9 +208,10 @@ function renderOverlay() {
   const ov = pageEl.querySelector('#overlay');
   ov.innerHTML = '';
   const sel = selObjs();
+  const single = sel.length === 1 ? sel[0] : null;
+  if (S.crop && (!single || single.id !== S.crop || S.editing)) endCrop(true); // crop mode ends when the picture isn't the selection
   if (!sel.length) return;
   const k = pxPerMm(), hs = 8 / k, lw = 1 / k;
-  const single = sel.length === 1 ? sel[0] : null;
   const grouped = sel.length > 1 && sel.every(o => o.groupId && o.groupId === sel[0].groupId);
   const addResizeHandles = (b, w, h) => {
     const pos = { nw: [0, 0], n: [50, 0], ne: [100, 0], e: [100, 50], se: [100, 100], s: [50, 100], sw: [0, 100], w: [0, 50] };
@@ -243,7 +244,11 @@ function renderOverlay() {
     b.className = 'sel-box' + (sel.length > 1 ? (grouped ? ' group' : ' multi') : '') + (o.locked ? ' locked' : '');
     Object.assign(b.style, { left: o.x + 'mm', top: o.y + 'mm', width: o.w + 'mm', height: o.h + 'mm', outlineWidth: lw + 'mm', transform: o.rot ? `rotate(${o.rot}deg)` : '' });
     ov.append(b);
-    if (single && !o.locked && !S.editing) {
+    if (single && !o.locked && !S.editing && S.crop === o.id) { // crop mode: black crop bars instead of the size handles
+      addResizeHandles(b, o.w, o.h);
+      b.classList.add('cropping');
+      b.querySelectorAll('.handle').forEach(x => { x.classList.add('crop'); x.title = 'Drag to crop'; });
+    } else if (single && !o.locked && !S.editing) {
       addResizeHandles(b, o.w, o.h);
       const stem = document.createElement('div'); stem.className = 'rot-stem';
       Object.assign(stem.style, { top: -hs * 2.2 + 'mm', height: hs * 2.2 + 'mm', width: lw + 'mm' }); b.append(stem);
@@ -641,6 +646,7 @@ function startHandle(e, h) {
   if (allSameGroup(sel)) return startGroupResize(e, h, sel);
   const o = sel[0];
   if (!o) return;
+  if (S.crop === o.id && h !== 'rot') return startCropDrag(e, h, o);
   const k = pxPerMm();
   const o0 = { ...o };
   const targets = snapTargets(new Set([o.id]));
@@ -1461,8 +1467,98 @@ function imageProps(P, sel) {
   if (hasLine(o)) s.append(alignLineRow(o, 'border'));
   const b = btns(s); b.style.marginTop = '6px';
   b.append(btn('Replace…', () => replaceImage(o)), btn('Original ratio', () => resetRatio(o)));
+  // crop, brightness, contrast, recolour, rotate & flip: settings on top of the photo, which is never changed
+  const cropOn = S.crop === o.id;
+  const cb = iconBtn('crop', cropOn ? 'Finish cropping (Enter)' : 'Crop: drag the black bars on the edges', () => cropOn ? endCrop() : startCrop(o), cropOn, cropOn ? 'Done' : 'Crop');
+  cb.disabled = !o.src || o.locked;
+  const rc = btn('Reset crop', () => setProp(x => resetCrop(x))); rc.disabled = !hasCrop(o);
+  const cr = btns(s); cr.style.margin = '6px 0 8px'; cr.append(cb, rc);
+  const slider = (label, key) => {
+    const rr = document.createElement('div'); rr.className = 'range-row';
+    const r = document.createElement('input'); r.type = 'range'; r.min = -100; r.max = 100; r.value = o[key] || 0; r.setAttribute('aria-label', label);
+    const v = document.createElement('span'); v.textContent = r.value;
+    r.oninput = () => { v.textContent = r.value; };
+    r.onchange = () => setProp(x => { if (x.type !== 'image') return; if (+r.value) x[key] = +r.value; else delete x[key]; });
+    rr.append(r, v); return row(label, rr);
+  };
+  s.append(slider('Brightness', 'bright'), slider('Contrast', 'contrast'));
+  s.append(row('Recolour', select([['normal', 'Normal'], ['gray', 'Grayscale'], ['bw', 'Black & white'], ['washout', 'Washout']], o.recolor || 'normal',
+    v => setProp(x => { if (x.type !== 'image') return; if (v === 'normal') delete x.recolor; else x.recolor = v; }))));
+  const turn = (d) => setProp(x => { x.rot = round2((((x.rot || 0) + d + 180) % 360 + 360) % 360 - 180); });
+  const flip = (k) => setProp(x => { if (x.type !== 'image') return; if (x[k]) delete x[k]; else x[k] = true; });
+  s.append(row('Rotate', seg(iconBtn('rotL', 'Rotate left 90°', () => turn(-90)), iconBtn('rotR', 'Rotate right 90°', () => turn(90)),
+    iconBtn('flipH', 'Flip horizontal', () => flip('flipH'), !!o.flipH), iconBtn('flipV', 'Flip vertical', () => flip('flipV'), !!o.flipV))));
+  const rp = btns(s); rp.style.marginTop = '6px';
+  rp.append(btn('Reset picture', () => setProp(x => { if (x.type !== 'image') return; resetCrop(x); for (const k of ['bright', 'contrast', 'recolor', 'flipH', 'flipV']) delete x[k]; })));
   if (o.note && !o.src) s.append(Object.assign(document.createElement('div'), { className: 'warn', textContent: o.note }));
   if (o.mergePhoto) s.append(Object.assign(document.createElement('div'), { className: 'muted', textContent: 'Picture field: ' + o.mergePhoto }));
+}
+
+// ---------------------------------------------------------------- crop (a picture's crop, see render.js)
+// The crop is kept as shares of the photo ({l,t,r,b}); a flipped photo shows its left share on the right, so the
+// crop bars work on what is seen (vis) and are turned back into the photo's own sides (photo).
+const visCrop = (o, c) => ({ l: o.flipH ? c.r : c.l, r: o.flipH ? c.l : c.r, t: o.flipV ? c.b : c.t, b: o.flipV ? c.t : c.b });
+const photoCrop = visCrop; // the same swap both ways
+// moves the centre by (dx, dy) measured along the picture's own (rotated) sides
+function shiftCentre(o, dx, dy, w, h) {
+  const a = (o.rot || 0) * Math.PI / 180, cx = o.x + o.w / 2 + dx * Math.cos(a) - dy * Math.sin(a), cy = o.y + o.h / 2 + dx * Math.sin(a) + dy * Math.cos(a);
+  o.w = round2(w); o.h = round2(h); o.x = round2(cx - o.w / 2); o.y = round2(cy - o.h / 2);
+}
+// Reset crop: the cut parts come back, the frame growing out at the same scale (Stretch), or the frame staying put
+function resetCrop(o) {
+  if (o.type !== 'image') return;
+  if (hasCrop(o) && o.fit === 'fill') {
+    const v = visCrop(o, o.crop), fw = o.w / (1 - v.l - v.r), fh = o.h / (1 - v.t - v.b);
+    shiftCentre(o, (v.r - v.l) * fw / 2, (v.b - v.t) * fh / 2, fw, fh);
+  }
+  delete o.crop;
+}
+// Crop mode: black bars on the picture's edges cut it. If Fit isn't Stretch, the current look first becomes Stretch
+// with nothing moving (Fit inside: the frame shrinks to the picture; Fill & crop: the hidden parts become the crop).
+function startCrop(o) {
+  finishEditing();
+  const img = pageEl && pageEl.querySelector(`.kcontent > .kobj[data-id="${o.id}"] img`);
+  if (!img || !img.naturalWidth || o.locked) return;
+  o.nat = { w: img.naturalWidth, h: img.naturalHeight };
+  const c = o.crop ? { ...o.crop } : { l: 0, t: 0, r: 0, b: 0 };
+  if (o.fit !== 'fill') {
+    const vw = 1 - c.l - c.r, vh = 1 - c.t - c.b, A = (o.nat.w * vw) / (o.nat.h * vh), B = o.w / o.h;
+    if (o.fit === 'contain') {
+      if (A > B) shiftCentre(o, 0, 0, o.w, o.w / A); else shiftCentre(o, 0, 0, o.h * A, o.h);
+    } else if (A > B) { const cut = vw * (1 - B / A) / 2; c.l += cut; c.r += cut; }
+    else { const cut = vh * (1 - A / B) / 2; c.t += cut; c.b += cut; }
+  }
+  o.crop = c; o.fit = 'fill';
+  S.crop = o.id;
+  commit(); renderStage(); renderOverlay(); renderProps();
+}
+function endCrop(quiet = false) { // quiet: called while the overlay is being drawn, which then goes on
+  if (!S.crop) return;
+  const o = getObj(S.crop);
+  S.crop = null;
+  if (o && o.crop && !hasCrop(o)) { delete o.crop; commit(); }
+  if (pageEl && !quiet) { renderOverlay(); renderProps(); }
+}
+function startCropDrag(e, h, o) {
+  const o0 = { ...o }, v0 = visCrop(o0, o0.crop || { l: 0, t: 0, r: 0, b: 0 });
+  const fw = o0.w / (1 - v0.l - v0.r), fh = o0.h / (1 - v0.t - v0.b); // the whole photo, at its size on the page
+  const sxn = h.includes('w') ? -1 : h.includes('e') ? 1 : 0, syn = h.includes('n') ? -1 : h.includes('s') ? 1 : 0;
+  const a = (o0.rot || 0) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+  const c0 = { x: o0.x + o0.w / 2, y: o0.y + o0.h / 2 };
+  const toLocal = (p) => { const dx = p.x - c0.x, dy = p.y - c0.y; return { x: dx * ca + dy * sa, y: -dx * sa + dy * ca }; };
+  const ax = -sxn * o0.w / 2, ay = -syn * o0.h / 2; // the side that stays put
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const r4 = (n) => Math.max(0, Math.round(n * 10000) / 10000);
+  dragLoop(e, (ev) => {
+    const lm = toLocal(mmFromEvent(ev)), v = { ...v0 };
+    let w = o0.w, hh = o0.h;
+    if (sxn) { w = clamp((lm.x - ax) * sxn, fw * 0.05, fw * (1 - (sxn > 0 ? v0.l : v0.r))); if (sxn > 0) v.r = 1 - v0.l - w / fw; else v.l = 1 - v0.r - w / fw; }
+    if (syn) { hh = clamp((lm.y - ay) * syn, fh * 0.05, fh * (1 - (syn > 0 ? v0.t : v0.b))); if (syn > 0) v.b = 1 - v0.t - hh / fh; else v.t = 1 - v0.b - hh / fh; }
+    const lcx = sxn ? ax + sxn * w / 2 : 0, lcy = syn ? ay + syn * hh / 2 : 0;
+    o.x = round2(c0.x + lcx * ca - lcy * sa - w / 2); o.y = round2(c0.y + lcx * sa + lcy * ca - hh / 2); o.w = round2(w); o.h = round2(hh);
+    const pc = photoCrop(o, v); o.crop = { l: r4(pc.l), t: r4(pc.t), r: r4(pc.r), b: r4(pc.b) };
+    updateObjEl(o); renderOverlay(); updateStatus(); drawRulers();
+  }, () => { commit(); renderProps(); });
 }
 
 function lineProps(P, sel) {
@@ -1835,12 +1931,14 @@ async function replaceImage(o) {
   if (!imgs.length) return;
   const [nw, nh] = await loadImageSize(imgs[0].dataUrl);
   const keepH = o.src ? o.h : o.w * nh / nw;
-  setProp(x => { if (x.id === o.id) { x.src = imgs[0].dataUrl; x.h = round2(keepH); x.note = null; } });
+  // a new photo starts uncropped (the old crop was cut for the old photo)
+  setProp(x => { if (x.id === o.id) { x.src = imgs[0].dataUrl; x.h = round2(keepH); x.note = null; delete x.crop; delete x.nat; } });
 }
 async function resetRatio(o) {
   if (!o.src) return;
   const [nw, nh] = await loadImageSize(o.src);
-  setProp(x => { if (x.id === o.id) x.h = round2(x.w * nh / nw); });
+  // a cropped picture: the ratio of the part that shows
+  setProp(x => { if (x.id !== o.id) return; const c = hasCrop(x) ? x.crop : { l: 0, t: 0, r: 0, b: 0 }; x.h = round2(x.w * nh * (1 - c.t - c.b) / (nw * (1 - c.l - c.r))); });
 }
 
 // ---------------------------------------------------------------- pages
@@ -2710,6 +2808,7 @@ function onKey(e) {
     if (lk === 'b' || lk === 'i' || lk === 'u') { if (textBoxesSelected().length) { e.preventDefault(); S.toggleFmt(lk); } return; }
     return;
   }
+  if (S.crop && (k === 'Escape' || k === 'Enter') && !ctrl) { e.preventDefault(); return endCrop(); }
   if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); return deleteSel(); }
   if (k === 'Escape') { if (S.tool !== 'select') setTool('select'); else { S.sel.clear(); selectionChanged(); } return; }
   if (k === 'F9') { e.preventDefault(); return setZoom(1); }

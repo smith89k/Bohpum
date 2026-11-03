@@ -136,12 +136,59 @@ function renderBox(o, el) {
   el.append(t);
 }
 
+// Picture settings (all optional): crop {l,t,r,b} = share of the photo cut off each side, with nat {w,h} = the photo's
+// own size (for Fit inside / Fill & crop of a cropped photo); bright and contrast -100…100; recolor 'gray' | 'bw' |
+// 'washout'; flipH, flipV. The photo itself is never changed.
+export function hasCrop(o) { const c = o.crop; return !!c && (c.l > 0 || c.t > 0 || c.r > 0 || c.b > 0); }
+// where the cropped photo goes in the box, in % of the box: the visible part laid in by Fit
+export function cropLayout(o) {
+  const c = o.crop, vw = 1 - c.l - c.r, vh = 1 - c.t - c.b;
+  let rx = 0, ry = 0, rw = 100, rh = 100;
+  if (o.fit !== 'fill' && o.nat && o.nat.w > 0 && o.nat.h > 0 && o.w > 0 && o.h > 0) {
+    const A = (o.nat.w * vw) / (o.nat.h * vh), B = o.w / o.h;
+    const wide = o.fit === 'contain' ? A > B : A < B;
+    if (wide) { rh = B / A * 100; ry = (100 - rh) / 2; } else { rw = A / B * 100; rx = (100 - rw) / 2; }
+  }
+  const iw = rw / vw, ih = rh / vh;
+  return { left: rx - c.l * iw, top: ry - c.t * ih, width: iw, height: ih };
+}
+let filterSeq = 0;
+function pictureFilter(o, el) {
+  const f = [];
+  if (o.bright) f.push(`brightness(${Math.max(0, 1 + o.bright / 100)})`);
+  if (o.contrast) f.push(`contrast(${Math.max(0, 1 + o.contrast / 100)})`);
+  if (o.recolor === 'gray') f.push('grayscale(1)');
+  else if (o.recolor === 'washout') f.push('contrast(0.35) brightness(1.6)');
+  else if (o.recolor === 'bw') { // pure black and white: a threshold, which CSS alone can't do
+    const id = 'kbw' + (++filterSeq) + '_' + o.id;
+    const svg = svgEl('svg', { width: 0, height: 0, style: 'position:absolute', 'aria-hidden': 'true' });
+    const fl = svgEl('filter', { id, 'color-interpolation-filters': 'sRGB' });
+    fl.append(svgEl('feColorMatrix', { type: 'saturate', values: 0 }));
+    const ct = svgEl('feComponentTransfer');
+    for (const ch of ['feFuncR', 'feFuncG', 'feFuncB']) ct.append(svgEl(ch, { type: 'discrete', tableValues: '0 1' }));
+    fl.append(ct); svg.append(fl); el.append(svg);
+    f.push(`url(#${id})`);
+  }
+  return f.join(' ');
+}
 function renderImage(o, el) {
   if (o.src) {
     const img = document.createElement('img');
     img.src = o.src; img.draggable = false;
-    img.style.objectFit = o.fit === 'fill' ? 'fill' : o.fit;
-    el.append(img);
+    const flip = o.flipH || o.flipV ? `scale(${o.flipH ? -1 : 1}, ${o.flipV ? -1 : 1})` : '';
+    const filter = pictureFilter(o, el);
+    if (filter) img.style.filter = filter;
+    if (hasCrop(o)) { // only the crop shows: the photo, bigger than the box, in a box that clips it
+      const clip = document.createElement('div'); clip.className = 'kimg-clip';
+      if (flip) clip.style.transform = flip;
+      const l = cropLayout(o);
+      Object.assign(img.style, { objectFit: 'fill', left: l.left + '%', top: l.top + '%', width: l.width + '%', height: l.height + '%' });
+      clip.append(img); el.append(clip);
+    } else {
+      img.style.objectFit = o.fit === 'fill' ? 'fill' : o.fit;
+      if (flip) img.style.transform = flip;
+      el.append(img);
+    }
   } else if (o.mergePhoto) { // a photo field with no photo: printed empty (the editor outlines it)
     const d = document.createElement('div'); d.className = 'kimg-empty'; el.append(d);
   } else {

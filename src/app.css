@@ -236,6 +236,10 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .handle { position: absolute; background: #fff; border: 1.5px solid var(--sel); border-radius: 2px; pointer-events: auto; }
 .handle.rot { border-radius: 50%; background: #3fb950; border-color: #fff; cursor: grab; }
 .handle.ep { border-radius: 50%; cursor: move; }
+/* crop mode: black bars, as in Publisher (long along the edge they cut) */
+.handle.crop { background: #111; border-color: #fff; border-radius: 1px; }
+.handle.crop[data-h="n"], .handle.crop[data-h="s"] { transform: scaleX(2.6) scaleY(.7); }
+.handle.crop[data-h="e"], .handle.crop[data-h="w"] { transform: scaleY(2.6) scaleX(.7); }
 .rot-stem { position: absolute; width: 1px; background: var(--sel); left: 50%; }
 .marquee { position: absolute; border: 1px dashed var(--sel); background: rgba(29,111,216,.08); pointer-events: none; }
 .draft { position: absolute; border: 1px dashed var(--accent); background: rgba(31,122,76,.05); pointer-events: none; }

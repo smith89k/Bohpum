@@ -123,9 +123,10 @@ Every change is one Undo step.
 
 ### Opening Publisher files
 
-When the converted file has them, read picture crop (`fo:clip`), brightness (`draw:luminance`), contrast
-(`draw:contrast`), colour mode (`draw:color-mode`: greyscale → Grayscale, mono → Black & white, watermark → Washout)
-and mirroring (`style:mirror`).
+When the converted file has them, read brightness (`draw:luminance`), contrast (`draw:contrast`), colour mode
+(`draw:color-mode`: greyscale → Grayscale, mono → Black & white, watermark → Washout) and mirroring (`style:mirror`).
+Not read: the crop (`fo:clip`). It is given in lengths of the photo's own printed size, which the converted file
+doesn't state for every photo, so it can't be turned into shares of the photo reliably.
 
 ## Errors and limits
 
