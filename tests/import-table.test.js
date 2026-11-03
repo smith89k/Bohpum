@@ -42,4 +42,20 @@ run(async (t, check) => {
   check('…holding the table and its words', r[0] && /<table/.test(r[0].html) && /Posted/.test(r[0].html) && /CR/.test(r[0].html), r);
   // the file's default shape style (green fill and outline here) is not painted behind a table, as in Publisher
   check('…with no fill or outline from the default shape style', r[0] && r[0].fill === 'none' && r[0].stroke === 'none', r);
+
+  // Publisher files give each paragraph a space after it (here 4.94 mm). In a table cell Publisher doesn't add it after
+  // the last paragraph: its 9 mm rows hold one 11 pt line. Adding it made every row 5 mm taller than the file says, so
+  // the table spilled out of its box and the box's frame looked like a second box inside the table.
+  const rows = await js(`(async () => {
+    const { makeObject } = await import('./model.js'), { renderObject } = await import('./render.js');
+    const p = (t) => '<p style="margin-bottom:4.94mm"><span style="font-size:11pt">' + t + '</span></p>';
+    const o = makeObject('box', { x: 0, y: 0, w: 60, h: 18, shape: 'none', html: '<table><tr style="height:9mm"><td style="padding:0.97mm">' + p('DR') + '</td></tr><tr style="height:9mm"><td style="padding:0.97mm">' + p('one') + p('two') + '</td></tr></table>' });
+    const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-10000px;top:0';
+    host.append(renderObject(o)); document.body.append(host);
+    const mm = (el) => el.getBoundingClientRect().height / (96 / 25.4);
+    const out = [...host.querySelectorAll('tr')].map(mm);
+    host.remove(); return out;
+  })()`);
+  check('A cell with one line keeps the file’s 9 mm row (no space after its last paragraph)', rows[0] < 10.5, rows); // the line and padding only (14.8 mm with the space after)
+  check('…while two paragraphs in a cell keep the space between them', rows[1] > rows[0] + 4.5, rows);
 });

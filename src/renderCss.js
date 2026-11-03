@@ -19,5 +19,8 @@ export const RENDER_CSS = `
 .kt p { margin: 0; min-height: 1em; }
 .kt table { border-collapse: collapse; width: 100%; }
 .kt td, .kt th { border: 0.2mm solid #000; padding: 0.5mm 1mm; vertical-align: top; }
+/* as in Publisher, a paragraph's space after isn't added after a cell's last paragraph (nothing follows it), so a
+   row keeps the height the file gives it */
+.kt td > p:last-child, .kt th > p:last-child { margin-bottom: 0 !important; }
 .kcrop { position: absolute; background: #000; }
 `;
