@@ -1,7 +1,10 @@
 // Rich-text helpers for text frames (contentEditable). Formatting is stored as inline CSS on <span>/<p>.
 import { fixLineHeights } from './render.js';
 
-const ALLOWED = new Set(['P', 'SPAN', 'BR', 'TABLE', 'TBODY', 'TR', 'TD', 'TH', 'B', 'I', 'U', 'S', 'STRONG', 'EM', 'SUB', 'SUP']);
+const ALLOWED = new Set(['P', 'SPAN', 'BR', 'TABLE', 'TBODY', 'TR', 'TD', 'TH', 'COLGROUP', 'COL', 'B', 'I', 'U', 'S', 'STRONG', 'EM', 'SUB', 'SUP']);
+// table settings (src/table.js): kept only on the table's own parts, so pasted text can't bring sizes into spans
+const TABLE_TAGS = new Set(['TABLE', 'COLGROUP', 'COL', 'TR', 'TD', 'TH']);
+const TABLE_KEEP = ['width', 'height', 'padding', 'border-style', 'border-width', 'border-color', 'table-layout'];
 const STYLE_KEEP = ['font-family', 'font-size', 'font-weight', 'font-style', 'color', 'text-decoration', 'text-decoration-line', 'background-color',
   'text-align', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right', 'text-indent', 'letter-spacing', 'vertical-align',
   'font-variant', 'text-transform', 'text-shadow', 'min-height', 'line-height'];
@@ -54,7 +57,7 @@ function cleanAttrs(el) {
   for (const a of Array.from(el.attributes)) {
     if (a.name === 'style') {
       const keep = [];
-      for (const prop of STYLE_KEEP) { const v = el.style.getPropertyValue(prop); if (v) keep.push(`${prop}:${v}`); }
+      for (const prop of TABLE_TAGS.has(el.tagName) ? [...STYLE_KEEP, ...TABLE_KEEP] : STYLE_KEEP) { const v = el.style.getPropertyValue(prop); if (v) keep.push(`${prop}:${v}`); }
       if (keep.length) el.setAttribute('style', keep.join(';')); else el.removeAttribute('style');
     } else if (!['data-ls', 'data-lhfix', 'colspan', 'rowspan', 'data-field', 'data-col'].includes(a.name) && !(a.name === 'contenteditable' && el.tagName === 'SPAN' && el.hasAttribute('data-field'))) el.removeAttribute(a.name);
   }

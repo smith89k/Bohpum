@@ -4,6 +4,7 @@ import { renderObject, renderPage, fixLineHeights } from './render.js';
 import { RENDER_CSS } from './renderCss.js';
 import { docFromFodg, bpumText, withDefaults } from './docfile.js';
 import * as TE from './textedit.js';
+import * as TB from './table.js';
 import { openPrintDialog, buildOutputHtml } from './print.js';
 import { parseList, fieldHtml, fieldsIn, ticked, fillPage, mergedDoc } from './merge.js';
 import { sheetBox, photoBox, peopleBox, problemsBox, renderMailBar, mailMenuState } from './mailings.js';
@@ -74,7 +75,12 @@ const ICONS = {
   fill: '<path d="M12 3.5s6 6.3 6 10.5a6 6 0 0 1-12 0c0-4.2 6-10.5 6-10.5z"/>',
   opacity: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none" opacity=".4"/>',
   margins: '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 3v18M16 3v18M4 7h16M4 17h16" stroke-dasharray="1.5 2.5"/>',
-  bg: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12l8-8M4 19.5L19.5 4M11.5 20L20 11.5"/>'
+  bg: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12l8-8M4 19.5L19.5 4M11.5 20L20 11.5"/>',
+  table: '<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10M15 9.5v10"/>',
+  // picture tools
+  crop: 'M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14',
+  rotL: 'M3 12a9 9 0 1 0 3-6.7M3 3v5h5', rotR: 'M21 12a9 9 0 1 1-3-6.7M21 3v5h-5',
+  flipH: 'M12 3v18M9 7L4 17h5zM15 7l5 10h-5z', flipV: 'M3 12h18M7 9L17 4v5zM7 15l10 5v-5z'
 };
 const icon = (n) => { const v = ICONS[n] || ''; return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${v.startsWith('<') ? v : `<path d="${v}"/>`}</svg>`; };
 
@@ -907,6 +913,9 @@ document.addEventListener('selectionchange', () => {
   if (kt && sel.rangeCount && kt.contains(sel.getRangeAt(0).commonAncestorContainer)) {
     S.savedRange = sel.getRangeAt(0).cloneRange();
     clearTimeout(S._tbT); S._tbT = setTimeout(updateTextbar, 60);
+    // the Table section follows the cursor from cell to cell
+    const a = cellOfNode(S.savedRange.startContainer), b = cellOfNode(S.savedRange.endContainer);
+    if (a !== S._cellA || b !== S._cellB) { S._cellA = a; S._cellB = b; clearTimeout(S._tpT); S._tpT = setTimeout(() => { if (S.editing) renderProps(); }, 80); }
   }
   paintKeptSelection();
 });
@@ -1209,7 +1218,7 @@ function renderProps() {
   ar.append(row('Group', gs));
 
   // the box itself: its outline, then the words inside it
-  if (types.size === 1 && types.has('box')) { shapeProps(P, sel[0]); textProps(P, sel[0]); }
+  if (types.size === 1 && types.has('box')) { shapeProps(P, sel[0]); textProps(P, sel[0]); if (single && hasTable(single)) tableProps(P, single); }
 
   if (types.size === 1 && types.has('box')) boxProps(P, sel);
   if (types.size === 1 && types.has('image')) imageProps(P, sel);
@@ -1285,6 +1294,143 @@ function textProps(P, o) {
     num('L', pad.l, v => setProp(x => x.pad = { ...x.pad, l: v }), 0.5), num('R', pad.r, v => setProp(x => x.pad = { ...x.pad, r: v }), 0.5));
   const b = btns(t); b.style.marginTop = '8px';
   b.append(btn('Fit height to text', () => fitHeight()), btn('Edit text', () => startEditing(o.id)));
+}
+
+// ---------------------------------------------------------------- table (src/table.js)
+// A table lives in a text box's html. The Table section works on the typing cursor's cell (or the cells a selection
+// spans) while the box is being edited, else on the whole table (insert / delete then use the last row / column).
+const hasTable = (o) => !!o && o.type === 'box' && /<table[\s>]/i.test(o.html || '');
+const cellOfNode = (n) => { const e = n && (n.nodeType === 1 ? n : n.parentElement); return e ? e.closest('td, th') : null; };
+function tableTarget(kt) {
+  const r = S.editing && S.savedRange && kt.contains(S.savedRange.commonAncestorContainer) ? S.savedRange : null;
+  const a = r && cellOfNode(r.startContainer), b = r && cellOfNode(r.endContainer);
+  if (a && kt.contains(a)) {
+    const table = a.closest('table');
+    return { table, cur: a, cells: b && b !== a && b.closest('table') === table ? TB.cellsBetween(table, a, b) : [a], whole: false };
+  }
+  const table = kt.querySelector('table');
+  if (!table) return null;
+  const g = TB.grid(table), all = [...table.querySelectorAll('td, th')];
+  return { table, cur: (g.nRows && g.cells[g.nRows - 1][g.nCols - 1]) || all[all.length - 1], cells: all, whole: true };
+}
+// mm of a part of the box, measured on screen (rotated boxes: by layout size, which a rotation doesn't change)
+function boxSizer(o, el) {
+  const rect = !o.rot, sz = (n) => rect ? n.getBoundingClientRect() : { width: n.offsetWidth, height: n.offsetHeight };
+  const b = sz(el), kx = b.width ? o.w / b.width : 0, ky = b.height ? o.h / b.height : 0;
+  return (n) => { const s = sz(n); return { w: s.width * kx, h: s.height * ky }; };
+}
+function colWidthsMm(t, size) {
+  const tw = size(t.table).w, known = TB.columnWidthsMm(t.table, tw);
+  if (known) return known;
+  const g = TB.grid(t.table), w = [];
+  for (let c = 0; c < g.nCols; c++) {
+    const td = g.cells.map(x => x[c]).find(x => x && !(+x.getAttribute('colspan') > 1));
+    w[c] = td ? size(td).w : null;
+  }
+  const missing = w.filter(v => v == null).length;
+  if (missing) { const rest = Math.max(missing, tw - w.reduce((a, v) => a + (v || 0), 0)); for (let c = 0; c < w.length; c++) if (w[c] == null) w[c] = rest / missing; }
+  return w;
+}
+// Runs fn({ table, cur, cells, whole }, size, o) on the selected box's design text and makes it one Undo step.
+// fn returns where the typing cursor goes afterwards ({ r, c }), or nothing to keep it in the same cell.
+function tableOp(fn) {
+  const o = selObjs().length === 1 ? selObjs()[0] : null;
+  if (!hasTable(o) || o.locked) return;
+  let at = null;
+  const kt0 = S.editing === o.id ? editingRoot() : null;
+  if (kt0) {
+    const t = tableTarget(kt0);
+    if (t && !t.whole) {
+      const g = TB.grid(t.table), end = cellOfNode(S.savedRange.endContainer);
+      at = { ti: [...kt0.querySelectorAll('table')].indexOf(t.table), a: TB.posOf(g, t.cur), b: end && end.closest('table') === t.table ? TB.posOf(g, end) : null };
+    }
+    finishEditing();
+  }
+  let caret = null, changed = false;
+  withDesignKt(o, (kt) => {
+    let t;
+    if (at) {
+      const table = kt.querySelectorAll('table')[at.ti];
+      const a = table && TB.cellAt(table, at.a.r0, at.a.c0), b = table && at.b ? TB.cellAt(table, at.b.r0, at.b.c0) : a;
+      t = a ? { table, cur: a, cells: a === b ? [a] : TB.cellsBetween(table, a, b), whole: false } : null;
+    } else t = tableTarget(kt);
+    if (!t || !t.cur) return;
+    const res = fn(t, boxSizer(o, kt.closest('.kobj')), o);
+    if (res === false) return;
+    caret = res || null; changed = true;
+    o.html = TE.sanitizeHtml(TE.stripZeroWidth(kt.innerHTML));
+  });
+  if (changed) commit();
+  renderStage(); renderProps(); updateStatus();
+  if (at) { // back to typing, in the same cell (or where the change put it)
+    startEditing(o.id);
+    const kt = editingRoot(), table = kt && kt.querySelectorAll('table')[at.ti];
+    const td = table && TB.cellAt(table, caret ? caret.r : at.a.r0, caret ? caret.c : at.a.c0);
+    if (td) { const r = document.createRange(); r.selectNodeContents(td.querySelector('p') || td); r.collapse(true); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); S.savedRange = r.cloneRange(); }
+  }
+}
+function tableInsertRow(where) {
+  tableOp((t, size, o) => {
+    const g = TB.grid(t.table), p = TB.posOf(g, t.cur), h = size(g.rows[where === 'above' ? p.r0 : p.r1]).h;
+    const tr = TB.insertRow(t.table, t.cur, where);
+    if (!tr) return false;
+    if (!tr.style.height) tr.style.height = round2(h) + 'mm';
+    o.h = round2(o.h + h); // the box grows by the new row, as in Publisher
+    return { r: where === 'above' ? p.r0 + 1 : p.r0, c: p.c0 };
+  });
+}
+function tableInsertColumn(where) {
+  tableOp((t, size, o) => {
+    const w = colWidthsMm(t, size), p = TB.posOf(TB.grid(t.table), t.cur), ref = where === 'left' ? p.c0 : p.c1;
+    const at = TB.insertColumn(t.table, t.cur, where);
+    if (at < 0) return false;
+    w.splice(at, 0, w[ref]); TB.setColumnWidthsMm(t.table, w);
+    o.w = round2(o.w + w[at]); // the other columns keep their widths
+    return { r: p.r0, c: where === 'left' ? p.c0 + 1 : p.c0 };
+  });
+}
+function tableDeleteRow() {
+  tableOp((t, size, o) => {
+    const g = TB.grid(t.table), p = TB.posOf(g, t.cur), h = size(g.rows[p.r0]).h;
+    if (!TB.deleteRow(t.table, t.cur)) return false;
+    o.h = round2(Math.max(1, o.h - h));
+    return { r: p.r0, c: p.c0 };
+  });
+}
+function tableDeleteColumn() {
+  tableOp((t, size, o) => {
+    const w = colWidthsMm(t, size), p = TB.posOf(TB.grid(t.table), t.cur);
+    const c = TB.deleteColumn(t.table, t.cur);
+    if (c < 0) return false;
+    const gone = w.splice(c, 1)[0]; TB.setColumnWidthsMm(t.table, w);
+    o.w = round2(Math.max(1, o.w - gone));
+    return { r: p.r0, c: p.c0 };
+  });
+}
+const tableStyle = (style) => tableOp((t) => { TB.setCellStyle(t.cells, style); });
+const BORDER_PT = [0, 0.25, 0.5, 0.75, 1, 1.5, 2.25];
+function tableProps(P, o) {
+  const holder = document.createElement('div'); holder.innerHTML = o.html;
+  const kt = S.editing === o.id ? editingRoot() : null;
+  const t = (kt && tableTarget(kt)) || tableTarget(holder);
+  if (!t || !t.cur) return;
+  const s = section(P, 'Table', 'table', 'table');
+  const g = TB.grid(t.table), cs = TB.cellStyle(t.cur);
+  caption(s, t.whole ? 'Whole table (click in a cell for one cell)' : t.cells.length > 1 ? `${t.cells.length} cells` : 'This cell');
+  const words = (...b) => { const x = seg(...b); x.classList.add('words'); return x; };
+  const tb = (label, title, fn) => { const b = btn(label, fn); b.title = title; return b; };
+  s.append(row('Insert row', words(tb('Above', 'Insert row above', () => tableInsertRow('above')), tb('Below', 'Insert row below', () => tableInsertRow('below')))));
+  s.append(row('Insert column', words(tb('Left', 'Insert column left', () => tableInsertColumn('left')), tb('Right', 'Insert column right', () => tableInsertColumn('right')))));
+  const dr = tb('Row', 'Delete row', () => tableDeleteRow()), dc = tb('Column', 'Delete column', () => tableDeleteColumn());
+  dr.disabled = g.nRows <= 1; dc.disabled = g.nCols <= 1;
+  s.append(row('Delete', words(dr, dc)));
+  s.append(row('Cell colour', colorField(cs.fill, v => tableStyle({ fill: v }), 'No Colour')));
+  const pt = round2(cs.borderWidth * 72 / 25.4), list = BORDER_PT.includes(pt) ? BORDER_PT : [...BORDER_PT, pt].sort((a, b) => a - b);
+  s.append(row('Border', select(list.map(v => [String(v), v ? `${v} pt` : 'None']), String(pt), v => tableStyle({ borderWidth: round2(+v * 25.4 / 72) }))));
+  s.append(row('Line colour', colorField(cs.borderColor, v => tableStyle({ borderColor: v }))));
+  s.append(row('Cell padding', numInput(cs.padding, v => tableStyle({ padding: Math.max(0, v) }), 0.25, 'mm')));
+  const va = (k, ic, title) => iconBtn(ic, title, () => tableStyle({ valign: k }), cs.valign === k);
+  s.append(row('Text', seg(va('top', 'vt', 'Text at the top'), va('middle', 'vm', 'Text in the middle'), va('bottom', 'vb', 'Text at the bottom'))));
 }
 
 // Align line (the InDesign / Illustrator name): Center = on the edge (the default), Inside, Outside. Each picture

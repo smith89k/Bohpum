@@ -70,6 +70,7 @@ class Styles {
         else if (c.localName === 'paragraph-properties') Object.assign(r.p, propsOf(c));
         else if (c.localName === 'text-properties') Object.assign(r.t, propsOf(c));
         else if (c.localName === 'drawing-page-properties') Object.assign(r.g, propsOf(c));
+        else if (/^table-(column|row|cell)-properties$/.test(c.localName)) Object.assign(r.g, propsOf(c));
       }
       return r;
     };
@@ -256,19 +257,51 @@ function tableHtml(tbl, baseText, basePara, styles) {
   const rows = [];
   const walk = (el) => { for (const c of kids(el)) { if (c.localName === 'table-row') rows.push(c); else if (/table-(header-)?rows|table-row-group/.test(c.localName)) walk(c); } };
   walk(tbl);
-  const html = ['<table>'];
+  // column widths (as shares of the table, so they scale with the box), row heights, and each cell's look
+  const widths = [];
+  const colWalk = (el) => { for (const c of kids(el)) {
+    if (c.localName === 'table-column') {
+      const w = toMm(styles.resolve('table-column', attr(c, 'table', 'style-name')).g['style:column-width']);
+      for (let i = 0, n = Math.max(1, parseInt(attr(c, 'table', 'number-columns-repeated'), 10) || 1); i < n; i++) widths.push(w);
+    } else if (/table-(header-)?columns|table-column-group/.test(c.localName)) colWalk(c);
+  } };
+  colWalk(tbl);
+  const html = [];
+  if (widths.length && widths.every(w => w > 0)) {
+    const total = widths.reduce((a, b) => a + b, 0);
+    html.push('<table style="table-layout:fixed"><colgroup>', ...widths.map(w => `<col style="width:${r2(w / total * 100)}%">`), '</colgroup>');
+  } else html.push('<table>');
   for (const r of rows) {
-    html.push('<tr>');
+    const rh = toMm(styles.resolve('table-row', attr(r, 'table', 'style-name')).g['style:row-height']);
+    html.push(rh ? `<tr style="height:${r2(rh)}mm">` : '<tr>');
+    const defCell = attr(r, 'table', 'default-cell-style-name');
     for (const cell of kids(r)) {
       if (cell.localName !== 'table-cell') continue;
       const cs = attr(cell, 'table', 'number-columns-spanned'), rs = attr(cell, 'table', 'number-rows-spanned');
       const inner = []; paragraphsHtml(cell, baseText, basePara, styles, inner);
-      html.push(`<td${cs ? ` colspan="${cs}"` : ''}${rs ? ` rowspan="${rs}"` : ''}>${inner.join('')}</td>`);
+      const st = cellCss(styles.resolve('table-cell', attr(cell, 'table', 'style-name') || defCell).g);
+      html.push(`<td${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}${st ? ` style="${st}"` : ''}>${inner.join('')}</td>`);
     }
     html.push('</tr>');
   }
   html.push('</table>');
   return html.join('');
+}
+// A table cell's padding, colour, borders and text position, as CSS (src/table.js reads and writes the same)
+function cellCss(g) {
+  const css = [];
+  const pads = ['top', 'right', 'bottom', 'left'].map(k => toMm(g['fo:padding-' + k] ?? g['fo:padding']));
+  if (pads.some(v => v != null)) css.push(`padding:${pads.map(v => r2(v || 0) + 'mm').join(' ')}`);
+  if (g['draw:fill'] === 'solid' && g['draw:fill-color']) css.push(`background-color:${g['draw:fill-color']}`);
+  else if (g['fo:background-color'] && g['fo:background-color'] !== 'transparent') css.push(`background-color:${g['fo:background-color']}`);
+  const b = g['fo:border'] || g['fo:border-top'];
+  if (b) {
+    if (b === 'none') css.push('border-style:none');
+    else { const m = b.match(/^([\d.]+\w+)\s+\w+\s+(#[0-9a-f]{6})/i); if (m) css.push(`border-style:solid;border-width:${r2(toMm(m[1]))}mm;border-color:${m[2]}`); }
+  }
+  const va = g['style:vertical-align'];
+  if (va === 'middle' || va === 'bottom') css.push(`vertical-align:${va}`);
+  return css.join(';');
 }
 
 // ---------- shapes ----------
