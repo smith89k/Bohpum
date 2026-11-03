@@ -1372,7 +1372,14 @@ function tableOp(fn) {
     startEditing(o.id);
     const kt = editingRoot(), table = kt && kt.querySelectorAll('table')[at.ti];
     const td = table && TB.cellAt(table, caret ? caret.r : at.a.r0, caret ? caret.c : at.a.c0);
-    if (td) { const r = document.createRange(); r.selectNodeContents(td.querySelector('p') || td); r.collapse(true); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); S.savedRange = r.cloneRange(); }
+    // a change to several cells keeps them chosen, so the next change goes to them too
+    const tdB = !caret && at.b && (at.b.r0 !== at.a.r0 || at.b.c0 !== at.a.c0) ? TB.cellAt(table, at.b.r0, at.b.c0) : null;
+    if (td) {
+      const r = document.createRange();
+      if (tdB) { r.setStart(td, 0); r.setEnd(tdB, tdB.childNodes.length); } else { r.selectNodeContents(td.querySelector('p') || td); r.collapse(true); }
+      const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); S.savedRange = r.cloneRange();
+      S._cellA = td; S._cellB = tdB || td; renderProps();
+    }
   }
 }
 function tableInsertRow(where) {
@@ -1414,6 +1421,52 @@ function tableDeleteColumn() {
   });
 }
 const tableStyle = (style) => tableOp((t) => { TB.setCellStyle(t.cells, style); });
+// Same width / Same height: the chosen columns (rows) share their space evenly; the table keeps its size
+function tableSameWidth() {
+  tableOp((t, size) => {
+    const s = TB.spanOf(t.table, t.cells), w = colWidthsMm(t, size);
+    if (!s || s.c1 <= s.c0) return false;
+    const each = w.slice(s.c0, s.c1 + 1).reduce((a, b) => a + b, 0) / (s.c1 - s.c0 + 1);
+    for (let c = s.c0; c <= s.c1; c++) w[c] = each;
+    TB.setColumnWidthsMm(t.table, w);
+  });
+}
+function tableSameHeight() {
+  tableOp((t, size) => {
+    const s = TB.spanOf(t.table, t.cells), rows = TB.grid(t.table).rows;
+    if (!s || s.r1 <= s.r0) return false;
+    const hs = rows.slice(s.r0, s.r1 + 1).map(tr => size(tr).h), each = round2(hs.reduce((a, b) => a + b, 0) / hs.length);
+    for (let r = s.r0; r <= s.r1; r++) rows[r].style.height = each + 'mm';
+  });
+}
+function tableMerge() {
+  tableOp((t) => {
+    const s = TB.spanOf(t.table, t.cells);
+    return TB.mergeCells(t.table, t.cells) ? { r: s.r0, c: s.c0 } : false;
+  });
+}
+function tableUnmerge() {
+  tableOp((t) => {
+    const merged = t.cells.filter(TB.isMerged);
+    if (!merged.length) return false;
+    const p = TB.posOf(TB.grid(t.table), merged[0]);
+    merged.forEach(td => TB.splitCell(t.table, td));
+    return { r: p.r0, c: p.c0 };
+  });
+}
+// Select table: every cell chosen (the typing cursor goes in the box if it isn't there), so the next change is for all
+function tableSelectAll() {
+  const o = selObjs()[0];
+  if (!hasTable(o)) return;
+  if (S.editing !== o.id) startEditing(o.id);
+  const kt = editingRoot(), cells = kt ? [...kt.querySelectorAll('td, th')] : [];
+  if (!cells.length) return;
+  const r = document.createRange();
+  r.setStart(cells[0], 0); r.setEnd(cells[cells.length - 1], cells[cells.length - 1].childNodes.length);
+  const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  S.savedRange = r.cloneRange(); S._cellA = cells[0]; S._cellB = cells[cells.length - 1];
+  renderProps();
+}
 const BORDER_PT = [0, 0.25, 0.5, 0.75, 1, 1.5, 2.25];
 function tableProps(P, o) {
   const holder = document.createElement('div'); holder.innerHTML = o.html;
@@ -1425,6 +1478,14 @@ function tableProps(P, o) {
   caption(s, t.whole ? 'Whole table (click in a cell for one cell)' : t.cells.length > 1 ? `${t.cells.length} cells` : 'This cell');
   const words = (...b) => { const x = seg(...b); x.classList.add('words'); return x; };
   const tb = (label, title, fn) => { const b = btn(label, fn); b.title = title; return b; };
+  s.append(row('Select', words(tb('Whole table', 'Select table', () => tableSelectAll()))));
+  const sp = TB.spanOf(t.table, t.cells) || { r0: 0, c0: 0, r1: 0, c1: 0 };
+  const sw = tb('Width', 'Same width', () => tableSameWidth()), sh = tb('Height', 'Same height', () => tableSameHeight());
+  sw.disabled = sp.c1 <= sp.c0; sh.disabled = sp.r1 <= sp.r0;
+  s.append(row('Same size', words(sw, sh)));
+  const mg = tb('Merge', 'Merge cells', () => tableMerge()), um = tb('Unmerge', 'Unmerge cells', () => tableUnmerge());
+  mg.disabled = t.cells.length < 2; um.disabled = !t.cells.some(TB.isMerged);
+  s.append(row('Cells', words(mg, um)));
   s.append(row('Insert row', words(tb('Above', 'Insert row above', () => tableInsertRow('above')), tb('Below', 'Insert row below', () => tableInsertRow('below')))));
   s.append(row('Insert column', words(tb('Left', 'Insert column left', () => tableInsertColumn('left')), tb('Right', 'Insert column right', () => tableInsertColumn('right')))));
   const dr = tb('Row', 'Delete row', () => tableDeleteRow()), dc = tb('Column', 'Delete column', () => tableDeleteColumn());

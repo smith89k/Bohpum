@@ -71,6 +71,7 @@ function newCell(like) {
 }
 // put td into tr in column order: before the first cell of that row that starts at column >= c
 function placeInRow(g, tr, td, c) {
+  // cells added since the grid was made aren't in it: they never count as "next"
   const next = cellsOf(tr).find(t => { const p = posOf(g, t); return p && p.c0 >= c; });
   if (next) next.before(td); else tr.append(td);
 }
@@ -141,6 +142,48 @@ export function deleteColumn(table, td) {
     if (n > 1) setSpan(t, 'colspan', n - 1); else t.remove();
   }
   return c;
+}
+
+// The rows and columns a set of cells covers
+export function spanOf(table, cells) {
+  const g = grid(table);
+  let r0 = Infinity, c0 = Infinity, r1 = -1, c1 = -1;
+  for (const td of cells) { const p = posOf(g, td); if (!p) continue; r0 = Math.min(r0, p.r0); c0 = Math.min(c0, p.c0); r1 = Math.max(r1, p.r1); c1 = Math.max(c1, p.c1); }
+  return r1 < 0 ? null : { r0, c0, r1, c1 };
+}
+const isEmptyCell = (td) => !td.textContent.replace(/​/g, '').trim() && !td.querySelector('[data-field]');
+export const isMerged = (td) => span(td.getAttribute('colspan')) > 1 || span(td.getAttribute('rowspan')) > 1;
+
+// Merges the rectangle the cells cover into its top-left cell; the words of every cell are kept, in reading order.
+// Returns the merged cell, or null for fewer than two cells.
+export function mergeCells(table, cells) {
+  const s = spanOf(table, cells);
+  if (!s) return null;
+  const g = grid(table), keep = g.cells[s.r0][s.c0], seen = new Set([keep]), others = [];
+  for (let r = s.r0; r <= s.r1; r++) for (let c = s.c0; c <= s.c1; c++) { const t = g.cells[r][c]; if (t && !seen.has(t)) { seen.add(t); others.push(t); } }
+  if (!keep || !others.length) return null;
+  for (const t of others) {
+    if (!isEmptyCell(t)) {
+      if (isEmptyCell(keep)) keep.replaceChildren();
+      keep.append(...t.childNodes);
+    }
+    t.remove();
+  }
+  setSpan(keep, 'colspan', s.c1 - s.c0 + 1);
+  setSpan(keep, 'rowspan', s.r1 - s.r0 + 1);
+  return keep;
+}
+
+// Splits a merged cell back into single cells: its words stay in the first one, the new ones get its look.
+export function splitCell(table, td) {
+  const g = grid(table), p = posOf(g, td);
+  if (!p || !isMerged(td)) return false;
+  for (let r = p.r0; r <= p.r1; r++) for (let c = p.c0; c <= p.c1; c++) {
+    if (r === p.r0 && c === p.c0) continue;
+    placeInRow(g, g.rows[r], newCell(td), c);
+  }
+  td.removeAttribute('colspan'); td.removeAttribute('rowspan');
+  return true;
 }
 
 // style: { fill: '#rrggbb' | 'none', borderWidth: mm (0 = no line), borderColor, padding: mm, valign: 'top' | 'middle' | 'bottom' }
