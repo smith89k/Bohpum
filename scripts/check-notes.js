@@ -2,8 +2,9 @@
 // people read it, so the build stops when one is missing (as in Sastra PDF):
 //  - src/notes.js, the app's own What's new window (and the GitHub release notes): an entry for package.json's version
 //    at the top, and no broken entry;
-//  - docs/store-listing.md, the Store page's "What's new in this version" (pasted into Partner Center): a "### <version>"
-//    section with at least one "- " line, within Partner Center's 1500 characters.
+//  - docs/store-listing.md, the Store page's "What's new in this version" (pasted into Partner Center as it is): a
+//    "### <version>" section of "New in this version:" and then one line per change, "- Name: what it does.", within
+//    Partner Center's 1500 characters.
 // `node scripts/check-notes.js [notes.js] [store-listing.md]` checks other copies (tests/check-notes.test.js).
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.join(__dirname, '..');
@@ -11,6 +12,7 @@ const file = path.resolve(process.argv[2] || path.join(ROOT, 'src', 'notes.js'))
 const listing = path.resolve(process.argv[3] || path.join(ROOT, 'docs', 'store-listing.md'));
 const version = require(path.join(ROOT, 'package.json')).version;
 const STORE_LIMIT = 1500;   // Partner Center: Store listings › What's new in this version
+const STORE_HEAD = 'New in this version:';   // the Store notes' first line, then "- Name: what it does." one per line
 const problems = [];
 let N = null;
 try { const window = {}; vm.runInNewContext(fs.readFileSync(file, 'utf8'), { window }, { filename: file }); N = window.BohpumNotes || null; }
@@ -44,8 +46,10 @@ if (lines) {
   else {
     const body = [];
     for (const l of lines.slice(at + 1)) { if (/^#/.test(l)) break; body.push(l); }
-    const text = body.join('\n').trim();
-    if (!body.some(l => /^- \S/.test(l))) storeProblems.push(`"### ${version}" has no notes ("- " lines)`);
+    const text = body.join('\n').trim(), said = body.filter(l => l.trim());
+    if (said[0] !== STORE_HEAD) storeProblems.push(`"### ${version}" must start with "${STORE_HEAD}"`);
+    else if (said.length < 2) storeProblems.push(`"### ${version}" has no notes ("- Name: what it does." lines)`);
+    else if (!said.slice(1).every(l => /^- \S/.test(l))) storeProblems.push(`"### ${version}": after "${STORE_HEAD}" every line is one note, "- Name: what it does." (no wrapped lines)`);
     else if (text.length > STORE_LIMIT) storeProblems.push(`"### ${version}" is ${text.length} characters; Partner Center takes up to ${STORE_LIMIT}`);
   }
 }

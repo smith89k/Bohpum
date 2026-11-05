@@ -21,13 +21,15 @@ Your files stay on your computer. Bohpum has no account, no ads and sends nothin
 ## What's new in this version
 
 (Partner Center: the submission › Store listings › English › What's new in this version; up to 1500 characters.
-Newest first; the app's own What's new window is src/notes.js.)
+Newest first; the app's own What's new window is src/notes.js. Every release gets a section here, pasted as it is:
+"New in this version:", then one line per change, "- Name: what it does, in plain words." One line each, no wrapping.
+scripts/check-notes.js stops the build without it.)
 
 ### 0.3.2
 
-- When a newer Bohpum is in the Microsoft Store, a small badge appears at the right end of the title bar. Click it to
-  see the download go from this version to the new one, then press Install. Nothing opens over your work by itself.
-- Help › Check for Updates opens the same panel and tells you whether you have the newest version.
+New in this version:
+- Update badge: when a newer Bohpum is in the Microsoft Store, a small badge appears at the right end of the title bar. Click it to watch the download go from this version to the new one, then press Install. Nothing opens over your work by itself.
+- Check for Updates: Help › Check for Updates opens the same panel and tells you whether you have the newest version.
 
 ### 0.3.1
 

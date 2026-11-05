@@ -106,7 +106,8 @@ Since 0.2.5 a release makes only the Microsoft Store package; there is no instal
 
 1. `pnpm version 0.3.0 --no-git-tag-version --no-git-checks` (only edits package.json).
 2. Write the version's What's new at the top of `src/notes.js` with today's date (it becomes the GitHub release notes)
-   and as `### <version>` in `docs/store-listing.md` (the Store page's notes) — the build refuses to run without both.
+   and as `### <version>` in `docs/store-listing.md` (the Store page's notes: "New in this version:", then one line per
+   change, "- Name: what it does.") — the build refuses to run without both.
 3. Commit and push main.
 4. GitHub → **Actions** → **Release** → **Run workflow** → type `0.3.0` → Run
    (or `gh workflow run release.yml -R smith89k/Bohpum -f version=0.3.0`).

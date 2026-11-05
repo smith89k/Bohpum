@@ -42,7 +42,13 @@ GitHub Actions builds each release's Store package; you submit it in Partner Cen
 1. `pnpm version 0.3.0 --no-git-tag-version --no-git-checks` (only edits package.json).
 2. Every release needs its What's new, in two places, or the build stops: at the top of `src/notes.js` with today's
    date (the app's What's new window and the GitHub release notes), and as `### <version>` at the top of "What's new
-   in this version" in `docs/store-listing.md` (pasted into Partner Center, up to 1500 characters).
+   in this version" in `docs/store-listing.md` (pasted into Partner Center as it is, up to 1500 characters), in this
+   form, one line per change:
+
+   ```
+   New in this version:
+   - Crop pages: drag a box or type the margins, on one page or many. What you cut is only hidden, so you can bring it back.
+   ```
 3. Commit and push main.
 4. GitHub → **Actions** → **Release** → **Run workflow** → type the version (or `gh workflow run release.yml -f version=0.3.0`).
 5. Download `Bohpum-Store-<version>.msix` from the GitHub release and submit it in Partner Center.

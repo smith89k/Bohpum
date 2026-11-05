@@ -31,12 +31,15 @@ run(async (t, check) => {
   const md = fs.readFileSync(path.join(ROOT, 'docs', 'store-listing.md'), 'utf8');
   const store = (name, text) => { const f = path.join(t.ctx.tmp, name + '.md'); fs.writeFileSync(f, text); return runCheck(null, f); };
   const head = "## What's new in this version\n\n";
+  const NEW = 'New in this version:';
   const storeCases = [
     ['no Store notes for this version', store('none', md.replace(`### ${version}`, '### 9.9.9')), new RegExp(`no "### ${version.replace(/\./g, '\\.')}"`)],
-    ['a Store section with no notes', store('empty', `${head}### ${version}\n\n(to do)\n\n### 0.0.1\n\n- x\n`), /has no notes/],
-    ['Store notes longer than Partner Center takes', store('long', `${head}### ${version}\n\n- ${'x'.repeat(1600)}\n`), /Partner Center takes up to 1500/]
+    ['Store notes without "New in this version:" first', store('head', `${head}### ${version}\n\n- Crop: x.\n`), /must start with "New in this version:"/],
+    ['a Store section with no notes', store('empty', `${head}### ${version}\n\n${NEW}\n\n### 0.0.1\n\n${NEW}\n- x\n`), /has no notes/],
+    ['a Store note wrapped onto two lines', store('wrap', `${head}### ${version}\n\n${NEW}\n- Crop pages: drag a box\n  or type the margins.\n`), /no wrapped lines/],
+    ['Store notes longer than Partner Center takes', store('long', `${head}### ${version}\n\n${NEW}\n- ${'x'.repeat(1600)}\n`), /Partner Center takes up to 1500/]
   ];
   for (const [name, r, msg] of storeCases) check(`It stops the build on ${name}`, r.code === 1 && msg.test(r.out), r);
-  const ok = store('ok', `${head}### ${version}\n\n- One new thing.\n- Another.\n\n## Keywords\n`);
-  check('A short Store section with "- " lines passes', ok.code === 0, ok);
+  const ok = store('ok', `${head}### ${version}\n\n${NEW}\n- Crop pages: drag a box or type the margins, on one page or many. What you cut is only hidden, so you can bring it back.\n- Another: one more.\n\n## Keywords\n`);
+  check('The user\'s example passes: "New in this version:", then one "- Name: what it does." line each', ok.code === 0, ok);
 });
