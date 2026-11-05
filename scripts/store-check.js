@@ -1,5 +1,5 @@
 // After electron-builder made the Microsoft Store package (build/store.config.js): the app inside it has the
-// Publisher reader and the menu DLL, and none of what only the installer may carry — the update key (anyone can
+// Publisher reader, the menu DLL and the update panel's helpers, and none of what only the installer may carry — the update key (anyone can
 // download a Store package and open it), app-update.yml, the sparse menu package.
 // `node scripts/store-check.js <dist-store> <msix name>`; run by .github/workflows/release.yml.
 const fs = require('fs'), path = require('path');
@@ -23,6 +23,7 @@ function storeProblems(dist, msix) {
   if (!there(dist, msix)) problems.push(`there is no ${msix}`);
   if (!there(res, 'libreoffice', 'program', 'soffice.exe')) problems.push('the Publisher reader is not inside (resources/libreoffice/program/soffice.exe)');
   if (!there(res, 'explorer-menu', 'BohpumMenu.dll')) problems.push('the menu DLL is not inside (resources/explorer-menu/BohpumMenu.dll)');
+  for (const f of ['BohpumStoreUpdate.exe', 'BohpumRestart.node']) if (!there(res, 'store-update', f)) problems.push(`${f} is not inside (resources/store-update/${f}; the update panel needs it)`);
   if (there(res, 'explorer-menu', 'Bohpum.ExplorerMenu.msix')) problems.push('the sparse menu package is inside (the Store package has its own menu)');
   if (there(res, 'app-update.yml')) problems.push('app-update.yml is inside (the Store updates this copy)');
   let files = [];
@@ -37,7 +38,7 @@ if (require.main === module) {
   const problems = storeProblems(path.resolve(dist), msix);
   for (const p of problems) console.error('::error::Store package: ' + p);
   if (problems.length) process.exit(1);
-  console.log(`store-check: ${msix} has the Publisher reader and the menu, and no update key`);
+  console.log(`store-check: ${msix} has the Publisher reader, the menu and the update helpers, and no update key`);
 }
 
 module.exports = { asarFiles, storeProblems };

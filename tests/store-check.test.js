@@ -1,5 +1,5 @@
 // scripts/store-check.js on made-up build folders (nothing is built here): a Store package passes only with the
-// Publisher reader and the menu DLL inside, and with no update key (inside app.asar or next to it), no app-update.yml
+// Publisher reader, the menu DLL and the update panel's two helpers inside, and with no update key (inside app.asar or next to it), no app-update.yml
 // and no sparse menu package. Also run as the release job runs it.
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -22,13 +22,16 @@ run(async (t, check) => {
   const { asarFiles, storeProblems } = require(path.join(ROOT, 'scripts', 'store-check.js'));
   let k = 0;
   const MSIX = 'Bohpum-Store-9.9.9.msix';
-  const make = ({ key = false, keyBeside = false, reader = true, dll = true, sparse = false, updateYml = false, msix = true } = {}) => {
+  const make = ({ key = false, keyBeside = false, reader = true, dll = true, helper = true, restart = true, sparse = false, updateYml = false, msix = true } = {}) => {
     const dist = path.join(t.ctx.tmp, 'dist' + (++k)), res = path.join(dist, 'win-unpacked', 'resources');
     fs.mkdirSync(path.join(res, 'explorer-menu'), { recursive: true });
     fakeAsar(path.join(res, 'app.asar'), ['main.js', 'store.js', 'src/app.js', ...(key ? ['update-config.json'] : [])]);
     if (keyBeside) { fs.mkdirSync(path.join(res, 'app'), { recursive: true }); fs.writeFileSync(path.join(res, 'app', 'update-config.json'), '{}'); }
     if (reader) { fs.mkdirSync(path.join(res, 'libreoffice', 'program'), { recursive: true }); fs.writeFileSync(path.join(res, 'libreoffice', 'program', 'soffice.exe'), 'x'); }
     if (dll) fs.writeFileSync(path.join(res, 'explorer-menu', 'BohpumMenu.dll'), 'x');
+    if (helper || restart) fs.mkdirSync(path.join(res, 'store-update'), { recursive: true });
+    if (helper) fs.writeFileSync(path.join(res, 'store-update', 'BohpumStoreUpdate.exe'), 'x');
+    if (restart) fs.writeFileSync(path.join(res, 'store-update', 'BohpumRestart.node'), 'x');
     if (sparse) fs.writeFileSync(path.join(res, 'explorer-menu', 'Bohpum.ExplorerMenu.msix'), 'x');
     if (updateYml) fs.writeFileSync(path.join(res, 'app-update.yml'), 'url: x');
     if (msix) fs.writeFileSync(path.join(dist, MSIX), 'x');
@@ -40,7 +43,7 @@ run(async (t, check) => {
   check('A good Store package: no problems', storeProblems(good, MSIX).length === 0, storeProblems(good, MSIX));
   const cases = {
     'the update key in app.asar': make({ key: true }), 'the update key next to it': make({ keyBeside: true }), 'no reader': make({ reader: false }),
-    'no menu DLL': make({ dll: false }), 'the sparse menu package': make({ sparse: true }), 'app-update.yml': make({ updateYml: true }), 'no .msix': make({ msix: false })
+    'no menu DLL': make({ dll: false }), 'no update helper': make({ helper: false }), 'no restart module': make({ restart: false }), 'the sparse menu package': make({ sparse: true }), 'app-update.yml': make({ updateYml: true }), 'no .msix': make({ msix: false })
   };
   for (const [what, dist] of Object.entries(cases)) check(`A package with ${what} is refused`, storeProblems(dist, MSIX).length === 1, storeProblems(dist, MSIX));
 

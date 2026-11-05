@@ -63,9 +63,12 @@ publisher, desktop publishing, pub file, greeting card, flyer, khmer, print
 ## Privacy policy
 
 Bohpum does not collect, store or send any personal information. Your publications and pictures stay on your computer
-and are never uploaded. Bohpum has no account, no analytics and no ads. Updates come from the Microsoft Store.
+and are never uploaded. Bohpum has no account, no analytics and no ads. Updates come from the Microsoft Store: the app
+asks the Microsoft Store, through Windows, whether a newer version exists, when it starts and every 6 hours; the app adds
+nothing about you or your files.
 
-(Partner Center takes this as text: Properties › Privacy policy › Provide privacy policy text. A URL is not needed.)
+(Partner Center takes this as text: Properties › Privacy policy › Provide privacy policy text. A URL is not needed.
+Changed 2026-11-05 for the update panel: paste the new text in the next submission.)
 
 ## Short description
 
@@ -85,4 +88,6 @@ to the File Explorer menu for .pub files.
 
 The package includes LibreOffice (Mozilla Public License 2.0) under resources\libreoffice. Bohpum runs it in the
 background only to read Publisher files; it is never shown and downloads nothing. To try it: open any .pub file with
-Bohpum (File › Open), or right-click a .pub file in File Explorer › Convert to Bohpum (.bpum).
+Bohpum (File › Open), or right-click a .pub file in File Explorer › Convert to Bohpum (.bpum). The app's only network
+use is asking the Microsoft Store, through Windows, for a newer version; a small badge in the title row shows when one
+is found.

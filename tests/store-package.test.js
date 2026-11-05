@@ -22,8 +22,9 @@ run(async (t, check) => {
     pkg.build.files.filter(f => !NOT_IN_STORE.includes(f)).every(f => c.files.includes(f)) && c.files.includes('store.json'), c.files);
   check('A sideloaded test package has no store.json',
     !storeBuildConfig({ base: pkg.build, id: store.SIDELOAD, readerDir: 'x', storeJson: false }).files.includes('store.json'));
-  check('The reader goes inside as resources/libreoffice; the menu DLL without its sparse package',
-    same(c.extraResources, [{ from: 'explorer-menu/out', to: 'explorer-menu', filter: ['BohpumMenu.dll'] }, { from: 'dist-reader/LibreOffice', to: 'libreoffice' }]), c.extraResources);
+  check('The reader goes inside as resources/libreoffice; the menu DLL without its sparse package; the update panel\'s helpers',
+    same(c.extraResources, [{ from: 'explorer-menu/out', to: 'explorer-menu', filter: ['BohpumMenu.dll'] }, { from: 'dist-reader/LibreOffice', to: 'libreoffice' },
+      { from: 'store-update/out', to: 'store-update', filter: ['BohpumStoreUpdate.exe', 'BohpumRestart.node'] }]), c.extraResources);
   check('appx target into dist-store, with the app icon and no update address',
     c.win.target === 'appx' && c.win.icon === pkg.build.win.icon && c.directories.output === 'dist-store' && c.publish === null, { win: c.win, dirs: c.directories, publish: c.publish });
   check('The identity from Partner Center, and Bohpum\'s own Store settings',
@@ -31,7 +32,8 @@ run(async (t, check) => {
       && c.appx.applicationId === 'Bohpum' && c.appx.displayName === 'Bohpum' && c.appx.minVersion === '10.0.19041.0'
       && c.appx.maxVersionTested === '10.0.26100.0' && c.appx.customManifestPath === 'build/store-manifest.xml'
       && c.appx.artifactName === 'Bohpum-Store-${version}.msix', c.appx);   // .msix: electron-builder's ext would say .appx (the same format)
-  check('The installer\'s own config is untouched', pkg.build.win.target === 'nsis' && pkg.build.files.includes('update-config.json'), pkg.build.win);
+  check('The installer\'s own config is untouched, and has no update panel helpers', pkg.build.win.target === 'nsis' && pkg.build.files.includes('update-config.json')
+    && !JSON.stringify(pkg.build.extraResources).includes('store-update'), pkg.build);
 
   // build/store.config.js: what electron-builder loads
   process.env.BOHPUM_STORE_SIDELOAD = '1'; process.env.BOHPUM_STORE_READER = 'vendor/libreoffice';

@@ -17,8 +17,16 @@ input:not([type=checkbox], [type=radio], [type=range], [type=color]), textarea, 
 .menu-btn:hover { background: var(--chrome-2); }
 .menu-btn.open { background: var(--accent-soft); color: var(--accent); }
 /* while a dialog is open (e.g. the print screen, which leaves the title row visible) the menus are off */
-body:has(#modal-root > *) #menus { opacity: .45; pointer-events: none; }
+body:has(#modal-root > *) #menus, body:has(#modal-root > *) #b-update { opacity: .45; pointer-events: none; }
 #doc-title { flex: 1; min-width: 0; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 12.5px; }
+/* The Store copy's update badge (src/update-panel.js), as in Sastra PDF: shown only while there is something to say.
+   At the row's right end, before ─ □ ✕; #doc-title gives it the room. */
+.upd-badge { -webkit-app-region: no-drag; flex: none; width: 112px; height: 26px; margin-left: 8px; padding: 0; border: 0; border-radius: 5px; background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; cursor: pointer; }
+.upd-badge[hidden] { display: none; }
+.upd-badge:hover { filter: brightness(1.06); }
+.upd-badge.ready { background: var(--accent); color: var(--on-accent); }
+.upd-badge.ready:hover { background: var(--accent-hover); filter: none; }
+.upd-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* a drag area ignores what is drawn over it */
 .modal-back, #ctxmenu, #toast, .drop-hint { -webkit-app-region: no-drag; }
 
@@ -351,6 +359,26 @@ body.page-dragging, body.page-dragging * { cursor: grabbing !important; }
 .progress .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .progress .btn.primary:hover { background: var(--accent-hover); }
 .progress .btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+/* The Store copy's update panel (src/update-panel.js), as in Sastra PDF and AI Hub: This version → New version, the
+   download bar, Install */
+.modal.update-panel { width: min(460px, calc(100vw - 32px)); }
+.update-panel .modal-b { display: flex; flex-direction: column; gap: 10px; }
+.update-panel .modal-b[hidden] { display: none; }
+.u-spin { flex: none; width: 16px; height: 16px; border: 2px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: u-turn .8s linear infinite; }
+@keyframes u-turn { to { transform: rotate(360deg); } }
+.u-versions { display: flex; align-items: center; justify-content: space-around; text-align: center; }
+.u-k { font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.u-v { font-size: 30px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.u-old .u-v { color: var(--ink-3); }
+.u-arrow { font-size: 26px; color: var(--ink-3); }
+.u-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.u-bar i { display: block; width: 0; height: 100%; background: var(--accent); transition: width .3s; }
+.u-prog { display: flex; justify-content: space-between; gap: 12px; min-height: 16px; margin-top: -4px; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.update-panel p { margin: 0; }
+.u-line { line-height: 1.45; }
+.u-hint { font-size: 12px; color: var(--ink-3); }
+@media (prefers-reduced-motion: reduce) { .u-bar i { transition: none; } .u-spin { animation-duration: 2.4s; } }
 
 /* About (Help > About), as in Sastra PDF: the app, its author, credits */
 .modal.about { width: min(480px, calc(100vw - 32px)); }

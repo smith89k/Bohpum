@@ -6,7 +6,7 @@
 const NOT_IN_STORE = Object.freeze(['update-config.json', 'reader-pack.json']);
 
 // id: { identityName, publisher, publisherDisplayName } (store.js); readerDir: the LibreOffice folder to put inside;
-// storeJson: carry store.json (its Store ID, for Check for Updates; a sideloaded test package has none)
+// storeJson: carry store.json (its Store ID, for the update panel's Open in Store; a sideloaded test package has none)
 function storeBuildConfig({ base, id, readerDir, storeJson }) {
   return {
     ...base,
@@ -14,7 +14,8 @@ function storeBuildConfig({ base, id, readerDir, storeJson }) {
     files: [...base.files.filter(f => !NOT_IN_STORE.includes(f)), ...(storeJson ? ['store.json'] : [])],
     extraResources: [
       { from: 'explorer-menu/out', to: 'explorer-menu', filter: ['BohpumMenu.dll'] },
-      { from: readerDir, to: 'libreoffice' }
+      { from: readerDir, to: 'libreoffice' },
+      { from: 'store-update/out', to: 'store-update', filter: ['BohpumStoreUpdate.exe', 'BohpumRestart.node'] }   // the update panel: Store copy only
     ],
     win: { ...base.win, target: 'appx' },
     publish: null,   // no app-update.yml: the Store updates this copy

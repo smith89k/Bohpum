@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('api', {
   checkUpdates: () => ipcRenderer.invoke('check-updates'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   onUpdateReady: (fn) => ipcRenderer.on('update-ready', (_e, v) => fn(String(v))),
+  // the Store copy's update badge and panel (store-update.js): main answers null in any other copy
+  storeUpdate: (action) => ipcRenderer.invoke('store-update', action),
+  onStoreUpdate: (fn) => ipcRenderer.on('store-update', (_e, s) => fn(s)),
   // after an update: is the right-click menu under "Show more options"? 'check' | 'later' | 'fix'
   menuRepair: (action) => ipcRenderer.invoke('menu-repair', action),
   saveDialog: (opts) => ipcRenderer.invoke('save-dialog', opts),

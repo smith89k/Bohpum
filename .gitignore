@@ -11,6 +11,7 @@ vendor/libreoffice.stamp
 
 # Built by pnpm run build:menu (scripts/build-explorer-menu.js)
 explorer-menu/out/
+store-update/out/
 
 # Written by the release job (.github/workflows/release.yml), never committed: the update key, the Publisher
 # reader's pack info, and the folder the reader pack is built in

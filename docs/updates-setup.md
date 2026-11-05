@@ -189,6 +189,15 @@ Windows shows no warning, and the Store keeps it up to date. Since 0.2.5 it is t
    question (most likely about `runFullTrust` or the LibreOffice inside), answer it in **Notes for certification** and
    submit again.
 
+**The update panel on a real update** (Store copy only, as Sastra PDF's). A copy shows it only for updates that come
+after the version that added it. The question to the Store can be tried on this PC at any time, from inside the
+installed Store copy. In PowerShell, with the path of a built `BohpumStoreUpdate.exe` (`pnpm run build:menu`):
+`Invoke-CommandInDesktopPackage -PackageFamilyName smith89k.Bohpum_d9wvxw143ha0g -AppId Bohpum -Command cmd.exe -Args '/c ""<path>\BohpumStoreUpdate.exe" check > "%TEMP%\store-check.txt""' -PreventBreakaway`,
+then read that file: `count` 1 means the Store offers an update. Tried on 2026-11-05 with 0.3.0 installed and 0.3.1 in
+the Store: `count` 1, `silent` true, but `version` "0.3.0.0", the installed one, so the panel says "New version" with no
+number. Still to see on the first real update: the download bar, Install, and whether Windows opens Bohpum again by
+itself. A Partner Center package flight can limit a test release to chosen accounts.
+
 **Trying the Store package on this PC first** (before a first submission, or after changing the manifest):
 `pnpm run bundle-libreoffice`, then in PowerShell
 `$env:BOHPUM_STORE_SIDELOAD='1'; $env:BOHPUM_STORE_READER='vendor/libreoffice'; pnpm run dist:store`, then in an

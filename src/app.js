@@ -2571,6 +2571,13 @@ async function readyBox(v) {
 }
 const offered = new Set(); // asked once per downloaded version while Bohpum runs; Later = it installs on closing
 function updateReady(v) { if (offered.has(v)) return; offered.add(v); inTurn(() => readyBox(v)); }
+// Unsaved changes before something that closes Bohpum (an update): Save / Don't save / Cancel → go on?
+async function saveFirst(before) {
+  finishEditing();
+  if (!S.dirty) return true;
+  const r = await choiceBox('Save changes first?', `Your publication has unsaved changes. Save them before ${before}?`, ['Save', "Don't save", 'Cancel']);
+  return r === 1 || (r === 0 && !!(await save()));
+}
 // The installer starts at once and closes Bohpum by force, so the unsaved question comes first.
 const RESTART_REFUSED = {
   task: ["Bohpum can't restart while files are being converted", 'Wait for the small convert window to finish, then use Help › Check for Updates. Or close Bohpum later: the update installs then.'],
@@ -2578,24 +2585,22 @@ const RESTART_REFUSED = {
   failed: ["The update couldn't be started", 'Your publication is still open. Bohpum downloads the update again and offers it next time.']
 };
 async function restartForUpdate() {
-  finishEditing();
-  if (S.dirty) {
-    const r = await choiceBox('Save changes first?', 'Your publication has unsaved changes. Save them before restarting?', ['Save', "Don't save", 'Cancel']);
-    if (r === 2 || (r === 0 && !(await save()))) return;
-  }
+  if (!(await saveFirst('restarting'))) return;
   const res = await api.installUpdate();
   const why = res && !res.ok && RESTART_REFUSED[res.reason];
   if (why) await choiceBox(why[0], why[1], ['OK']);
 }
-// Help › Check for Updates: "Checking for updates…" (Cancel or Esc drops the answer), then the answer.
+// Help › Check for Updates: "Checking for updates…" (Cancel or Esc drops the answer), then the answer. The Store copy
+// shows its update panel instead (src/update-panel.js).
 async function checkUpdatesCmd() {
+  if (!screenFree()) return;
+  if (await BohpumUpdatePanel.active()) return BohpumUpdatePanel.check();
   if (!screenFree()) return;
   const m = modal('Checking for updates…', document.createElement('div'), [['Cancel', null]], 'checking');
   let open = true; m.done.then(() => { open = false; });
   let a; try { a = await api.checkUpdates(); } catch { a = { kind: 'failed' }; }
   if (!open) return;
   m.close();
-  if (a.kind === 'store') return;   // main opened Bohpum's page in the Store, which updates this copy
   if (a.kind === 'ready') return readyBox(a.version);
   const [title, text] = {
     current: ['You have the latest version', `Bohpum ${a.version} is the newest version.`],
@@ -2968,6 +2973,7 @@ function wire() {
   api.onReadStep((s) => { if (reading && reading.step) reading.step(s); });
   api.onReaderProgress((p) => { if (reading && reading.progress) reading.progress(p); });
   api.onUpdateReady(updateReady);
+  BohpumUpdatePanel.init({ api, saveFirst: () => saveFirst('installing'), choice: choiceBox, screenFree });
   // a file double-clicked in Explorer (or "Open with"): it replaces the welcome screen
   api.onOpenPath((p) => { if (welcome) welcome.close(); openFile(p); });
   setupTextbar();

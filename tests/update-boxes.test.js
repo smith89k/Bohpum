@@ -19,6 +19,9 @@ run(async (t, check) => {
   const helpItem = (label) => Menu.getApplicationMenu().items.find(i => i.label === 'Help').submenu.items.find(i => i.label === label);
   const toastText = () => js(`document.getElementById('toast').classList.contains('show') ? document.getElementById('toast').textContent : ''`);
 
+  check('Not the Store copy: no Store update state and no update badge (store-panel.test.js has them)',
+    (await js(`api.storeUpdate('state')`)) === null && await js(`document.getElementById('b-update').hidden`));
+
   // ---- Check for Updates
   helpItem('Check for Updates…').click();
   await waitTitle("This copy doesn't update itself");

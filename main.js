@@ -9,6 +9,7 @@ const menu = require('./explorer-menu');
 const updates = require('./updater');
 const reader = require('./reader');
 const store = require('./store');
+const storeUpdates = require('./store-update');
 const lists = require('./list');
 
 const APP_NAME = 'Bohpum';
@@ -17,6 +18,7 @@ let win = null;
 let dirty = false;
 let pendingOpenPath = null;
 let up = null;              // automatic updates (updater.js), only in the installed app with the key
+let storeUp = null;         // the Store copy's update state (store-update.js), started when its window first asks
 
 // The Microsoft Store copy (store.js): Windows says so (process.windowsStore). Tests only (never in the installed app):
 // BOHPUM_STORE_TEST = { resources } makes `electron .` act as one, with <resources> standing in for its resources folder.
@@ -465,11 +467,8 @@ ipcMain.on('reader-cancel', (e) => readerService.cancel(e.sender.id));
 
 // Automatic updates (updater.js). The page asks about unsaved changes BEFORE install-update: quitAndInstall starts the
 // installer at once and it closes the app by force, so nothing may be left to ask by then.
-// The Store copy: the Store updates it, so Check for Updates opens Bohpum's page there (store.js storePageUrl).
-ipcMain.handle('check-updates', () => {
-  if (STORE) { shell.openExternal(store.storePageUrl(STORE_INFO)).catch(() => {}); return { kind: 'store' }; }
-  return up ? up.checkNow() : { kind: 'dev' };
-});
+// The Store copy has its own badge and panel instead ('store-update' below).
+ipcMain.handle('check-updates', () => up ? up.checkNow() : { kind: 'dev' });
 ipcMain.handle('install-update', () => {
   const block = updates.installBlock({ downloaded: up && up.downloaded(), taskOpen: !!taskWin, readerBusy: readerService.busy() });
   if (block) return { ok: false, reason: block };
@@ -478,6 +477,40 @@ ipcMain.handle('install-update', () => {
   if (up.install()) return { ok: true };
   dirty = was;     // it didn't start: closing must ask about unsaved changes again
   return { ok: false, reason: 'failed' };
+});
+// The Store copy's update badge and panel (store-update.js, src/update-panel.js), as in Sastra PDF. Starting here, at
+// the main window's first question, means a right-click job alone never checks. The helper program does the talking
+// to the Store; its problems go to the same update.log as above.
+function startStoreUpdates() {
+  const fake = !app.isPackaged && process.env.BOHPUM_STORE_HELPER;   // tests only, never in the installed app
+  const run = storeUpdates.makeRun(fake
+    ? { command: process.execPath, prefix: [fake], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, log: updateLog }
+    : { command: path.join(RESOURCES, 'store-update', 'BohpumStoreUpdate.exe'), log: updateLog });
+  storeUp = storeUpdates.createStoreUpdater({
+    run, log: updateLog, current: app.getVersion(),
+    send: s => { if (win) win.webContents.send('store-update', s); },
+    hwnd: () => win ? win.getNativeWindowHandle().readBigUInt64LE(0).toString() : null,
+    taskOpen: () => !!taskWin,
+    // Loading it is what asks Windows to open the app again after the update closes it (store-update/restart.cpp)
+    registerRestart: () => { if (app.isPackaged) process.dlopen({ exports: {} }, path.join(process.resourcesPath, 'store-update', 'BohpumRestart.node')); }
+  });
+  storeUp.start();
+}
+ipcMain.handle('store-update', async (_e, action) => {
+  if (!STORE) return null;
+  if (!storeUp) startStoreUpdates();
+  if (action === 'state') return storeUp.state();
+  if (action === 'check') return storeUp.checkNow();
+  if (action === 'download') return storeUp.download();
+  if (action === 'open-store') { shell.openExternal(store.storePageUrl(STORE_INFO)).catch(() => {}); return {}; }
+  if (action === 'install') {
+    const was = dirty;
+    dirty = false;   // before: Windows closes the app to install, and the page has already asked about unsaved changes
+    const r = await storeUp.install();
+    if (!r.ok) dirty = was;   // it didn't happen: closing must ask again
+    return r;
+  }
+  return null;
 });
 // After a silent update the right-click menu may have fallen back to "Show more options" (explorer-menu.js
 // repairNeeded): 'check' → { needed }, 'later' → not again for this version, 'fix' → the installer's own setup step,
@@ -719,4 +752,5 @@ else {
     }
   });
   app.on('window-all-closed', () => app.quit());
+  app.on('will-quit', () => { if (storeUp) storeUp.stop(); });
 }

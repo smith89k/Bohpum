@@ -34,6 +34,8 @@ doesn't update itself or download the Publisher reader. Only the release job's i
 
 Bohpum comes from the **Microsoft Store** (https://apps.microsoft.com/detail/9MWKGK7SCMJS): Microsoft signs it, so
 Windows shows no warning, and the Store keeps it up to date. The Store version has the Publisher reader inside.
+When a new version is found, a small badge appears at the right end of the title row (as in Sastra PDF): click it to
+see the download go from version to version, then click Install. Help › Check for Updates checks by hand.
 GitHub Actions builds each release's Store package; you submit it in Partner Center.
 
 1. `pnpm version 0.3.0 --no-git-tag-version --no-git-checks` (only edits package.json).
@@ -48,8 +50,8 @@ Up to 0.2.4 releases were an installer with private updates from a Cloudflare R2
 Publisher reader); since 0.2.5 nothing goes there. The Store setup, each release's upload, and the old update setup:
 [docs/updates-setup.md](docs/updates-setup.md).
 
-**Privacy.** The Store version never goes online by itself (the Store updates it). An installer copy goes online only
-to check for updates, and downloads the Publisher reader only when you say yes. Nothing about you or your files is
+**Privacy.** The Store version asks the Microsoft Store, through Windows, whether a newer version exists, when it starts
+and every 6 hours; the app adds nothing about you or your files. An installer copy goes online only to check for updates, and downloads the Publisher reader only when you say yes. Nothing about you or your files is
 sent.
 
 ## The Publisher reader (LibreOffice)
@@ -196,7 +198,10 @@ The app's own text uses the fonts of Sastra PDF, shipped in `src/fonts` (same fi
 ```
 main.js          Electron main process: windows, menus, files, LibreOffice import, print/PDF/PNG, updates
 preload.js       Safe bridge between the window and main process
-updater.js       Automatic updates: when to check, what Check for Updates says, the update key (as Sastra PDF)
+updater.js       Automatic updates of installer copies: when to check, what Check for Updates says, the update key
+store-update.js  The Store copy's update state, behind the badge and panel (src/update-panel.js), as Sastra PDF's
+store-update/    The small programs the Store copy uses to ask the Store for updates and to reopen after one (C++,
+                 built by pnpm run build:menu into store-update/out/, only in the Store package)
 reader.js        The Publisher reader: which LibreOffice to use, its download, checksum and unpack, one shared download
 store.js         The Microsoft Store copy: which copy it is, its identity (store.json), the Store page, the reader inside
 list.js          Mail merge: reads a list file (xlsx, xls, csv) and the photos it names, never writes to them
@@ -213,6 +218,7 @@ src/model.js     Document model (all sizes in mm)
 src/docfile.js   .pub (via LibreOffice) → document → .bpum text; shared by the editor and the convert window
 src/task.html/.js  The Explorer menu's convert window
 src/tokens.css   Colours and font (light and dark), shared by the editor and the convert window
+src/update-panel.js  The Store copy's update badge and panel: This version → New version, the download, Install
 src/notes.js     What's new: the notes of each version, newest first (Help > What's New)
 explorer-menu.js Explorer menu: reads a menu click, registers / removes the menu (installer hooks)
 explorer-menu/   The menu add-on: menu.cpp (BohpumMenu.dll), AppxManifest.xml + Assets (Windows 11 package)
