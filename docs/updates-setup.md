@@ -105,8 +105,8 @@ address is locked, and opens with the key").
 Since 0.2.5 a release makes only the Microsoft Store package; there is no installer and nothing goes to R2.
 
 1. `pnpm version 0.3.0 --no-git-tag-version --no-git-checks` (only edits package.json).
-2. Write the version's entry at the top of `src/notes.js` (What's new) with today's date — the build refuses to run
-   without it, and it becomes the GitHub release notes.
+2. Write the version's What's new at the top of `src/notes.js` with today's date (it becomes the GitHub release notes)
+   and as `### <version>` in `docs/store-listing.md` (the Store page's notes) — the build refuses to run without both.
 3. Commit and push main.
 4. GitHub → **Actions** → **Release** → **Run workflow** → type `0.3.0` → Run
    (or `gh workflow run release.yml -R smith89k/Bohpum -f version=0.3.0`).

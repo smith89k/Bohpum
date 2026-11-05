@@ -25,7 +25,8 @@ To build an installer on your PC to try it out (`dist\Bohpum-Setup-<version>.exe
 pnpm run dist
 ```
 
-It checks What's new (`scripts/check-notes.js`: the newest entry in `src/notes.js` must be `package.json`'s version),
+It checks What's new (`scripts/check-notes.js`: the newest entry in `src/notes.js` must be `package.json`'s version, and
+`docs/store-listing.md` must have that version's Store notes),
 builds the File Explorer menu add-on (`pnpm run build:menu`), then the installer. The menu add-on needs **Visual Studio
 Build Tools** ("Desktop development with C++", x64) and the **Windows 10/11 SDK**. A local build has no update key: it
 doesn't update itself or download the Publisher reader. Only the release job's installers do.
@@ -39,8 +40,9 @@ see the download go from version to version, then click Install. Help › Check 
 GitHub Actions builds each release's Store package; you submit it in Partner Center.
 
 1. `pnpm version 0.3.0 --no-git-tag-version --no-git-checks` (only edits package.json).
-2. Write that version's notes at the top of `src/notes.js` (What's new) with today's date. They become the GitHub
-   release notes; the release stops without them.
+2. Every release needs its What's new, in two places, or the build stops: at the top of `src/notes.js` with today's
+   date (the app's What's new window and the GitHub release notes), and as `### <version>` at the top of "What's new
+   in this version" in `docs/store-listing.md` (pasted into Partner Center, up to 1500 characters).
 3. Commit and push main.
 4. GitHub → **Actions** → **Release** → **Run workflow** → type the version (or `gh workflow run release.yml -f version=0.3.0`).
 5. Download `Bohpum-Store-<version>.msix` from the GitHub release and submit it in Partner Center.
@@ -227,7 +229,7 @@ build/           logo.png and bpum-file.png: the logo and the .bpum file icon (s
                  menu install / update / uninstall steps, .pub in "Open with"
 scripts/build-explorer-menu.js Builds BohpumMenu.dll and Bohpum.ExplorerMenu.msix into explorer-menu/out
 scripts/bundle-libreoffice.js  The trim (trimCopy); copies the installed LibreOffice into vendor/libreoffice for pnpm start
-scripts/check-notes.js         Stops pnpm run dist when src/notes.js has no notes for package.json's version
+scripts/check-notes.js         Stops the build when src/notes.js or the Store listing has no notes for package.json's version
 scripts/reader-pack.js         Makes the reader pack (trimmed LibreOffice zip + its name, size, SHA-256); reader-check.js
                                checks it opens a Publisher file
 scripts/release-notes.js       The GitHub release notes from What's new
