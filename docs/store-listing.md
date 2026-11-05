@@ -23,6 +23,12 @@ Your files stay on your computer. Bohpum has no account, no ads and sends nothin
 (Partner Center: the submission › Store listings › English › What's new in this version; up to 1500 characters.
 Newest first; the app's own What's new window is src/notes.js.)
 
+### 0.3.2
+
+- When a newer Bohpum is in the Microsoft Store, a small badge appears at the right end of the title bar. Click it to
+  see the download go from this version to the new one, then press Install. Nothing opens over your work by itself.
+- Help › Check for Updates opens the same panel and tells you whether you have the newest version.
+
 ### 0.3.1
 
 - Tables have their own Table section: insert or delete rows and columns, merge and unmerge cells, make columns or

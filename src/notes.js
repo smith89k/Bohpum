@@ -10,6 +10,10 @@ const KINDS = Object.freeze(['new', 'improved', 'fixed', 'removed']); // the win
 const N = (version, date, notes) => Object.freeze({ version, date, notes: Object.freeze(notes.map(([kind, text]) => Object.freeze({ kind, text }))) });
 
 const NOTES = Object.freeze([
+  N('0.3.2', '2026-11-05', [
+    ['new', 'When a newer Bohpum is in the Microsoft Store, a small badge appears at the right end of the title bar. Click it to see the download go from this version to the new one, then press Install. Nothing opens over your work by itself.'],
+    ['improved', 'Help › Check for Updates opens the same panel and tells you whether you have the newest version.']
+  ]),
   N('0.3.1', '2026-11-03', [
     ['new', 'Tables have their own Table section on the right: insert or delete rows and columns, merge and unmerge cells, make columns or rows the same size, and change the cell colour, border, inner space and where the text sits.'],
     ['new', 'Click in a cell to change that cell, drag across cells to change several, or press Whole table to change them all.'],
