@@ -21,10 +21,6 @@
   <img src="art/banner-light.png" alt="Bohpum: .pub files Windows cannot open on the left, the same card open and editable in Bohpum on the right." width="100%">
 </picture>
 
-<p align="center">
-  <img src="docs/images/editor.png" alt="The Bohpum editor with a workshop card open" width="100%">
-</p>
-
 ## About
 
 Bohpum ("to print" in Khmer) is a desktop publishing app for Windows. It opens your old Microsoft Publisher
@@ -32,6 +28,10 @@ Bohpum ("to print" in Khmer) is a desktop publishing app for Windows. It opens y
 Publisher does, including several cards on one A4 sheet. It handles Khmer and English text side by side.
 
 Your files stay on your computer. Bohpum has no account, no ads and no tracking.
+
+<p align="center">
+  <img src="docs/images/editor.png" alt="The Bohpum editor with a workshop card open" width="100%">
+</p>
 
 ## Features
 
