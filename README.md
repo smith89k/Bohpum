@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="art/logo.svg" alt="Bohpum logo" width="112" height="112">
+<img src="build/logo.png" alt="Bohpum logo" width="112" height="112">
 
 # Bohpum <sub>បោះពុម្ព</sub>
 
