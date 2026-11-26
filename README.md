@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="build/logo.png" alt="Bohpum logo" width="112">
+<img src="art/logo.svg" alt="Bohpum logo" width="112" height="112">
 
 # Bohpum <sub>បោះពុម្ព</sub>
 
@@ -15,6 +15,11 @@
 [![Latest release](https://img.shields.io/github/v/release/smith89k/Bohpum?color=1f7a4d)](https://github.com/smith89k/Bohpum/releases)
 
 </div>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="art/banner-dark.png">
+  <img src="art/banner-light.png" alt="Bohpum: .pub files Windows cannot open on the left, the same card open and editable in Bohpum on the right." width="100%">
+</picture>
 
 <p align="center">
   <img src="docs/images/editor.png" alt="The Bohpum editor with a workshop card open" width="100%">
