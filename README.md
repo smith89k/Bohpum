@@ -2,7 +2,7 @@
 
 <img src="build/logo.png" alt="Bohpum logo" width="112" height="112">
 
-# Bohpum <sub>បោះពុម្ព</sub>
+# Bohpum (បោះពុម្ព)
 
 **Open, edit and print Microsoft Publisher files on Windows. You don't need Publisher.**
 
